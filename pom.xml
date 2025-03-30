@@ -18,14 +18,20 @@
         <dependency>
             <groupId>org.pragmatica-lite</groupId>
             <artifactId>core</artifactId>
-            <version>0.6.0</version>
+            <version>0.6.1</version>
         </dependency>
     </dependencies>
 
     <repositories>
         <repository>
-            <id>core</id>
-            <url>https://raw.github.com/siy/pragmatica-lite/mvn-repo/</url>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/siy/pragmatica-lite</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
         </repository>
     </repositories>
 

@@ -241,7 +241,7 @@ package org.pragmatica.lang;
 import org.pragmatica.lang.Functions.*;
 import org.pragmatica.lang.Tuple.*;
 import org.pragmatica.lang.io.CoreError;
-import org.pragmatica.lang.io.TimeSpan;
+import org.pragmatica.lang.io.Timeout;
 import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.lang.utils.ResultCollector;
 import org.slf4j.Logger;

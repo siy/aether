@@ -19,7 +19,7 @@ package io.microraft.impl.task;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 import io.microraft.report.RaftNodeReport;
 import io.microraft.report.RaftNodeReport.RaftNodeReportReason;
 
@@ -28,7 +28,7 @@ import io.microraft.report.RaftNodeReport.RaftNodeReportReason;
  */
 public class RaftStateSummaryPublishTask extends RaftNodeStatusAwareTask {
 
-    public RaftStateSummaryPublishTask(RaftNodeImpl node) {
+    public RaftStateSummaryPublishTask(RaftNode node) {
         super(node);
     }
 

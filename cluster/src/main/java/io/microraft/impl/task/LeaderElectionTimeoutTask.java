@@ -22,7 +22,7 @@ import static io.microraft.RaftRole.CANDIDATE;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 
 /**
  * Scheduled by {@link LeaderElectionTask} to trigger leader election again if a
@@ -32,7 +32,7 @@ public final class LeaderElectionTimeoutTask extends RaftNodeStatusAwareTask imp
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LeaderElectionTimeoutTask.class);
 
-    public LeaderElectionTimeoutTask(RaftNodeImpl raftNode) {
+    public LeaderElectionTimeoutTask(RaftNode raftNode) {
         super(raftNode);
     }
 

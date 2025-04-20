@@ -18,7 +18,7 @@ package io.microraft.impl.handler;
 
 import javax.annotation.Nonnull;
 
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 import io.microraft.impl.task.RaftNodeStatusAwareTask;
 import io.microraft.model.message.RaftMessage;
 
@@ -29,7 +29,7 @@ public abstract class AbstractMessageHandler<T extends RaftMessage> extends Raft
 
     protected final T message;
 
-    AbstractMessageHandler(RaftNodeImpl raftNode, T message) {
+    AbstractMessageHandler(RaftNode raftNode, T message) {
         super(raftNode);
         this.message = message;
     }

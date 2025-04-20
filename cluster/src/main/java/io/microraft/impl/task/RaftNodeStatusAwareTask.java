@@ -20,12 +20,12 @@ package io.microraft.impl.task;
 import static io.microraft.RaftNodeStatus.INITIAL;
 import static io.microraft.RaftNodeStatus.isTerminal;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.microraft.RaftEndpoint;
 import io.microraft.RaftNodeStatus;
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.state.RaftState;
 import io.microraft.model.RaftModelFactory;
 
@@ -37,11 +37,11 @@ import io.microraft.model.RaftModelFactory;
  */
 public abstract class RaftNodeStatusAwareTask implements Runnable {
 
-    protected final RaftNodeImpl node;
+    protected final RaftNode node;
     protected final RaftState state;
     protected final RaftModelFactory modelFactory;
 
-    protected RaftNodeStatusAwareTask(RaftNodeImpl node) {
+    protected RaftNodeStatusAwareTask(RaftNode node) {
         this.node = node;
         this.state = node.state();
         this.modelFactory = node.modelFactory();

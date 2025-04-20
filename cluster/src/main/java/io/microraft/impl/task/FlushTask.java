@@ -17,7 +17,7 @@
 
 package io.microraft.impl.task;
 
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 import io.microraft.impl.log.RaftLog;
 import io.microraft.impl.state.LeaderState;
 
@@ -27,7 +27,7 @@ import io.microraft.impl.state.LeaderState;
  */
 public class FlushTask extends RaftNodeStatusAwareTask {
 
-    public FlushTask(RaftNodeImpl node) {
+    public FlushTask(RaftNode node) {
         super(node);
     }
 

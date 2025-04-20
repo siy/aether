@@ -18,7 +18,7 @@
 package io.microraft.impl.handler;
 
 import io.microraft.RaftEndpoint;
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 import io.microraft.impl.state.FollowerState;
 import io.microraft.impl.state.LeaderState;
 import io.microraft.impl.state.QueryState;
@@ -52,7 +52,7 @@ public class AppendEntriesSuccessResponseHandler extends AbstractResponseHandler
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AppendEntriesSuccessResponseHandler.class);
 
-    public AppendEntriesSuccessResponseHandler(RaftNodeImpl raftNode, AppendEntriesSuccessResponse response) {
+    public AppendEntriesSuccessResponseHandler(RaftNode raftNode, AppendEntriesSuccessResponse response) {
         super(raftNode, response);
     }
 

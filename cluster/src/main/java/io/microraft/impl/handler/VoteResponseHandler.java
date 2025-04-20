@@ -21,11 +21,11 @@ import static io.microraft.RaftRole.CANDIDATE;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.microraft.RaftRole;
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.state.CandidateState;
 import io.microraft.impl.state.RaftState;
 import io.microraft.model.message.VoteRequest;
@@ -54,7 +54,7 @@ public class VoteResponseHandler extends AbstractResponseHandler<VoteResponse> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(VoteResponseHandler.class);
 
-    public VoteResponseHandler(RaftNodeImpl raftNode, VoteResponse response) {
+    public VoteResponseHandler(RaftNode raftNode, VoteResponse response) {
         super(raftNode, response);
     }
 

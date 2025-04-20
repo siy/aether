@@ -19,7 +19,6 @@ package io.microraft.impl.task;
 
 import static io.microraft.RaftNodeStatus.INITIAL;
 import static io.microraft.RaftNodeStatus.UPDATING_RAFT_GROUP_MEMBER_LIST;
-import static io.microraft.RaftNodeStatus.isTerminal;
 import static io.microraft.RaftRole.LEADER;
 
 import org.slf4j.Logger;
@@ -30,7 +29,7 @@ import io.microraft.RaftNodeStatus;
 import io.microraft.exception.CannotReplicateException;
 import io.microraft.exception.NotLeaderException;
 import io.microraft.exception.RaftException;
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 import io.microraft.impl.log.RaftLog;
 import io.microraft.impl.state.RaftState;
 import io.microraft.impl.util.OrderedFuture;
@@ -120,7 +119,7 @@ public final class ReplicateTask implements Runnable {
             LOGGER.debug("{} Won't run {}, since Raft node is not started.", raftNode.localEndpointName(), operation);
             future.fail(raftNode.newCannotReplicateException());
             return false;
-        } else if (isTerminal(status)) {
+        } else if (status.isTerminal()) {
             LOGGER.debug("{} Won't run {}, since Raft node is {}.", raftNode.localEndpointName(), operation, status);
             future.fail(raftNode.newNotLeaderException());
             return false;

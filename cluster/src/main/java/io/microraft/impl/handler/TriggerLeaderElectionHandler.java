@@ -22,10 +22,10 @@ import static java.util.Objects.requireNonNull;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.task.LeaderElectionTask;
 import io.microraft.model.log.BaseLogEntry;
 import io.microraft.model.message.TriggerLeaderElectionRequest;
@@ -41,7 +41,7 @@ public class TriggerLeaderElectionHandler extends AbstractMessageHandler<Trigger
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TriggerLeaderElectionHandler.class);
 
-    public TriggerLeaderElectionHandler(RaftNodeImpl raftNode, TriggerLeaderElectionRequest request) {
+    public TriggerLeaderElectionHandler(RaftNode raftNode, TriggerLeaderElectionRequest request) {
         super(raftNode, request);
     }
 

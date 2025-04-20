@@ -22,11 +22,11 @@ import static java.util.Objects.requireNonNull;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.microraft.RaftEndpoint;
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.task.PreVoteTask;
 import io.microraft.model.log.BaseLogEntry;
 import io.microraft.model.message.PreVoteRequest;
@@ -53,7 +53,7 @@ public class PreVoteRequestHandler extends AbstractMessageHandler<PreVoteRequest
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PreVoteRequestHandler.class);
 
-    public PreVoteRequestHandler(RaftNodeImpl raftNode, PreVoteRequest request) {
+    public PreVoteRequestHandler(RaftNode raftNode, PreVoteRequest request) {
         super(raftNode, request);
     }
 

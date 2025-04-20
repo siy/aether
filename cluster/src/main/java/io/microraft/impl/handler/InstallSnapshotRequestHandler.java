@@ -30,12 +30,12 @@ import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.microraft.RaftEndpoint;
 import io.microraft.exception.RaftException;
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.log.SnapshotChunkCollector;
 import io.microraft.model.log.SnapshotChunk;
 import io.microraft.model.log.SnapshotEntry.SnapshotEntryBuilder;
@@ -84,7 +84,7 @@ public class InstallSnapshotRequestHandler extends AbstractMessageHandler<Instal
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InstallSnapshotRequestHandler.class);
 
-    public InstallSnapshotRequestHandler(RaftNodeImpl raftNode, InstallSnapshotRequest request) {
+    public InstallSnapshotRequestHandler(RaftNode raftNode, InstallSnapshotRequest request) {
         super(raftNode, request);
     }
 

@@ -17,10 +17,10 @@
 
 package io.microraft.impl.task;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.model.message.PreVoteRequest;
 
 /**
@@ -31,7 +31,7 @@ import io.microraft.model.message.PreVoteRequest;
  * election round can be started.
  * <p>
  * Also a {@link PreVoteTimeoutTask} is scheduled with the
- * {@link RaftNodeImpl#leaderElectionTimeoutMs()} delay to trigger another
+ * {@link RaftNode#leaderElectionTimeoutMs()} delay to trigger another
  * round of pre-voting if a leader is not available yet.
  */
 public final class PreVoteTask extends RaftNodeStatusAwareTask implements Runnable {
@@ -40,7 +40,7 @@ public final class PreVoteTask extends RaftNodeStatusAwareTask implements Runnab
 
     private final int term;
 
-    public PreVoteTask(RaftNodeImpl raftNode, int term) {
+    public PreVoteTask(RaftNode raftNode, int term) {
         super(raftNode);
         this.term = term;
     }

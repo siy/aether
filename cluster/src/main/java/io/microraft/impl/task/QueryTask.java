@@ -34,7 +34,6 @@ import java.time.Duration;
 import java.util.Optional;
 
 import static io.microraft.RaftNodeStatus.INITIAL;
-import static io.microraft.RaftNodeStatus.isTerminal;
 import static io.microraft.RaftRole.LEADER;
 
 /**
@@ -162,7 +161,7 @@ public final class QueryTask implements Runnable {
                     queryPolicy, operation);
             future.fail(new IllegalStateException("Cannot query because Raft node not started"));
             return false;
-        } else if (isTerminal(status)) {
+        } else if (status.isTerminal()) {
             LOGGER.debug("{} Won't {} query {}, since Raft node is {}.", raftNode.localEndpointName(), queryPolicy,
                          operation, status);
             future.fail(raftNode.newNotLeaderException());

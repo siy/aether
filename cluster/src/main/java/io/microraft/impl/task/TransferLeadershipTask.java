@@ -18,7 +18,6 @@
 package io.microraft.impl.task;
 
 import static io.microraft.RaftNodeStatus.ACTIVE;
-import static io.microraft.RaftNodeStatus.isTerminal;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 import java.util.concurrent.TimeoutException;
@@ -29,7 +28,7 @@ import org.slf4j.LoggerFactory;
 import io.microraft.RaftConfig;
 import io.microraft.RaftEndpoint;
 import io.microraft.RaftNodeStatus;
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 import io.microraft.impl.state.LeaderState;
 import io.microraft.impl.state.LeadershipTransferState;
 import io.microraft.impl.state.RaftState;
@@ -50,11 +49,11 @@ public class TransferLeadershipTask implements Runnable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TransferLeadershipTask.class);
 
-    private final RaftNodeImpl node;
+    private final RaftNode node;
     private final RaftEndpoint targetEndpoint;
     private final OrderedFuture<Object> future;
 
-    public TransferLeadershipTask(RaftNodeImpl node, RaftEndpoint targetEndpoint, OrderedFuture<Object> future) {
+    public TransferLeadershipTask(RaftNode node, RaftEndpoint targetEndpoint, OrderedFuture<Object> future) {
         this.node = node;
         this.targetEndpoint = targetEndpoint;
         this.future = future;
@@ -82,7 +81,7 @@ public class TransferLeadershipTask implements Runnable {
 
     private boolean checkLeadershipTransfer(RaftState state) {
         RaftNodeStatus status = node.status();
-        if (isTerminal(status)) {
+        if (status.isTerminal()) {
             future.fail(node.newNotLeaderException());
             return true;
         }

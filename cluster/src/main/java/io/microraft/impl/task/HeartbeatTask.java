@@ -21,11 +21,11 @@ import static io.microraft.RaftRole.FOLLOWER;
 import static io.microraft.RaftRole.LEARNER;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.microraft.RaftEndpoint;
-import io.microraft.impl.RaftNodeImpl;
 
 /**
  * Checks whether currently there is a known leader endpoint and triggers the
@@ -35,7 +35,7 @@ public class HeartbeatTask extends RaftNodeStatusAwareTask {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HeartbeatTask.class);
 
-    public HeartbeatTask(RaftNodeImpl node) {
+    public HeartbeatTask(RaftNode node) {
         super(node);
     }
 

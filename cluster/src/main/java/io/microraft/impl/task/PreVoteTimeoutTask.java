@@ -22,7 +22,7 @@ import static io.microraft.RaftRole.FOLLOWER;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 
 /**
  * Scheduled by {@link PreVoteTask} to trigger pre-voting again if the local
@@ -35,7 +35,7 @@ public final class PreVoteTimeoutTask extends RaftNodeStatusAwareTask implements
 
     private final int term;
 
-    public PreVoteTimeoutTask(RaftNodeImpl raftNode, int term) {
+    public PreVoteTimeoutTask(RaftNode raftNode, int term) {
         super(raftNode);
         this.term = term;
     }

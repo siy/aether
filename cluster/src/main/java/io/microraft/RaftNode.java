@@ -37,6 +37,7 @@ import io.microraft.impl.state.RaftState;
 import io.microraft.lifecycle.RaftNodeLifecycleAware;
 import io.microraft.model.RaftModelFactory;
 import io.microraft.model.impl.DefaultRaftModelFactory;
+import io.microraft.model.log.SnapshotEntry;
 import io.microraft.model.message.RaftMessage;
 import io.microraft.persistence.NopRaftStore;
 import io.microraft.persistence.RaftStore;
@@ -116,6 +117,8 @@ public interface RaftNode {
     boolean canReplicateNewOperation(Object operation);
 
     boolean canQueryLinearizable();
+
+    void sendSnapshotChunk(RaftEndpoint follower, long snapshotIndex, int requestedSnapshotChunkIndex);
 
     /**
      * Returns the unique id of the Raft group which this Raft node belongs to.
@@ -504,26 +507,68 @@ public interface RaftNode {
     @Nullable
     RaftEndpoint leaderEndpoint();
 
+    void scheduleLeaderRequestBackoffResetTask(LeaderState leaderState);
+
+    void applyLogEntries();
+
+    void leaderHeartbeatReceived();
+
     RaftState state();
+
+    void installSnapshot(SnapshotEntry snapshotEntry);
 
     void updateGroupMembers(long logIndex, Collection<RaftEndpoint> members,
                             Collection<RaftEndpoint> votingMembers);
 
+    void revertGroupMembers();
+
+    void publishRaftNodeReport(RaftNodeReport.RaftNodeReportReason reason);
+
+    void leader(RaftEndpoint member);
+
+    void toLeader();
+
     void broadcastAppendEntriesRequest();
 
+    void sendAppendEntriesRequest(RaftEndpoint target);
+
+    void send(RaftEndpoint target, RaftMessage message);
+
     boolean submitLeaderFlushTask(LeaderState leaderState);
+
+    void toCandidate(boolean sticky);
+
+    long leaderElectionTimeoutMs();
+
+    void preCandidate();
 
     RaftException newCannotReplicateException();
 
     boolean tryAdvanceCommitIndex();
 
+    void tryAckQuery(long querySequenceNumber, RaftEndpoint sender);
+
     String localEndpointName();
 
+    void tryRunQueries();
+
+    void tryRunScheduledQueries();
+
     void runOrScheduleQuery(QueryState.QueryContainer query, long minCommitIndex, Optional<Duration> timeout);
+
+    boolean isLeaderHeartbeatTimeoutElapsed();
 
     RaftModelFactory modelFactory();
 
     boolean demoteToFollowerIfQuorumHeartbeatTimeoutElapsed();
+
+    void toFollower(int term);
+
+    void runPreVote();
+
+    void toSingletonLeader();
+
+    Clock clock();
 
     /**
      * The builder interface for configuring and creating Raft node instances.
@@ -769,7 +814,6 @@ public interface RaftNode {
          */
         @Nonnull
         RaftNode build();
-
     }
 
 }

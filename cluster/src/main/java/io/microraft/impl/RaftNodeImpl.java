@@ -21,7 +21,6 @@ import static io.microraft.RaftNodeStatus.ACTIVE;
 import static io.microraft.RaftNodeStatus.INITIAL;
 import static io.microraft.RaftNodeStatus.TERMINATED;
 import static io.microraft.RaftNodeStatus.UPDATING_RAFT_GROUP_MEMBER_LIST;
-import static io.microraft.RaftNodeStatus.isTerminal;
 import static io.microraft.RaftRole.FOLLOWER;
 import static io.microraft.RaftRole.LEADER;
 import static io.microraft.RaftRole.LEARNER;
@@ -148,7 +147,7 @@ import io.microraft.transport.Transport;
  * state machine, and {@link RaftStore} to persist internal Raft state to stable
  * storage.
  */
-public final class RaftNodeImpl implements RaftNode {
+final class RaftNodeImpl implements RaftNode {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RaftNode.class);
     private static final int LEADER_ELECTION_TIMEOUT_NOISE_MILLIS = 100;
@@ -369,6 +368,7 @@ public final class RaftNodeImpl implements RaftNode {
         return queryState.queryCount() < maxPendingLogEntryCount;
     }
 
+    @Override
     public void sendSnapshotChunk(RaftEndpoint follower, long snapshotIndex, int requestedSnapshotChunkIndex) {
         // this node can be a leader or a follower!
 
@@ -475,7 +475,7 @@ public final class RaftNodeImpl implements RaftNode {
      */
     @Override
     public void setStatus(RaftNodeStatus newStatus) {
-        if (isTerminal(status)) {
+        if (status.isTerminal()) {
             throw new IllegalStateException("Cannot set status: " + newStatus + " since already " + this.status);
         } else if (this.status == newStatus) {
             return;
@@ -611,14 +611,14 @@ public final class RaftNodeImpl implements RaftNode {
     @Nonnull
     @Override
     public CompletableFuture<Ordered<Object>> terminate() {
-        if (isTerminal(status)) {
+        if (status.isTerminal()) {
             return CompletableFuture.completedFuture(null);
         }
 
         OrderedFuture<Object> future = new OrderedFuture<>();
 
         executor.execute(() -> {
-            if (isTerminal(status)) {
+            if (status.isTerminal()) {
                 future.completeNull(state.commitIndex());
                 return;
             }
@@ -654,9 +654,8 @@ public final class RaftNodeImpl implements RaftNode {
     }
 
     @Override
-    @SuppressWarnings("checkstyle:cyclomaticcomplexity")
     public void handle(@Nonnull RaftMessage message) {
-        if (isTerminal(status)) {
+        if (status.isTerminal()) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.warn("{} will not handle {} because {}", localEndpointName, message, status);
             } else {
@@ -763,7 +762,7 @@ public final class RaftNodeImpl implements RaftNode {
         OrderedFuture<RaftNodeReport> future = new OrderedFuture<>();
         return executeIfRunning(() -> {
             try {
-                if (status == INITIAL || isTerminal(status)) {
+                if (status == INITIAL || status.isTerminal()) {
                     future.fail(newNotRunningException());
                     return;
                 }
@@ -772,7 +771,7 @@ public final class RaftNodeImpl implements RaftNode {
                             localEndpointName + " cannot take a snapshot before committing a log entry!"));
                 }
                 applyLogEntries();
-                if (isTerminal(status)) {
+                if (status.isTerminal()) {
                     LOGGER.warn("{} cannot take snapshot since it is {}", localEndpointName, status);
                     future.fail(newNotRunningException());
                     return;
@@ -823,7 +822,7 @@ public final class RaftNodeImpl implements RaftNode {
     }
 
     private <T> OrderedFuture<T> executeIfRunning(Runnable task, OrderedFuture<T> future) {
-        if (!isTerminal(status)) {
+        if (!status.isTerminal()) {
             executor.execute(task);
         } else {
             future.fail(newNotRunningException());
@@ -834,7 +833,7 @@ public final class RaftNodeImpl implements RaftNode {
 
     @Override
     public RaftException newNotLeaderException() {
-        return new NotLeaderException(localEndpoint(), isTerminal(status) ? null : leaderEndpoint());
+        return new NotLeaderException(localEndpoint(), status.isTerminal() ? null : leaderEndpoint());
     }
 
     @Override
@@ -871,6 +870,7 @@ public final class RaftNodeImpl implements RaftNode {
      *            the leader state to check and set the backoff task scheduling
      *            state.
      */
+    @Override
     public void scheduleLeaderRequestBackoffResetTask(LeaderState leaderState) {
         if (!leaderState.isRequestBackoffResetTaskScheduled()) {
             executor.schedule(leaderBackoffResetTask, LEADER_BACKOFF_RESET_TASK_PERIOD_MILLIS, MILLISECONDS);
@@ -886,6 +886,7 @@ public final class RaftNodeImpl implements RaftNode {
      * @see RaftState#lastApplied()
      * @see RaftState#commitIndex()
      */
+    @Override
     public void applyLogEntries() {
         assert state.commitIndex() >= state.lastApplied() : localEndpointName + " commit index: " + state.commitIndex()
                 + " cannot be smaller than last applied: " + state.lastApplied();
@@ -911,7 +912,7 @@ public final class RaftNodeImpl implements RaftNode {
                 applyLogEntry(entry);
             }
 
-            if (state.lastApplied() % commitCountToTakeSnapshot == 0 && !isTerminal(status)) {
+            if (state.lastApplied() % commitCountToTakeSnapshot == 0 && !status.isTerminal()) {
                 // If the status is terminal, then there will be no new append or commit.
                 takeSnapshot(log, state.lastApplied());
             }
@@ -981,6 +982,7 @@ public final class RaftNodeImpl implements RaftNode {
     /**
      * Updates the last leader heartbeat timestamp to now
      */
+    @Override
     public void leaderHeartbeatReceived() {
         lastLeaderHeartbeatTimestamp = Math.max(lastLeaderHeartbeatTimestamp, clock.millis());
     }
@@ -1106,6 +1108,7 @@ public final class RaftNodeImpl implements RaftNode {
      * @param snapshotEntry
      *            the snapshot entry object to install to the local Raft node
      */
+    @Override
     public void installSnapshot(SnapshotEntry snapshotEntry) {
         long commitIndex = state.commitIndex();
 
@@ -1182,6 +1185,7 @@ public final class RaftNodeImpl implements RaftNode {
      *
      * @see RaftState#revertGroupMembers()
      */
+    @Override
     public void revertGroupMembers() {
         state.revertGroupMembers();
         publishRaftNodeReport(RaftNodeReportReason.GROUP_MEMBERS_CHANGE);
@@ -1195,6 +1199,7 @@ public final class RaftNodeImpl implements RaftNode {
      *
      * @see RaftNodeReport
      */
+    @Override
     public void publishRaftNodeReport(RaftNodeReportReason reason) {
         RaftNodeReportImpl report = newReport(reason);
         if ((reason == RaftNodeReportReason.STATUS_CHANGE || reason == RaftNodeReportReason.ROLE_CHANGE
@@ -1234,6 +1239,7 @@ public final class RaftNodeImpl implements RaftNode {
      * @param member
      *            the discovered leader endpoint
      */
+    @Override
     public void leader(RaftEndpoint member) {
         state.leader(member);
         publishRaftNodeReport(RaftNodeReportReason.ROLE_CHANGE);
@@ -1248,6 +1254,7 @@ public final class RaftNodeImpl implements RaftNode {
      * <li>Appending an operation to the Raft log if enabled.</li>
      * </ul>
      */
+    @Override
     public void toLeader() {
         state.toLeader(clock.millis());
         appendNewTermEntry();
@@ -1284,7 +1291,7 @@ public final class RaftNodeImpl implements RaftNode {
      * @param target
      *            the Raft endpoint to send the request
      */
-    @SuppressWarnings({"checkstyle:npathcomplexity", "checkstyle:cyclomaticcomplexity", "checkstyle:methodlength",})
+    @Override
     public void sendAppendEntriesRequest(RaftEndpoint target) {
         RaftLog log = state.log();
         LeaderState leaderState = state.leaderState();
@@ -1446,6 +1453,7 @@ public final class RaftNodeImpl implements RaftNode {
      * @param message
      *            the Raft message to send
      */
+    @Override
     public void send(RaftEndpoint target, RaftMessage message) {
         try {
             transport.send(target, message);
@@ -1505,6 +1513,7 @@ public final class RaftNodeImpl implements RaftNode {
      *            the parameter to pass on to the vote requests which are going to
      *            be sent to the followers.
      */
+    @Override
     public void toCandidate(boolean sticky) {
         state.toCandidate();
         BaseLogEntry lastLogEntry = state.log().lastLogOrSnapshotEntry();
@@ -1532,6 +1541,7 @@ public final class RaftNodeImpl implements RaftNode {
      *
      * @see RaftConfig#leaderElectionTimeoutMillis()
      */
+    @Override
     public long leaderElectionTimeoutMs() {
         return (((int) config.leaderElectionTimeoutMillis()) + random.nextInt(LEADER_ELECTION_TIMEOUT_NOISE_MILLIS));
     }
@@ -1541,6 +1551,7 @@ public final class RaftNodeImpl implements RaftNode {
      * executed to check if other group members would vote for this Raft node if it
      * would start a new leader election.
      */
+    @Override
     public void preCandidate() {
         state.initPreCandidateState();
         int nextTerm = state.term() + 1;
@@ -1562,7 +1573,7 @@ public final class RaftNodeImpl implements RaftNode {
 
     @Override
     public RaftException newCannotReplicateException() {
-        return new CannotReplicateException(isTerminal(status) ? null : leaderEndpoint());
+        return new CannotReplicateException(status.isTerminal() ? null : leaderEndpoint());
     }
 
     private long findQuorumMatchIndex() {
@@ -1648,6 +1659,7 @@ public final class RaftNodeImpl implements RaftNode {
         }
     }
 
+    @Override
     public void tryAckQuery(long querySequenceNumber, RaftEndpoint sender) {
         LeaderState leaderState = state.leaderState();
         if (leaderState == null) {
@@ -1677,6 +1689,7 @@ public final class RaftNodeImpl implements RaftNode {
         return localEndpointName;
     }
 
+    @Override
     public void tryRunQueries() {
         LeaderState leaderState = state.leaderState();
         if (leaderState == null) {
@@ -1703,14 +1716,16 @@ public final class RaftNodeImpl implements RaftNode {
         queryState.reset();
     }
 
+    @Override
     public void tryRunScheduledQueries() {
         long lastApplied = state.lastApplied();
-        Collection<QueryContainer> queries = state.collectScheduledQueriesToExecute();
-        for (QueryContainer query : queries) {
+        var queries = state.collectScheduledQueriesToExecute();
+
+        for (var query : queries) {
             query.run(lastApplied, stateMachine);
         }
 
-        if (queries.size() > 0 && LOGGER.isDebugEnabled()) {
+        if (!queries.isEmpty() && LOGGER.isDebugEnabled()) {
             LOGGER.debug("{} executed {} waiting queries at log index: {}.", localEndpointName, queries.size(),
                          lastApplied);
         }
@@ -1754,6 +1769,7 @@ public final class RaftNodeImpl implements RaftNode {
         }
     }
 
+    @Override
     public boolean isLeaderHeartbeatTimeoutElapsed() {
         return isLeaderHeartbeatTimeoutElapsed(lastLeaderHeartbeatTimestamp, clock.millis());
     }
@@ -1767,10 +1783,11 @@ public final class RaftNodeImpl implements RaftNode {
     }
 
     private void initRestoredState() {
-        SnapshotEntry snapshotEntry = state.log().snapshotEntry();
+        var snapshotEntry = state.log().snapshotEntry();
+
         if (isNonInitial(snapshotEntry)) {
             List<Object> chunkOperations = ((List<SnapshotChunk>) snapshotEntry.getOperation()).stream()
-                    .map(SnapshotChunk::getOperation).collect(toList());
+                    .map(SnapshotChunk::getOperation).toList();
             stateMachine.installSnapshot(snapshotEntry.getIndex(), chunkOperations);
             publishRaftNodeReport(RaftNodeReportReason.INSTALL_SNAPSHOT);
             if (LOGGER.isDebugEnabled()) {
@@ -1866,11 +1883,13 @@ public final class RaftNodeImpl implements RaftNode {
      * @param term
      *            the new term to switch
      */
+    @Override
     public void toFollower(int term) {
         state.toFollower(term);
         publishRaftNodeReport(RaftNodeReportReason.ROLE_CHANGE);
     }
 
+    @Override
     public void runPreVote() {
         new PreVoteTask(this, state.term()).run();
     }
@@ -1880,6 +1899,7 @@ public final class RaftNodeImpl implements RaftNode {
      *
      * @see #toLeader()
      */
+    @Override
     public void toSingletonLeader() {
         state.toCandidate();
         BaseLogEntry lastLogEntry = state.log().lastLogOrSnapshotEntry();
@@ -1900,6 +1920,7 @@ public final class RaftNodeImpl implements RaftNode {
         }
     }
 
+    @Override
     public Clock clock() {
         return clock;
     }

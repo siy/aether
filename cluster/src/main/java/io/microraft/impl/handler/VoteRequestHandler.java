@@ -22,11 +22,11 @@ import static java.util.Objects.requireNonNull;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.microraft.RaftEndpoint;
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.task.LeaderElectionTask;
 import io.microraft.model.log.BaseLogEntry;
 import io.microraft.model.message.VoteRequest;
@@ -51,7 +51,7 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(VoteRequestHandler.class);
 
-    public VoteRequestHandler(RaftNodeImpl raftNode, VoteRequest request) {
+    public VoteRequestHandler(RaftNode raftNode, VoteRequest request) {
         super(raftNode, request);
     }
 

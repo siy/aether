@@ -18,7 +18,6 @@
 package io.microraft.impl.task;
 
 import static io.microraft.RaftNodeStatus.INITIAL;
-import static io.microraft.RaftNodeStatus.isTerminal;
 import static io.microraft.RaftRole.LEADER;
 import static io.microraft.RaftRole.LEARNER;
 import static io.microraft.report.RaftGroupMembers.MAX_LEARNER_COUNT;
@@ -174,7 +173,7 @@ public final class MembershipChangeTask implements Runnable {
                          raftNode.localEndpointName(), membershipChangeMode, endpoint.id(), groupMembersCommitIndex);
             future.fail(new IllegalStateException("Cannot change group membership because Raft node not started"));
             return false;
-        } else if (isTerminal(status)) {
+        } else if (status.isTerminal()) {
             LOGGER.error("{} Cannot {} {} with expected members commit index: {} since Raft node is {}.",
                          raftNode.localEndpointName(), membershipChangeMode, endpoint.id(), groupMembersCommitIndex,
                          status);

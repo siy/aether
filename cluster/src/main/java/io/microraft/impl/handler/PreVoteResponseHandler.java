@@ -21,10 +21,10 @@ import static io.microraft.RaftRole.FOLLOWER;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.state.CandidateState;
 import io.microraft.impl.task.LeaderElectionTask;
 import io.microraft.impl.task.PreVoteTask;
@@ -45,7 +45,7 @@ public class PreVoteResponseHandler extends AbstractResponseHandler<PreVoteRespo
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PreVoteResponseHandler.class);
 
-    public PreVoteResponseHandler(RaftNodeImpl raftNode, PreVoteResponse response) {
+    public PreVoteResponseHandler(RaftNode raftNode, PreVoteResponse response) {
         super(raftNode, response);
     }
 

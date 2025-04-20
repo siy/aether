@@ -67,4 +67,11 @@ public enum RaftNodeStatus {
         return status == TERMINATED;
     }
 
+    public boolean isTerminal() {
+        return this == TERMINATED;
+    }
+
+    public boolean isInitial() {
+        return this == INITIAL;
+    }
 }

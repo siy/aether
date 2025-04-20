@@ -21,11 +21,11 @@ import static io.microraft.RaftRole.LEADER;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.microraft.RaftEndpoint;
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.state.FollowerState;
 import io.microraft.impl.state.LeaderState;
 import io.microraft.model.message.AppendEntriesFailureResponse;
@@ -49,7 +49,7 @@ public class AppendEntriesFailureResponseHandler extends AbstractResponseHandler
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AppendEntriesFailureResponseHandler.class);
 
-    public AppendEntriesFailureResponseHandler(RaftNodeImpl raftNode, AppendEntriesFailureResponse response) {
+    public AppendEntriesFailureResponseHandler(RaftNode raftNode, AppendEntriesFailureResponse response) {
         super(raftNode, response);
     }
 

@@ -17,10 +17,11 @@
 
 package io.microraft.impl.task;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 import io.microraft.impl.handler.PreVoteResponseHandler;
 import io.microraft.impl.state.RaftState;
 import io.microraft.model.message.VoteRequest;
@@ -41,7 +42,7 @@ public final class LeaderElectionTask extends RaftNodeStatusAwareTask implements
 
     private final boolean sticky;
 
-    public LeaderElectionTask(RaftNodeImpl raftNode, boolean sticky) {
+    public LeaderElectionTask(RaftNode raftNode, boolean sticky) {
         super(raftNode);
         this.sticky = sticky;
     }

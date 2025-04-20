@@ -21,10 +21,10 @@ import static java.util.Objects.requireNonNull;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.model.message.RaftMessage;
 
 /**
@@ -35,7 +35,7 @@ import io.microraft.model.message.RaftMessage;
  */
 public abstract class AbstractResponseHandler<T extends RaftMessage> extends AbstractMessageHandler<T> {
 
-    AbstractResponseHandler(RaftNodeImpl raftNode, T response) {
+    AbstractResponseHandler(RaftNode raftNode, T response) {
         super(raftNode, response);
     }
 

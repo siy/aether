@@ -22,10 +22,10 @@ import static io.microraft.RaftRole.LEARNER;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.state.FollowerState;
 import io.microraft.impl.state.LeaderState;
 import io.microraft.model.message.InstallSnapshotRequest;
@@ -61,7 +61,7 @@ public class InstallSnapshotResponseHandler extends AbstractResponseHandler<Inst
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InstallSnapshotResponseHandler.class);
 
-    public InstallSnapshotResponseHandler(RaftNodeImpl raftNode, InstallSnapshotResponse response) {
+    public InstallSnapshotResponseHandler(RaftNode raftNode, InstallSnapshotResponse response) {
         super(raftNode, response);
     }
 

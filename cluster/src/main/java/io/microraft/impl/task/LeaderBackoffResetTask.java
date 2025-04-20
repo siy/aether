@@ -20,7 +20,7 @@ package io.microraft.impl.task;
 import java.util.Map.Entry;
 
 import io.microraft.RaftEndpoint;
-import io.microraft.impl.RaftNodeImpl;
+import io.microraft.RaftNode;
 import io.microraft.impl.state.FollowerState;
 import io.microraft.impl.state.LeaderState;
 
@@ -30,7 +30,7 @@ import io.microraft.impl.state.LeaderState;
  */
 public class LeaderBackoffResetTask extends RaftNodeStatusAwareTask {
 
-    public LeaderBackoffResetTask(RaftNodeImpl node) {
+    public LeaderBackoffResetTask(RaftNode node) {
         super(node);
     }
 

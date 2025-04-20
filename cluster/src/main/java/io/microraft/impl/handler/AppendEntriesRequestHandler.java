@@ -31,11 +31,11 @@ import java.util.Map.Entry;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.RaftNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.microraft.RaftEndpoint;
-import io.microraft.impl.RaftNodeImpl;
 import io.microraft.impl.log.RaftLog;
 import io.microraft.model.groupop.RaftGroupOp;
 import io.microraft.model.groupop.UpdateRaftGroupMembersOp;
@@ -62,7 +62,7 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AppendEntriesRequestHandler.class);
 
-    public AppendEntriesRequestHandler(RaftNodeImpl raftNode, AppendEntriesRequest request) {
+    public AppendEntriesRequestHandler(RaftNode raftNode, AppendEntriesRequest request) {
         super(raftNode, request);
     }
 

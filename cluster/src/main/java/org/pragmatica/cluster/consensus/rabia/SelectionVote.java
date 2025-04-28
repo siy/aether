@@ -1,11 +1,11 @@
 package org.pragmatica.cluster.consensus.rabia;
 
-import java.util.UUID;
+import org.pragmatica.utility.ULID;
 
-public record SelectionVote(UUID messageId,
-                          long timestamp,
-                          String senderId,
-                          UUID selectionId,
-                          boolean accepted,
-                          long viewNumber) implements RabiaMessage {
+public record SelectionVote(ULID messageId,
+                            long timestamp,
+                            String senderId,
+                            ULID selectionId,
+                            boolean accepted,
+                            long viewNumber) implements RabiaMessage {
 } 

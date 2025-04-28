@@ -1,8 +1,10 @@
 package org.pragmatica.cluster.consensus.rabia;
 
+import org.pragmatica.cluster.consensus.Command;
 import org.pragmatica.cluster.consensus.Consensus;
 import org.pragmatica.cluster.net.ClusterNetwork;
 import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.utility.ULID;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -15,66 +17,69 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
     private final int quorumSize;
     private final ClusterNetwork<RabiaMessage> network;
     private final Consumer<Command> commandExecutor;
-    private final Serializer<Command> commandSerializer;
-    
+
     // Local state
-    private final ConcurrentLinkedQueue<byte[]> commandBuffer = new ConcurrentLinkedQueue<>();
-    private final ConcurrentHashMap<UUID, Batch> batches = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, VoteSet> voteSets = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, Set<NodeId>> receivedVotes = new ConcurrentHashMap<>();
+    private final ConcurrentLinkedQueue<Command> commandBuffer = new ConcurrentLinkedQueue<>();
+    private final ConcurrentHashMap<ULID, Batch> batches = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ULID, VoteSet> voteSets = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ULID, Set<NodeId>> receivedVotes = new ConcurrentHashMap<>();
     private final AtomicLong sequenceNumber = new AtomicLong(0);
     private final Random random = new Random();
-    
+
     // Configuration
     private static final int BATCH_SIZE = 100;
     private static final long BATCH_TIMEOUT_MS = 1000;
-    private static final int MAX_RETRIES = 3;
-    private static final long RETRY_DELAY_MS = 100;
-    
+
     // Enhanced state tracking
     private static final long CLEANUP_INTERVAL_MS = 30000; // 30 seconds
     private static final long MAX_ENTRY_AGE_MS = 300000; // 5 minutes
     private final ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
-    
+
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    
+
     private final AtomicLong currentView = new AtomicLong(0);
-    
+
+    // Add missing field declarations
+    private final ConcurrentHashMap<ULID, TimestampedEntry<ProposalState>> proposalStates = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ULID, VoteCount> votes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ULID, Long> lastProposalTimes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ULID, Integer> retryCounts = new ConcurrentHashMap<>();
+
     // Enhanced command selection state
     private static class CommandSelection {
-        private final List<byte[]> commands;
+        private final List<Command> commands;
         private final long selectionTimestamp;
-        private final UUID selectionId;
+        private final ULID selectionId;
         private volatile boolean selected;
-        
-        public CommandSelection(List<byte[]> commands) {
+
+        public CommandSelection(List<Command> commands) {
             this.commands = commands;
             this.selectionTimestamp = System.currentTimeMillis();
-            this.selectionId = UUID.randomUUID();
+            this.selectionId = ULID.randomULID();
             this.selected = false;
         }
-        
-        public List<byte[]> getCommands() {
+
+        public List<Command> getCommands() {
             return commands;
         }
-        
+
         public long getSelectionTimestamp() {
             return selectionTimestamp;
         }
-        
-        public UUID getSelectionId() {
+
+        public ULID getSelectionId() {
             return selectionId;
         }
-        
+
         public boolean isSelected() {
             return selected;
         }
-        
+
         public void setSelected(boolean selected) {
             this.selected = selected;
         }
     }
-    
+
     private static class TimestampedEntry<T> {
         private final T value;
         private final long timestamp;
@@ -92,47 +97,44 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
             return timestamp;
         }
     }
-    
-    private final ConcurrentHashMap<UUID, TimestampedEntry<CommandSelection>> commandSelections = new ConcurrentHashMap<>();
+
+    private final ConcurrentHashMap<ULID, TimestampedEntry<CommandSelection>> commandSelections = new ConcurrentHashMap<>();
     private final PriorityQueue<CommandSelection> selectionQueue = new PriorityQueue<>(
-        Comparator.comparingLong(CommandSelection::getSelectionTimestamp)
+            Comparator.comparingLong(CommandSelection::getSelectionTimestamp)
     );
-    
+
     private final StateMachine stateMachine;
-    private final AtomicLong sequenceNumber = new AtomicLong(0);
-    private final ConcurrentHashMap<UUID, TimestampedEntry<StateSyncRequest>> pendingSyncRequests = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ULID, TimestampedEntry<StateSyncRequest>> pendingSyncRequests = new ConcurrentHashMap<>();
     private final ScheduledExecutorService syncScheduler = Executors.newSingleThreadScheduledExecutor();
-    
-    public RabiaConsensus(NodeId nodeId, 
-                         Set<NodeId> clusterNodes, 
-                         ClusterNetwork<RabiaMessage> network,
-                         Consumer<Command> commandExecutor,
-                         StateMachine stateMachine,
-                         Serializer<Command> commandSerializer) {
+
+    public RabiaConsensus(NodeId nodeId,
+                          Set<NodeId> clusterNodes,
+                          ClusterNetwork<RabiaMessage> network,
+                          Consumer<Command> commandExecutor,
+                          StateMachine stateMachine) {
         this.nodeId = nodeId;
         this.clusterNodes = new ConcurrentHashMap.KeySetView<>(clusterNodes, false);
         this.quorumSize = (clusterNodes.size() / 2) + 1;
         this.network = network;
         this.commandExecutor = commandExecutor;
         this.stateMachine = stateMachine;
-        this.commandSerializer = commandSerializer;
-        
+
         // Start periodic batching
-        scheduler.scheduleAtFixedRate(this::processCommandBuffer, 
-                                    BATCH_TIMEOUT_MS, 
-                                    BATCH_TIMEOUT_MS, 
-                                    TimeUnit.MILLISECONDS);
-        
+        scheduler.scheduleAtFixedRate(this::processCommandBuffer,
+                                      BATCH_TIMEOUT_MS,
+                                      BATCH_TIMEOUT_MS,
+                                      TimeUnit.MILLISECONDS);
+
         // Start periodic cleanup
         cleanupScheduler.scheduleAtFixedRate(this::cleanupOldEntries,
-                                           CLEANUP_INTERVAL_MS,
-                                           CLEANUP_INTERVAL_MS,
-                                           TimeUnit.MILLISECONDS);
-        
+                                             CLEANUP_INTERVAL_MS,
+                                             CLEANUP_INTERVAL_MS,
+                                             TimeUnit.MILLISECONDS);
+
         // Register network listener
         network.listen(this::processMessage);
     }
-    
+
     @Override
     public void processMessage(RabiaMessage message) {
         if (message instanceof StateSyncRequest request) {
@@ -151,76 +153,89 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
             handleCommit(commit);
         }
     }
-    
-    public void submitCommand(byte[] command) {
+
+    public void submitCommand(Command command) {
         commandBuffer.offer(command);
     }
-    
+
     private void processCommandBuffer() {
-        List<byte[]> batchCommands = new ArrayList<>();
-        byte[] command;
-        
+        List<Command> batchCommands = new ArrayList<>();
+        Command command;
+
         while (batchCommands.size() < BATCH_SIZE && (command = commandBuffer.poll()) != null) {
             batchCommands.add(command);
         }
-        
+
         if (!batchCommands.isEmpty()) {
             // Create a new command selection
             CommandSelection selection = new CommandSelection(batchCommands);
             commandSelections.put(selection.getSelectionId(), new TimestampedEntry<>(selection));
             selectionQueue.offer(selection);
-            
+
             // Start the selection process
             startSelectionProcess(selection);
         }
     }
-    
+
     private void startSelectionProcess(CommandSelection selection) {
         // Select a random subset of nodes for this selection
         Set<NodeId> selectionNodes = selectRandomRecipients();
-        
+
         // Create and send selection proposal
         SelectionProposal proposal = new SelectionProposal(
-            UUID.randomUUID(),
-            System.currentTimeMillis(),
-            nodeId.id(),
-            selection.getSelectionId(),
-            selection.getCommands(),
-            selection.getSelectionTimestamp()
+                ULID.randomULID(),
+                System.currentTimeMillis(),
+                nodeId.id(),
+                selection.getSelectionId(),
+                selection.getCommands(),
+                selection.getSelectionTimestamp()
         );
-        
+
         for (NodeId node : selectionNodes) {
             network.send(node, proposal);
         }
     }
-    
+
     private void handleSelectionProposal(SelectionProposal proposal) {
         CommandSelection selection = commandSelections.computeIfAbsent(
-            proposal.selectionId(),
-            k -> new TimestampedEntry<>(new CommandSelection(proposal.commands()))
+                proposal.selectionId(),
+                k -> new TimestampedEntry<>(new CommandSelection(proposal.commands()))
         ).getValue();
-        
+
         // Only process if this is a newer selection
         if (proposal.selectionTimestamp() > selection.getSelectionTimestamp()) {
             selection = new CommandSelection(proposal.commands());
             commandSelections.put(proposal.selectionId(), new TimestampedEntry<>(selection));
         }
-        
+
         // Vote on the selection
         broadcastSelectionVote(proposal.selectionId(), true);
     }
-    
+
+    private void broadcastSelectionVote(ULID selectionId, boolean accepted) {
+        SelectionVote vote = new SelectionVote(
+                ULID.randomULID(),
+                System.currentTimeMillis(),
+                nodeId.id(),
+                selectionId,
+                accepted,
+                currentView.get()
+        );
+
+        network.broadcast(vote);
+    }
+
     private void handleSelectionVote(SelectionVote vote) {
         TimestampedEntry<CommandSelection> timestamped = commandSelections.get(vote.selectionId());
         if (timestamped != null && !timestamped.getValue().isSelected()) {
             VoteSet voteSet = voteSets.computeIfAbsent(
-                vote.selectionId(),
-                k -> new TimestampedEntry<>(new VoteSet())
+                    vote.selectionId(),
+                    k -> new TimestampedEntry<>(new VoteSet())
             ).getValue();
-            
+
             if (vote.accepted()) {
                 voteSet.addAcceptedVote(NodeId.create(vote.senderId()));
-                
+
                 // Check for quorum
                 if (voteSet.hasQuorum(quorumSize)) {
                     timestamped.getValue().setSelected(true);
@@ -230,20 +245,21 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
             }
         }
     }
-    
-    private void cleanupSelection(UUID selectionId) {
+
+    private void cleanupSelection(ULID selectionId) {
         commandSelections.remove(selectionId);
         selectionQueue.removeIf(s -> s.getSelectionId().equals(selectionId));
     }
-    
+
     private void handleProposal(ProposalMessage proposal) {
-        ProposalState state = proposalStates.computeIfAbsent(proposal.batchId(), 
-            k -> new ProposalState(proposal.commands()));
-            
+        ProposalState state = proposalStates.computeIfAbsent(proposal.batchId(),
+                                                             k -> new TimestampedEntry<>(new ProposalState(proposal.commands())))
+                                            .getValue();
+
         // Only process if we haven't seen this proposal before
         if (state.getLastSeenTime() < proposal.timestamp()) {
             state.setLastSeenTime(proposal.timestamp());
-            
+
             // Vote for the proposal if it's the first one we've seen
             if (!votes.containsKey(proposal.batchId())) {
                 votes.put(proposal.batchId(), new VoteCount());
@@ -251,29 +267,29 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
             }
         }
     }
-    
+
     private void handleVote(VoteMessage vote) {
         VoteSet voteSet = voteSets.computeIfAbsent(vote.batchId(), k -> new VoteSet());
-        
+
         // Check if vote is from current view
         if (vote.viewNumber() != currentView.get()) {
             // If not, we might need to trigger a view change
             handleViewChange(vote.viewNumber());
             return;
         }
-        
+
         NodeId voter = NodeId.create(vote.senderId());
-        
+
         // Only process vote if we haven't seen it before
-        if (!voteSet.getAcceptedVotes().contains(voter) && 
-            !voteSet.getRejectedVotes().contains(voter)) {
-            
+        if (!voteSet.getAcceptedVotes().contains(voter) &&
+                !voteSet.getRejectedVotes().contains(voter)) {
+
             if (vote.accepted()) {
                 voteSet.addAcceptedVote(voter);
             } else {
                 voteSet.addRejectedVote(voter);
             }
-            
+
             // Check for quorum
             if (voteSet.hasQuorum(quorumSize) && !voteSet.isCommitted()) {
                 ProposalState state = proposalStates.get(vote.batchId());
@@ -281,52 +297,64 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
                     // Mark as committed
                     voteSet.setCommitted(true);
                     state.setCommitted(true);
-                    
+
                     // Broadcast commit
                     broadcastCommit(vote.batchId(), state.getCommands());
-                    
+
                     // Execute commands
                     executeCommands(state.getCommands());
-                    
+
                     // Cleanup
                     cleanupProposal(vote.batchId());
                 }
             }
         }
     }
-    
+
     private void handleViewChange(long newViewNumber) {
         if (newViewNumber > currentView.get()) {
             // Update current view
             currentView.set(newViewNumber);
-            
+
             // Reset vote sets for new view
             voteSets.clear();
-            
+
             // Broadcast view change notification
             broadcastViewChange(newViewNumber);
         }
     }
-    
+
     private void broadcastViewChange(long newViewNumber) {
         // In a real implementation, this would broadcast to all nodes
         // For now, we'll just log it
         System.out.println("View change to: " + newViewNumber);
     }
-    
-    private void broadcastVote(UUID batchId, boolean accepted) {
+
+    private void broadcastVote(ULID batchId, boolean accepted) {
         VoteMessage vote = new VoteMessage(
-            UUID.randomUUID(),
-            System.currentTimeMillis(),
-            nodeId.id(),
-            batchId,
-            accepted,
-            currentView.get()  // Include current view number
+                ULID.randomULID(),
+                System.currentTimeMillis(),
+                nodeId.id(),
+                batchId,
+                accepted,
+                currentView.get()  // Include current view number
         );
-        
+
         network.broadcast(vote);
     }
-    
+
+    private void broadcastCommit(ULID batchId, List<Command> commands) {
+        CommitMessage commit = new CommitMessage(
+                ULID.randomULID(),
+                System.currentTimeMillis(),
+                nodeId.id(),
+                batchId,
+                commands
+        );
+
+        network.broadcast(commit);
+    }
+
     private void handleCommit(CommitMessage commit) {
         Batch batch = batches.get(commit.batchId());
         if (batch != null && !batch.isCommitted()) {
@@ -334,19 +362,18 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
             executeCommands(batch.commands());
         }
     }
-    
-    private void executeCommands(List<byte[]> commands) {
-        for (byte[] commandBytes : commands) {
+
+    private void executeCommands(List<Command> commands) {
+        for (Command command : commands) {
             try {
-                Command command = commandSerializer.decode(commandBytes, Command.class);
                 commandExecutor.accept(command);
             } catch (Exception e) {
                 System.err.println("Failed to execute command: " + e.getMessage());
             }
         }
     }
-    
-    private void cleanupProposal(UUID batchId) {
+
+    private void cleanupProposal(ULID batchId) {
         proposalStates.remove(batchId);
         lastProposalTimes.remove(batchId);
         retryCounts.remove(batchId);
@@ -354,60 +381,62 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
         receivedVotes.remove(batchId);
         batches.remove(batchId);
     }
-    
+
     private void handleStateSyncRequest(StateSyncRequest request) {
         // Only respond if we have a more recent state
         if (sequenceNumber.get() > request.lastKnownSequence()) {
             stateMachine.makeSnapshot()
-                       .onSuccess(snapshot -> {
-                           StateSyncResponse response = new StateSyncResponse(
-                               UUID.randomUUID(),
-                               System.currentTimeMillis(),
-                               nodeId.id(),
-                               sequenceNumber.get(),
-                               snapshot,
-                               true
-                           );
-                           network.send(NodeId.create(request.senderId()), response);
-                       })
-                       .onFailure(error -> {
-                           System.err.println("Failed to create snapshot: " + error);
-                       });
+                        .onSuccess(snapshot -> {
+                            // Send the complete snapshot in a single message
+                            StateSyncResponse response = new StateSyncResponse(
+                                    request.messageId(), // Use the same ID for request/response correlation
+                                    System.currentTimeMillis(),
+                                    nodeId.id(),
+                                    sequenceNumber.get(),
+                                    snapshot,
+                                    true  // Always complete since we send in one chunk
+                            );
+                            network.send(NodeId.create(request.senderId()), response);
+                        })
+                        .onFailure(error -> {
+                            System.err.println("Failed to create snapshot: " + error);
+                        });
         }
     }
-    
+
     private void handleStateSyncResponse(StateSyncResponse response) {
         TimestampedEntry<StateSyncRequest> timestamped = pendingSyncRequests.get(response.messageId());
         if (timestamped != null && response.sequenceNumber() > sequenceNumber.get()) {
+            // Apply the snapshot directly since we receive it in one chunk
             stateMachine.restoreSnapshot(response.stateSnapshot())
-                       .onSuccess(unit -> {
-                           sequenceNumber.set(response.sequenceNumber());
-                           pendingSyncRequests.remove(response.messageId());
-                           startConsensusParticipation();
-                       })
-                       .onFailure(error -> {
-                           System.err.println("Failed to restore snapshot: " + error);
-                           syncScheduler.schedule(() -> requestStateSync(), 5, TimeUnit.SECONDS);
-                       });
+                        .onSuccess(unit -> {
+                            sequenceNumber.set(response.sequenceNumber());
+                            pendingSyncRequests.remove(response.messageId());
+                            startConsensusParticipation();
+                        })
+                        .onFailure(error -> {
+                            System.err.println("Failed to restore snapshot: " + error);
+                            syncScheduler.schedule(() -> requestStateSync(), 5, TimeUnit.SECONDS);
+                        });
         }
     }
-    
+
     public void joinCluster() {
         // Request state synchronization from the cluster
         requestStateSync();
     }
-    
+
     private void requestStateSync() {
         StateSyncRequest request = new StateSyncRequest(
-            UUID.randomUUID(),
-            System.currentTimeMillis(),
-            nodeId.id(),
-            sequenceNumber.get()
+                ULID.randomULID(),
+                System.currentTimeMillis(),
+                nodeId.id(),
+                sequenceNumber.get()
         );
-        
+
         pendingSyncRequests.put(request.messageId(), new TimestampedEntry<>(request));
         network.broadcast(request);
-        
+
         syncScheduler.schedule(() -> {
             if (pendingSyncRequests.containsKey(request.messageId())) {
                 pendingSyncRequests.remove(request.messageId());
@@ -415,14 +444,14 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
             }
         }, 30, TimeUnit.SECONDS);
     }
-    
+
     private void startConsensusParticipation() {
         // Start participating in consensus after state sync
         // This could include joining the view change protocol,
         // starting to process commands, etc.
         System.out.println("Node " + nodeId + " joined consensus with sequence number " + sequenceNumber.get());
     }
-    
+
     public void shutdown() {
         scheduler.shutdown();
         syncScheduler.shutdown();
@@ -444,181 +473,180 @@ public class RabiaConsensus implements Consensus<RabiaMessage> {
             Thread.currentThread().interrupt();
         }
     }
-    
+
     // Helper classes
     private static class Batch {
-        private final List<byte[]> commands;
+        private final List<Command> commands;
         private volatile boolean committed;
-        
-        public Batch(List<byte[]> commands) {
+
+        public Batch(List<Command> commands) {
             this.commands = commands;
             this.committed = false;
         }
-        
-        public List<byte[]> commands() {
+
+        public List<Command> commands() {
             return commands;
         }
-        
+
         public boolean isCommitted() {
             return committed;
         }
-        
+
         public void setCommitted(boolean committed) {
             this.committed = committed;
         }
     }
-    
+
     private static class VoteCount {
         private final AtomicLong accepted = new AtomicLong(0);
         private final AtomicLong rejected = new AtomicLong(0);
-        
+
         public void incrementAccepted() {
             accepted.incrementAndGet();
         }
-        
+
         public void incrementRejected() {
             rejected.incrementAndGet();
         }
-        
+
         public long getAccepted() {
             return accepted.get();
         }
-        
+
         public long getRejected() {
             return rejected.get();
         }
     }
-    
+
     // Enhanced state tracking class
     private static class ProposalState {
-        private final List<byte[]> commands;
+        private final List<Command> commands;
         private volatile boolean committed;
         private volatile long lastSeenTime;
-        
-        public ProposalState(List<byte[]> commands) {
+
+        public ProposalState(List<Command> commands) {
             this.commands = commands;
             this.committed = false;
             this.lastSeenTime = System.currentTimeMillis();
         }
-        
-        public List<byte[]> getCommands() {
+
+        public List<Command> getCommands() {
             return commands;
         }
-        
+
         public boolean isCommitted() {
             return committed;
         }
-        
+
         public void setCommitted(boolean committed) {
             this.committed = committed;
         }
-        
+
         public long getLastSeenTime() {
             return lastSeenTime;
         }
-        
+
         public void setLastSeenTime(long lastSeenTime) {
             this.lastSeenTime = lastSeenTime;
         }
     }
-    
+
     // Enhanced voting state
     private static class VoteSet {
         private final Set<NodeId> acceptedVotes = ConcurrentHashMap.newKeySet();
         private final Set<NodeId> rejectedVotes = ConcurrentHashMap.newKeySet();
         private final AtomicLong viewNumber = new AtomicLong(0);
         private volatile boolean committed = false;
-        
+
         public void addAcceptedVote(NodeId nodeId) {
             acceptedVotes.add(nodeId);
         }
-        
+
         public void addRejectedVote(NodeId nodeId) {
             rejectedVotes.add(nodeId);
         }
-        
+
         public boolean hasQuorum(int quorumSize) {
             return acceptedVotes.size() >= quorumSize;
         }
-        
+
         public boolean isCommitted() {
             return committed;
         }
-        
+
         public void setCommitted(boolean committed) {
             this.committed = committed;
         }
-        
+
         public long getViewNumber() {
             return viewNumber.get();
         }
-        
+
         public void incrementViewNumber() {
             viewNumber.incrementAndGet();
         }
-        
+
         public Set<NodeId> getAcceptedVotes() {
             return Collections.unmodifiableSet(acceptedVotes);
         }
-        
+
         public Set<NodeId> getRejectedVotes() {
             return Collections.unmodifiableSet(rejectedVotes);
         }
     }
-    
+
     private Set<NodeId> selectRandomRecipients() {
         List<NodeId> nodes = new ArrayList<>(clusterNodes);
         Collections.shuffle(nodes, random);
-        
+
         // Enhanced selection: ensure at least one node from each region/zone
         // This is a simplified version - in production, you'd want to consider
         // actual network topology and latency
         int subsetSize = Math.min(quorumSize, nodes.size());
         Set<NodeId> selected = new HashSet<>();
-        
+
         // First, ensure we have at least one node from each "region"
         // (In a real implementation, you'd want to group nodes by region/zone)
         int regions = Math.min(3, nodes.size()); // Assuming 3 regions for example
         for (int i = 0; i < regions; i++) {
             selected.add(nodes.get(i));
         }
-        
+
         // Then fill the rest randomly
         while (selected.size() < subsetSize) {
             selected.add(nodes.get(random.nextInt(nodes.size())));
         }
-        
+
         return selected;
     }
-    
+
     private void cleanupOldEntries() {
         long currentTime = System.currentTimeMillis();
-        
+
         // Cleanup command selections
         commandSelections.entrySet().removeIf(entry -> {
             TimestampedEntry<CommandSelection> timestamped = entry.getValue();
             return currentTime - timestamped.getTimestamp() > MAX_ENTRY_AGE_MS &&
-                   timestamped.getValue().isSelected();
+                    timestamped.getValue().isSelected();
         });
-        
+
         // Cleanup vote sets
         voteSets.entrySet().removeIf(entry -> {
-            TimestampedEntry<VoteSet> timestamped = entry.getValue();
-            return currentTime - timestamped.getTimestamp() > MAX_ENTRY_AGE_MS &&
-                   timestamped.getValue().isCommitted();
+            VoteSet voteSet = entry.getValue();
+            return voteSet.isCommitted() &&
+                    (currentTime - lastProposalTimes.getOrDefault(entry.getKey(), 0L) > MAX_ENTRY_AGE_MS);
         });
-        
+
         // Cleanup proposal states
         proposalStates.entrySet().removeIf(entry -> {
-            TimestampedEntry<ProposalState> timestamped = entry.getValue();
-            return currentTime - timestamped.getTimestamp() > MAX_ENTRY_AGE_MS &&
-                   timestamped.getValue().isCommitted();
+            ProposalState state = entry.getValue().getValue();
+            return state.isCommitted() &&
+                    (currentTime - entry.getValue().getTimestamp() > MAX_ENTRY_AGE_MS);
         });
-        
+
         // Cleanup pending sync requests
-        pendingSyncRequests.entrySet().removeIf(entry -> {
-            TimestampedEntry<StateSyncRequest> timestamped = entry.getValue();
-            return currentTime - timestamped.getTimestamp() > MAX_ENTRY_AGE_MS;
-        });
+        pendingSyncRequests.entrySet().removeIf(entry ->
+                                                        currentTime - entry.getValue().getTimestamp() > MAX_ENTRY_AGE_MS
+        );
     }
-} 
+}

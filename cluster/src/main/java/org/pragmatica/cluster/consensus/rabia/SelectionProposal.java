@@ -1,12 +1,14 @@
 package org.pragmatica.cluster.consensus.rabia;
 
-import java.util.List;
-import java.util.UUID;
+import org.pragmatica.cluster.consensus.Command;
+import org.pragmatica.utility.ULID;
 
-public record SelectionProposal(UUID messageId,
-                              long timestamp,
-                              String senderId,
-                              UUID selectionId,
-                              List<byte[]> commands,
-                              long selectionTimestamp) implements RabiaMessage {
-} 
+import java.util.List;
+
+public record SelectionProposal(ULID messageId,
+                                long timestamp,
+                                String senderId,
+                                ULID selectionId,
+                                List<Command> commands,
+                                long selectionTimestamp) implements RabiaMessage {
+}

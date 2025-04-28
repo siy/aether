@@ -1,11 +1,11 @@
 package org.pragmatica.cluster.consensus.rabia;
 
-import java.util.UUID;
+import org.pragmatica.utility.ULID;
 
-public record StateSyncResponse(UUID messageId,
-                              long timestamp,
-                              String senderId,
-                              long sequenceNumber,
-                              byte[] stateSnapshot,
-                              boolean isComplete) implements RabiaMessage {
-} 
+public record StateSyncResponse(ULID messageId,
+                                long timestamp,
+                                String senderId,
+                                long sequenceNumber,
+                                byte[] stateSnapshot,
+                                boolean isComplete) implements RabiaMessage {
+}

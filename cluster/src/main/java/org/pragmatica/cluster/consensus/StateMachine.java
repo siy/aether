@@ -3,6 +3,8 @@ package org.pragmatica.cluster.consensus;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
 
+import java.util.List;
+
 public interface StateMachine {
     /**
      * Process a command and update the state machine's state.
@@ -11,6 +13,10 @@ public interface StateMachine {
      * @param command The command to process
      */
     void process(Command command);
+
+    default void process(List<Command> commands) {
+        commands.forEach(this::process);
+    }
 
     /**
      * Create a snapshot of the current state machine state.

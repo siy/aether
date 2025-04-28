@@ -134,11 +134,11 @@ public class NettyClusterNetwork<T extends ProtocolMessage> implements ClusterNe
     }
 
     @Override
-    public void send(NodeId peerId, T message) {
+    public <M extends ProtocolMessage> void send(NodeId peerId, M message) {
         sendToChannel(peerId, message, peerLinks.get(peerId));
     }
 
-    private void sendToChannel(NodeId peerId, T message, Channel channel) {
+    private <M extends ProtocolMessage> void sendToChannel(NodeId peerId, M message, Channel channel) {
         if (channel == null) {
             logger.warn("Peer {} is not connected", peerId);
             return;
@@ -155,7 +155,7 @@ public class NettyClusterNetwork<T extends ProtocolMessage> implements ClusterNe
     }
 
     @Override
-    public void broadcast(T message) {
+    public <M extends ProtocolMessage> void broadcast(M message) {
         peerLinks.forEach((peerId, channel) -> sendToChannel(peerId, message, channel));
     }
 

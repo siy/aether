@@ -7,9 +7,9 @@ import java.util.function.Consumer;
 
 public interface ClusterNetwork<T extends ProtocolMessage> {
 
-    void broadcast(T message);
+    <M extends ProtocolMessage> void broadcast(M message);
 
-    void send(NodeId nodeId, T message);
+    <M extends ProtocolMessage> void send(NodeId nodeId, M message);
 
     void connect(NodeId nodeId);
 

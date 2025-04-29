@@ -1,47 +1,55 @@
 package org.pragmatica.cluster.consensus.rabia;
 
-import org.pragmatica.cluster.consensus.Command;
 import org.pragmatica.cluster.consensus.Consensus;
-import org.pragmatica.cluster.consensus.StateMachine;
 import org.pragmatica.cluster.consensus.rabia.RabiaProtocolMessage.*;
 import org.pragmatica.cluster.net.AddressBook;
 import org.pragmatica.cluster.net.ClusterNetwork;
 import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.cluster.state.StateMachine;
+import org.pragmatica.cluster.state.Command;
+import org.pragmatica.lang.io.TimeSpan;
+import org.pragmatica.lang.utils.SharedScheduler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class RabiaEngine<T extends RabiaProtocolMessage> implements Consensus<T> {
+/// Implementation of the Rabia state machine replication consensus protocol for distributed systems.
+///
+/// @param <T> Type of protocol messages used for communication
+/// @param <C> Type of commands to be processed by the state machine
+public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> implements Consensus<T, C> {
     private static final Logger log = LoggerFactory.getLogger(RabiaEngine.class);
     private final NodeId self;
     private final AddressBook addressBook;
     private final ClusterNetwork<T> network;
-    private final StateMachine stateMachine;
+    private final StateMachine<C> stateMachine;
 
     //TODO: make queue size configurable
-    private final BlockingQueue<Command> pendingCommands = new ArrayBlockingQueue<>(1024);
-    private final Map<Integer, RoundData> instances = new ConcurrentHashMap<>();
+    private final BlockingQueue<C> pendingCommands = new ArrayBlockingQueue<>(1024);
+    private final Map<Integer, RoundData<C>> instances = new ConcurrentHashMap<>();
     private final AtomicInteger nextSlot = new AtomicInteger(1);
-
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor();
 
     private volatile NodeMode mode = NodeMode.FOLLOWER;
 
-    public RabiaEngine(NodeId self, AddressBook addressBook, ClusterNetwork<T> network, StateMachine stateMachine) {
+    public RabiaEngine(NodeId self, AddressBook addressBook, ClusterNetwork<T> network, StateMachine<C> stateMachine) {
         this.self = self;
         this.addressBook = addressBook;
         this.network = network;
         this.stateMachine = stateMachine;
-        cleanupExecutor.scheduleAtFixedRate(this::cleanupOldInstances, 10, 10, TimeUnit.SECONDS);
+
+        //TODO: make interval configurable
+        SharedScheduler.scheduleAtFixedRate(this::cleanupOldInstances, TimeSpan.timeSpan(10).seconds());
     }
 
     @Override
-    public void submitCommands(List<Command> commands) {
+    public void submitCommands(List<C> commands) {
         pendingCommands.addAll(commands);
 
         if (mode == NodeMode.NORMAL) {
@@ -56,33 +64,34 @@ public class RabiaEngine<T extends RabiaProtocolMessage> implements Consensus<T>
             return;
         }
 
-        var batch = new ArrayList<Command>();
+        var batch = new ArrayList<C>();
         pendingCommands.drainTo(batch, 10);
 
         if (batch.isEmpty()) {
             return;
         }
 
-        var instance = new RoundData(slot, batch);
+        var instance = RoundData.create(slot, batch);
         instances.put(slot, instance);
-        network.broadcast(new Propose(self, slot, batch));
+        network.broadcast(new Propose<>(self, slot, batch));
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void processMessage(RabiaProtocolMessage message) {
         executor.execute(() -> {
             switch (message) {
-                case Propose propose -> onPropose(propose);
+                case Propose<?> propose -> onPropose((Propose<C>) propose);
                 case Vote vote -> onVote(vote);
-                case RabiaProtocolMessage.Decide decide -> onDecide(decide);
-                case RabiaProtocolMessage.SnapshotRequest snapshotRequest -> onSnapshotRequest(snapshotRequest);
+                case Decide<?> decide -> onDecide((Decide<C>) decide);
+                case SnapshotRequest snapshotRequest -> onSnapshotRequest(snapshotRequest);
                 case SnapshotResponse snapshotResponse -> onSnapshotResponse(snapshotResponse);
             }
         });
     }
 
-    private void onPropose(Propose msg) {
-        var instance = instances.computeIfAbsent(msg.slot(), s -> new RoundData(s, msg.commands()));
+    private void onPropose(Propose<C> msg) {
+        var instance = instances.computeIfAbsent(msg.slot(), s -> RoundData.create(s, msg.commands()));
 
         instance.proposals.put(msg.sender(), msg.commands());
 
@@ -113,17 +122,17 @@ public class RabiaEngine<T extends RabiaProtocolMessage> implements Consensus<T>
         }
     }
 
-    private void onDecide(RabiaProtocolMessage.Decide msg) {
-        var instance = instances.computeIfAbsent(msg.slot(), s -> new RoundData(s, msg.commands()));
+    private void onDecide(Decide<C> msg) {
+        var instance = instances.computeIfAbsent(msg.slot(), s -> RoundData.create(s, msg.commands()));
         decide(instance, msg.commands());
     }
 
-    private void decide(RoundData instance, List<Command> commands) {
+    private void decide(RoundData<C> instance, List<C> commands) {
         if (instance.decided.compareAndSet(false, true)) {
             if (!commands.isEmpty()) {
-                stateMachine.process(commands);
+                commands.forEach(stateMachine::process);
             }
-            network.broadcast(new RabiaProtocolMessage.Decide(self, instance.slot, commands));
+            network.broadcast(new Decide<>(self, instance.slot, commands));
             nextSlot.incrementAndGet();
             startRound();
         }
@@ -148,25 +157,27 @@ public class RabiaEngine<T extends RabiaProtocolMessage> implements Consensus<T>
                                                   cause));
     }
 
+    //TODO: make configurable
     private void cleanupOldInstances() {
         int currentSlot = nextSlot.get();
         instances.keySet()
-                 .removeIf(slot -> slot < currentSlot - 100); //TODO: make configurable
+                 .removeIf(slot -> slot < currentSlot - 100);
     }
 
     enum NodeMode {FOLLOWER, NORMAL}
 
-    static class RoundData {
-        final int slot;
-        final List<Command> commands;
-        final Map<NodeId, List<Command>> proposals = new ConcurrentHashMap<>();
-        final Map<Boolean, Integer> votes = new ConcurrentHashMap<>();
-        final AtomicBoolean voted = new AtomicBoolean(false);
-        final AtomicBoolean decided = new AtomicBoolean(false);
-
-        RoundData(int slot, List<Command> commands) {
-            this.slot = slot;
-            this.commands = commands;
+    record RoundData<C extends Command>(int slot,
+                                        List<C> commands,
+                                        Map<NodeId, List<C>> proposals,
+                                        Map<Boolean, Integer> votes,
+                                        AtomicBoolean voted,
+                                        AtomicBoolean decided) {
+        static <C extends Command> RoundData<C> create(int slot, List<C> commands) {
+            return new RoundData<>(slot, commands,
+                                   new ConcurrentHashMap<>(),
+                                   new ConcurrentHashMap<>(),
+                                   new AtomicBoolean(false),
+                                   new AtomicBoolean(false));
         }
     }
 }

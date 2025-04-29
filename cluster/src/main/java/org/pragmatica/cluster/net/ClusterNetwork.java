@@ -1,7 +1,6 @@
 package org.pragmatica.cluster.net;
 
 import org.pragmatica.cluster.consensus.ProtocolMessage;
-import org.pragmatica.cluster.consensus.ViewChange;
 
 import java.util.function.Consumer;
 

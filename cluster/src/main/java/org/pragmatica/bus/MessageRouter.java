@@ -6,7 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/// **NOTE**: This implementation assumes that instance is configured and then used without
+/// **NOTE**: This implementation assumes that the instance is configured and then used without
 /// changes.
 public interface MessageRouter<R, T> {
     R route(T message);

@@ -23,6 +23,7 @@
         <junit.version>5.11.4</junit.version>
         <assertj-core.version>3.26.3</assertj-core.version>
         <mockito.version>5.14.2</mockito.version>
+        <pragmatica.version>0.6.6</pragmatica.version>
     </properties>
 
     <dependencyManagement>
@@ -30,7 +31,7 @@
             <dependency>
                 <groupId>org.pragmatica-lite</groupId>
                 <artifactId>core</artifactId>
-                <version>0.6.5</version>
+                <version>${pragmatica.version}</version>
             </dependency>
 
             <!-- Logging -->
@@ -72,26 +73,6 @@
                 <artifactId>netty-all</artifactId>
                 <version>${netty.version}</version>
             </dependency>
-<!--            <dependency>-->
-<!--                <groupId>io.netty</groupId>-->
-<!--                <artifactId>netty-buffer</artifactId>-->
-<!--                <version>${netty.version}</version>-->
-<!--            </dependency>-->
-<!--            <dependency>-->
-<!--                <groupId>io.netty</groupId>-->
-<!--                <artifactId>netty-codec</artifactId>-->
-<!--                <version>${netty.version}</version>-->
-<!--            </dependency>-->
-<!--            <dependency>-->
-<!--                <groupId>io.netty</groupId>-->
-<!--                <artifactId>netty-transport</artifactId>-->
-<!--                <version>${netty.version}</version>-->
-<!--            </dependency>-->
-<!--            <dependency>-->
-<!--                <groupId>io.netty</groupId>-->
-<!--                <artifactId>netty-handler</artifactId>-->
-<!--                <version>${netty.version}</version>-->
-<!--            </dependency>-->
         </dependencies>
     </dependencyManagement>
 

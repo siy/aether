@@ -9,9 +9,10 @@ import org.slf4j.LoggerFactory;
 
 public class MessageEncoder<T extends ProtocolMessage> extends MessageToByteEncoder<ProtocolMessage> {
     private static final Logger logger = LoggerFactory.getLogger(MessageEncoder.class);
-    private final Serializer<T> serializer;
 
-    public MessageEncoder(Serializer<T> serializer) {
+    private final Serializer serializer;
+
+    public MessageEncoder(Serializer serializer) {
         this.serializer = serializer;
     }
 

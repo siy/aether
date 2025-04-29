@@ -3,7 +3,7 @@ package org.pragmatica.cluster.net.netty;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import org.pragmatica.cluster.consensus.ProtocolMessage;
-import org.pragmatica.cluster.consensus.ViewChange;
+import org.pragmatica.cluster.net.ViewChange;
 import org.pragmatica.cluster.net.*;
 import org.pragmatica.lang.Option;
 import org.slf4j.Logger;
@@ -39,7 +39,7 @@ public class NettyClusterNetwork<T extends ProtocolMessage> implements ClusterNe
         ADD, REMOVE, SHUTDOWN
     }
 
-    public NettyClusterNetwork(NodeId self, int port, AddressBook addressBook, Serializer<T> serializer) {
+    public NettyClusterNetwork(NodeId self, int port, AddressBook addressBook, Serializer serializer) {
         this.self = self;
         this.port = port;
         this.addressBook = addressBook;

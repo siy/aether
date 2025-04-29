@@ -12,9 +12,9 @@ import java.util.List;
 public class MessageDecoder<T extends ProtocolMessage> extends ByteToMessageDecoder {
     private static final Logger logger = LoggerFactory.getLogger(MessageDecoder.class);
 
-    private final Serializer<T> serializer;
+    private final Serializer serializer;
 
-    public MessageDecoder(Serializer<T> serializer) {
+    public MessageDecoder(Serializer serializer) {
         this.serializer = serializer;
     }
 

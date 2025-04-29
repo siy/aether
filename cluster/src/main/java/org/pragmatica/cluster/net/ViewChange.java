@@ -1,6 +1,4 @@
-package org.pragmatica.cluster.consensus;
-
-import org.pragmatica.cluster.net.NodeId;
+package org.pragmatica.cluster.net;
 
 import java.util.List;
 
@@ -23,7 +21,7 @@ public sealed interface ViewChange {
         return new NodeRemoved(nodeId, changedView);
     }
 
-    static NodeRemoved nodeDown(NodeId nodeId) {
-        return new NodeRemoved(nodeId, List.of());
+    static NodeDown nodeDown(NodeId nodeId) {
+        return new NodeDown(nodeId, List.of());
     }
 }

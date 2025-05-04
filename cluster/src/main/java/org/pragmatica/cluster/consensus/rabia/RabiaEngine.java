@@ -86,7 +86,7 @@ public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> impl
         SharedScheduler.schedule(this::synchronize, config.syncRetryInterval());
     }
 
-    void quorumState(QuorumState quorumState) {
+    public void quorumState(QuorumState quorumState) {
         log.trace("Node {} received quorum state {}", self, quorumState);
         switch (quorumState) {
             case APPEARED -> clusterConnected();

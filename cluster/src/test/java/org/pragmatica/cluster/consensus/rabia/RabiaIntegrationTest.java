@@ -2,9 +2,11 @@ package org.pragmatica.cluster.consensus.rabia;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.pragmatica.cluster.consensus.ConsensusErrors;
 import org.pragmatica.cluster.net.AddressBook;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.NodeInfo;
+import org.pragmatica.cluster.net.QuorumState;
 import org.pragmatica.cluster.net.local.LocalNetwork;
 import org.pragmatica.cluster.net.netty.Serializer;
 import org.pragmatica.cluster.state.Notification;
@@ -26,8 +28,11 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 class RabiaIntegrationTest {
+    private static final Logger log = LoggerFactory.getLogger(RabiaIntegrationTest.class);
+
     /// A very simple Serializer that uses Java built-in object streams
     /// to encode/decode snapshots of the KVStore.
     static class TestSerializer implements Serializer {
@@ -79,7 +84,6 @@ class RabiaIntegrationTest {
         Cluster(int size) {
             addressBook = new TestAddressBook(size);
             network = new LocalNetwork<>(addressBook);
-            network.start();
 
             // create nodes
             for (int i = 1; i <= size; i++) {
@@ -87,6 +91,12 @@ class RabiaIntegrationTest {
                 ids.add(id);
                 addNewNode(id);
             }
+            network.start();
+        }
+
+        private void quorumChange(QuorumState quorumState) {
+            engines.values()
+                   .forEach(engine -> engine.quorumState(quorumState));
         }
 
         void disconnect(NodeId id) {
@@ -96,6 +106,7 @@ class RabiaIntegrationTest {
         void addNewNode(NodeId id) {
             var store = new KVStore<String, String>(serializer);
             var engine = new RabiaEngine<>(id, addressBook, network, store, ProtocolConfig.testConfig());
+            network.observeQuorumState(this::quorumChange);
             network.addNode(id, engine::processMessage);
             stores.put(id, store);
             engines.put(id, engine);
@@ -121,8 +132,17 @@ class RabiaIntegrationTest {
     void threeNodeCluster_agreesAndPropagates() {
         var c = new Cluster(3);
 
+        c.engines.get(c.ids.getFirst())
+                 .startPromise()
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully started node-1"))
+                 .onFailure(cause -> fail("Failed to start node-1: " + cause));
+
         c.engines.get(c.ids.get(0))
-                 .submitCommands(List.of(new KVCommand.Put<>("k1", "v1")));
+                 .apply(List.of(new KVCommand.Put<>("k1", "v1")))
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully applied command: (k1, v1)"))
+                 .onFailure(cause -> fail("Failed to apply command: (k1, v1): " + cause));
 
         // await all three having it
         Awaitility.await()
@@ -133,7 +153,10 @@ class RabiaIntegrationTest {
 
         // submit on node2
         c.engines.get(c.ids.get(1))
-                 .submitCommands(List.of(new KVCommand.Put<>("k2", "v2")));
+                 .apply(List.of(new KVCommand.Put<>("k2", "v2")))
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully applied command: (k2, v2)"))
+                 .onFailure(cause -> fail("Failed to apply command: (k2, v2): " + cause));
 
         Awaitility.await()
                   .atMost(2, TimeUnit.SECONDS)
@@ -146,8 +169,18 @@ class RabiaIntegrationTest {
     void fiveNodeCluster_withFailures_andSnapshotJoin() {
         var c = new Cluster(5);
 
+        c.engines.get(c.ids.get(1))
+                 .startPromise()
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully started node-2"))
+                 .onFailure(cause -> fail("Failed to start node-2: " + cause));
+
+
         c.engines.get(c.ids.getFirst())
-                 .submitCommands(List.of(new KVCommand.Put<>("a", "1")));
+                 .apply(List.of(new KVCommand.Put<>("a", "1")))
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully applied command: (a, 1)"))
+                 .onFailure(cause -> fail("Failed to apply command: (a, 1): " + cause));
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
@@ -160,7 +193,10 @@ class RabiaIntegrationTest {
 
         // still quorum on 4 nodes: put b->2
         c.engines.get(c.ids.get(1))
-                 .submitCommands(List.of(new KVCommand.Put<>("b", "2")));
+                 .apply(List.of(new KVCommand.Put<>("b", "2")))
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully applied command: (b, 2)"))
+                 .onFailure(cause -> fail("Failed to apply command: (b, 2): " + cause));
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
@@ -173,7 +209,10 @@ class RabiaIntegrationTest {
 
         // still quorum on 3 nodes: put c->3
         c.engines.get(c.ids.get(2))
-                 .submitCommands(List.of(new KVCommand.Put<>("c", "3")));
+                 .apply(List.of(new KVCommand.Put<>("c", "3")))
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully applied command: (c, 3)"))
+                 .onFailure(cause -> fail("Failed to apply command: (c, 3): " + cause));
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
@@ -185,7 +224,11 @@ class RabiaIntegrationTest {
         c.disconnect(c.ids.get(2));
         var beforeSize = readStorage(c.stores.get(c.ids.get(3))).size();
 
-        assertFalse(c.engines.get(c.ids.get(3)).trySubmitCommands(List.of(new KVCommand.Put<>("d", "4"))));
+        c.engines.get(c.ids.get(3))
+                 .apply(List.of(new KVCommand.Put<>("d", "4")))
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> fail("Should not be successful"))
+                 .onFailure(cause -> assertEquals(ConsensusErrors.nodeInactive(c.ids.get(3)), cause));
 
         Awaitility.await()
                   .during(Duration.ofSeconds(1))
@@ -196,7 +239,12 @@ class RabiaIntegrationTest {
         var node6 = NodeId.create("node-6");
         c.addNewNode(node6);
 
-        //TODO: reset state machine. so far we have no method for that
+        c.engines.get(node6)
+                 .startPromise()
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully started node-6"))
+                 .onFailure(cause -> fail("Failed to start node-6: " + cause));
+
         // node-6 should eventually have all values: a,b,c
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
@@ -211,7 +259,10 @@ class RabiaIntegrationTest {
 
         // now nodes 4,5,6 form a quorum of 3: put e->5
         c.engines.get(node6)
-                 .submitCommands(List.of(new KVCommand.Put<>("e", "5")));
+                 .apply(List.of(new KVCommand.Put<>("e", "5")))
+                 .await(timeSpan(10).seconds())
+                 .onSuccess(_ -> log.info("Successfully applied command: (e, 5)"))
+                 .onFailure(cause -> fail("Failed to apply command: (e, 5): " + cause));
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)

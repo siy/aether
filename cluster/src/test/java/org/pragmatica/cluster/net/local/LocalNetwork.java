@@ -66,7 +66,7 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
     @Override
     public void disconnect(NodeId nodeId) {
         nodes.remove(nodeId);
-        if (nodes.size() < addressBook.quorumSize() - 1) {
+        if (nodes.size() == addressBook.quorumSize() - 1) {
             quorumObserver.accept(QuorumState.DISAPPEARED);
         }
     }

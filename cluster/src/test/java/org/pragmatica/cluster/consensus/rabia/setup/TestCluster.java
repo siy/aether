@@ -7,6 +7,7 @@ import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.local.LocalNetwork;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
+import org.pragmatica.lang.Promise;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,14 +107,14 @@ public class TestCluster {
         return stores.get(id).snapshot();
     }
 
-    public boolean submitCommand(NodeId id, KVCommand command) {
+    public Promise<List<Object>> submitCommand(NodeId id, KVCommand command) {
         testMetrics.recordCommandSubmit(id);
-        return engines.get(id).trySubmitCommands(List.of(command));
+        return engines.get(id).apply(List.of(command));
     }
 
-    public boolean submitCommands(NodeId id, List<KVCommand> commands) {
+    public Promise<List<Object>> submitCommands(NodeId id, List<KVCommand> commands) {
         testMetrics.recordCommandSubmit(id);
-        return engines.get(id).trySubmitCommands(commands);
+        return engines.get(id).apply(commands);
     }
 
     public int getClusterSize() {

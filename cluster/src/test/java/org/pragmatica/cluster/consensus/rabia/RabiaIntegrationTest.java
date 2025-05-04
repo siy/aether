@@ -57,19 +57,7 @@ class RabiaIntegrationTest {
 
         c.awaitStart();
 
-        c.engines()
-         .get(c.ids().get(1))
-         .startPromise()
-         .await(timeSpan(10).seconds())
-         .onSuccess(_ -> log.info("Successfully started node-2"))
-         .onFailure(cause -> fail("Failed to start node-2: " + cause));
-
-
-        c.engines().get(c.getFirst())
-         .apply(List.of(new KVCommand.Put<>("a", "1")))
-         .await(timeSpan(10).seconds())
-         .onSuccess(_ -> log.info("Successfully applied command: (a, 1)"))
-         .onFailure(cause -> fail("Failed to apply command: (a, 1): " + cause));
+        c.submitAndWait(c.getFirst(), new KVCommand.Put<>("a", "1"));
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
@@ -79,11 +67,7 @@ class RabiaIntegrationTest {
         c.disconnect(c.getFirst());
 
         // still quorum on 4 nodes: put b->2
-        c.engines().get(c.ids().get(1))
-         .apply(List.of(new KVCommand.Put<>("b", "2")))
-         .await(timeSpan(10).seconds())
-         .onSuccess(_ -> log.info("Successfully applied command: (b, 2)"))
-         .onFailure(cause -> fail("Failed to apply command: (b, 2): " + cause));
+        c.submitAndWait(c.ids().get(1), new KVCommand.Put<>("b", "2"));
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
@@ -93,12 +77,7 @@ class RabiaIntegrationTest {
         c.disconnect(c.ids().get(1));
 
         // still quorum on 3 nodes: put c->3
-        c.engines()
-         .get(c.ids().get(2))
-         .apply(List.of(new KVCommand.Put<>("c", "3")))
-         .await(timeSpan(10).seconds())
-         .onSuccess(_ -> log.info("Successfully applied command: (c, 3)"))
-         .onFailure(cause -> fail("Failed to apply command: (c, 3): " + cause));
+        c.submitAndWait(c.ids().get(2), new KVCommand.Put<>("c", "3"));
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
@@ -108,7 +87,8 @@ class RabiaIntegrationTest {
         c.disconnect(c.ids().get(2));
         var beforeSize = c.stores().get(c.ids().get(3)).snapshot().size();
 
-        c.engines().get(c.ids().get(3))
+        c.engines()
+         .get(c.ids().get(3))
          .apply(List.of(new KVCommand.Put<>("d", "4")))
          .await(timeSpan(2).seconds())
          .onSuccess(_ -> fail("Should not be successful"))
@@ -122,13 +102,7 @@ class RabiaIntegrationTest {
         // bring up node-6 as a replacement
         var node6 = NodeId.create("node-6");
         c.addNewNode(node6);
-
-        c.engines()
-         .get(node6)
-         .startPromise()
-         .await(timeSpan(10).seconds())
-         .onSuccess(_ -> log.info("Successfully started node-6"))
-         .onFailure(cause -> fail("Failed to start node-6: " + cause));
+        c.awaitNode(node6);
 
         // node-6 should eventually have all values: a,b,c
         Awaitility.await()
@@ -143,12 +117,7 @@ class RabiaIntegrationTest {
         assertTrue(c.network().quorumConnected());
 
         // now nodes 4,5,6 form a quorum of 3: put e->5
-        c.engines()
-         .get(node6)
-         .apply(List.of(new KVCommand.Put<>("e", "5")))
-         .await(timeSpan(10).seconds())
-         .onSuccess(_ -> log.info("Successfully applied command: (e, 5)"))
-         .onFailure(cause -> fail("Failed to apply command: (e, 5): " + cause));
+        c.submitAndWait(node6, new KVCommand.Put<>("e", "5"));
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)

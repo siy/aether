@@ -80,6 +80,13 @@ public class TestCluster {
         store.observeStateChanges(new StateChangePrinter(id));
     }
 
+    public void awaitNode(NodeId nodeId) {
+        engines.get(nodeId)
+               .startPromise()
+               .await(timeSpan(10).seconds())
+               .onFailure(cause -> fail("Failed to start " + nodeId.id() + " " + cause));
+    }
+
     public void awaitStart() {
         var promises = engines.values()
                               .stream()
@@ -89,6 +96,13 @@ public class TestCluster {
         Promise.allOf(promises)
                .await(timeSpan(10).seconds())
                .onFailureRun(() -> fail("Failed to start all nodes within 10 seconds"));
+    }
+
+    public void submitAndWait(NodeId nodeId, KVCommand command) {
+        engines.get(nodeId)
+               .apply(List.of(command))
+               .await(timeSpan(10).seconds())
+               .onFailure(cause -> fail("Failed to apply command: (a, 1): " + cause));
     }
 
     public boolean allNodesHaveValue(String k1, String v1) {

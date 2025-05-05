@@ -31,8 +31,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /// Implementation of the Rabia consensus protocol.
 public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> implements Consensus<T, C> {
@@ -250,18 +248,17 @@ public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> impl
             return;
         }
 
-        var collected = syncResponses.values()
-                                     .stream()
-                                     .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+        log.trace("Node {} received {} responses, collected: {}", self, syncResponses.size(), syncResponses);
 
-        var candidate = collected.entrySet()
-                                 .stream()
-                                 .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-                                 .map(Map.Entry::getKey)
-                                 .findFirst();
-        Option.from(candidate)
-              .onEmpty(syncResponses::clear)
-              .onPresent(this::restoreState);
+        // Use the latest known state among received responses
+        var candidate = syncResponses.values()
+                                     .stream()
+                                     .sorted(Comparator.comparing(SavedState::lastCommittedPhase))
+                                     .toList()
+                                     .getLast();
+
+        log.trace("Node {} uses {} as synchronization candidate", self, candidate);
+        restoreState(candidate);
     }
 
     private void restoreState(SavedState<C> state) {
@@ -277,6 +274,7 @@ public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> impl
                         lastCommittedPhase.set(state.lastCommittedPhase());
                         state.pendingBatches()
                              .forEach(batch -> pendingBatches.put(batch.correlationId(), batch));
+                        persistence.save(stateMachine, currentPhase.get(), pendingBatches.values());
 
                         log.info("Node {} restored state from persistence. Current phase {}",
                                  self,

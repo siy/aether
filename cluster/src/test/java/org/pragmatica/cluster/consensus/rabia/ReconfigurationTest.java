@@ -1,7 +1,6 @@
 package org.pragmatica.cluster.consensus.rabia;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.pragmatica.cluster.consensus.rabia.infrastructure.TestCluster;
 import org.pragmatica.cluster.net.NodeId;
@@ -60,7 +59,7 @@ public class ReconfigurationTest {
                .until(() -> cluster.allNodesHaveValue("initial-key-" + (initialCommands - 1), 
                                                      "value-" + (initialCommands - 1)));
         
-        // Capture the current state snapshot before adding new node
+        // Capture the current state snapshot before adding a new node
         var beforeSnapshot = cluster.stores().get(clientNode).snapshot();
         int beforeSize = beforeSnapshot.size();
         log.info("Current state size: {} entries", beforeSize);
@@ -110,7 +109,7 @@ public class ReconfigurationTest {
         
         log.info("New node successfully synced state");
         
-        // Submit additional commands and verify new node participates
+        // Submit additional commands and verify a new node participates
         int additionalCommands = 20;
         for (int i = 0; i < additionalCommands; i++) {
             var key = "post-add-key-" + i;
@@ -134,7 +133,7 @@ public class ReconfigurationTest {
         // Verify the quorum size has increased
         assertTrue(cluster.network().quorumConnected(), "Cluster should have an active quorum");
         
-        // Final verification - check state consistency across all nodes including the new one
+        // Final verification - check state consistency across all nodes, including the new one
         var allNodes = new ArrayList<>(cluster.ids());
         allNodes.add(newNode);
 
@@ -180,7 +179,7 @@ public class ReconfigurationTest {
         
         log.info("Initial state established with {} commands", initialCommands);
         
-        // Verify initial state across all nodes
+        // Verify the initial state across all nodes
         await().atMost(TIMEOUT)
                .until(() -> cluster.allNodesHaveValue("pre-remove-key-" + (initialCommands - 1), 
                                                      "value-" + (initialCommands - 1)));
@@ -262,9 +261,9 @@ public class ReconfigurationTest {
         
         // For this test, we'll:
         // 1. Establish baseline state
-        // 2. Remove two nodes including the first one (primary)
+        // 2. Remove two nodes, including the first one (primary)
         // 3. Add two new nodes
-        // 4. Verify consensus continues and state is preserved
+        // 4. Verify consensus continues and the state is preserved
         
         // 1. Establish the baseline state
         var originalPrimary = cluster.getFirst();
@@ -295,11 +294,11 @@ public class ReconfigurationTest {
         
         log.info("Adding two new nodes: {} and {}", newNode1, newNode2);
         
-        // Add first new node
+        // Add the first new node
         cluster.addNewNode(newNode1);
         cluster.awaitNode(newNode1);
         
-        // Add second new node
+        // Add the second new node
         cluster.addNewNode(newNode2);
         cluster.awaitNode(newNode2);
         
@@ -328,7 +327,7 @@ public class ReconfigurationTest {
         
         log.info("Verified new nodes synced successfully");
         
-        // Verify consensus continues with new configuration by submitting commands
+        // Verify consensus continues with a new configuration by submitting commands
         // through one of the new nodes
         int postReconfigCommands = 20;
         var commandLatch = new CountDownLatch(postReconfigCommands);
@@ -403,7 +402,6 @@ public class ReconfigurationTest {
      * Assertion: Full state transfer; operation continues
      */
     @Test
-    @Disabled("This test is flacky, requires deeper investigation")
     void majorityReplacement() {
         log.info("Starting majority replacement test");
         
@@ -505,7 +503,7 @@ public class ReconfigurationTest {
             var key = "post-majority-key-" + i;
             var value = "post-majority-value-" + i;
             
-            // Submit each command through a different new node to verify all participate
+            // Submit each command through a different new node to verify that all nodes are participating
             var submitNode = newNodes.get(i % newNodes.size());
             
             cluster.submitAndWait(submitNode, new KVCommand.Put<>(key, value));

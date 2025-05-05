@@ -141,6 +141,7 @@ public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> impl
 
         correlationMap.put(batch.correlationId(), pendingAnswer);
         pendingBatches.put(batch.correlationId(), batch);
+        network.broadcast(new NewBatch<>(self, batch));
 
         if (!isInPhase.get()) {
             executor.execute(this::startPhase);
@@ -357,7 +358,7 @@ public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> impl
         // phase value but aren't "in" it, enter it now.
         // This assumes the currentPhaseValue is correctly managed by sync/moveToNextPhase
         if (propose.phase().equals(currentPhaseValue) && !isInPhase.get() && active.get()) {
-            log.debug("Node {} entering phase {} triggered by proposal from {}",
+            log.trace("Node {} entering phase {} triggered by proposal from {}",
                       self,
                       propose.phase(),
                       propose.sender());
@@ -476,8 +477,10 @@ public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> impl
         var results = stateMachine.process(decision.value().commands());
         lastCommittedPhase.set(phaseData.phase);
         pendingBatches.remove(decision.value().correlationId());
-        correlationMap.computeIfPresent(decision.value().correlationId(),
-                                        (_, promise) -> promise.succeed(results));
+        correlationMap.computeIfPresent(decision.value().correlationId(), (_, promise) -> {
+            promise.succeed(results);
+            return null;    // Remove mapping
+        });
     }
 
     /// Handles a decision message from another node.
@@ -494,7 +497,7 @@ public class RabiaEngine<T extends RabiaProtocolMessage, C extends Command> impl
         if (phaseData.hasDecided.compareAndSet(false, true)) {
             // Apply commands to the state machine if the decision is positive
             if (decision.stateValue() == StateValue.V1 && decision.value().isNotEmpty()) {
-                stateMachine.process(decision.value().commands());
+                commitChanges(phaseData, decision);
             }
 
             // Move to the next phase

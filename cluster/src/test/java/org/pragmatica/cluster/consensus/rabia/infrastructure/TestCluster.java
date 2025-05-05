@@ -76,8 +76,7 @@ public class TestCluster {
         network.addNode(id, engine::processMessage);
         stores.put(id, store);
         engines.put(id, engine);
-
-        store.observeStateChanges(new StateChangePrinter(id));
+        //store.observeStateChanges(new StateChangePrinter(id));
     }
 
     public void awaitNode(NodeId nodeId) {

@@ -20,7 +20,7 @@ public record Batch<C extends Command>(BatchId id, CorrelationId correlationId, 
             return idCompare;
         }
 
-        return Integer.compare(correlationId.id().hashCode(), o.correlationId.id().hashCode());
+        return correlationId.id().compareTo(o.correlationId.id());
     }
 
     public static <C extends Command> Batch<C> create(List<C> commands) {

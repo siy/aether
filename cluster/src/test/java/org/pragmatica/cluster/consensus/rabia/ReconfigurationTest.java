@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 /**
- * Test Suite 4: Reconfiguration
+ * Test Suite 5: Cluster Reconfiguration
  */
 public class ReconfigurationTest {
     private static final Logger log = LoggerFactory.getLogger(ReconfigurationTest.class);
@@ -37,7 +37,7 @@ public class ReconfigurationTest {
     }
 
     /**
-     * Test 4.1: Add node to active cluster
+     * Test 5.1: Add node to active cluster
      * Assertion: New node syncs and participates; quorum size increases
      */
     @Test
@@ -160,7 +160,7 @@ public class ReconfigurationTest {
     }
 
     /**
-     * Test 4.2: Remove node from active cluster
+     * Test 5.2: Remove node from active cluster
      * Assertion: Remaining nodes continue; quorum size decreases
      */
     @Test
@@ -252,7 +252,7 @@ public class ReconfigurationTest {
     }
 
     /**
-     * Test 4.3: Replace primary (two nodes removed, two nodes added)
+     * Test 5.3: Replace primary (two nodes removed, two nodes added)
      * Assertion: Cluster state preserved; consensus maintained
      */
     @Test
@@ -398,7 +398,7 @@ public class ReconfigurationTest {
     }
 
     /**
-     * Test 4.4: Majority replacement (f+1 nodes replaced)
+     * Test 5.4: Majority replacement (f+1 nodes replaced)
      * Assertion: Full state transfer; operation continues
      */
     @Test

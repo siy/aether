@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
@@ -50,7 +49,6 @@ class RabiaIntegrationTest {
                   .until(() -> c.allNodesHaveValue("k2", "v2"));
     }
 
-
     @Test
     void fiveNodeCluster_withFailures_andSnapshotJoin() {
         var c = new TestCluster(5);
@@ -71,7 +69,7 @@ class RabiaIntegrationTest {
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
-                  .until(() -> c.nodesHaveValue(1, 5, "b", "2"));
+                  .until(() -> c.allNodesHaveValue("b", "2"));
 
         // fail node2
         c.disconnect(c.ids().get(1));
@@ -81,7 +79,7 @@ class RabiaIntegrationTest {
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
-                  .until(() -> c.nodesHaveValue(2, 5, "c", "3"));
+                  .until(() -> c.allNodesHaveValue("c", "3"));
 
         // fail node3 → only 2 left, quorum=3 ⇒ no new entries
         c.disconnect(c.ids().get(2));
@@ -121,7 +119,6 @@ class RabiaIntegrationTest {
 
         Awaitility.await()
                   .atMost(10, TimeUnit.SECONDS)
-                  .until(() -> Stream.of(c.ids().get(3), c.ids().get(4), node6)
-                                     .allMatch(id -> "5".equals(c.stores().get(id).snapshot().get("e"))));
+                  .until(() -> c.allNodesHaveValue("e", "5"));
     }
 }

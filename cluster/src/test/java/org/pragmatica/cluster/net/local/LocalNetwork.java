@@ -12,7 +12,11 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
     private final Map<NodeId, Consumer<T>> nodes = new ConcurrentHashMap<>();
     private final AddressBook addressBook;
     private Consumer<QuorumState> quorumObserver = _ -> {};
-    
+
+    public List<NodeId> connectedNodes() {
+        return List.copyOf(nodes.keySet());
+    }
+
     // Fault injection support
     public enum FaultType {
         MESSAGE_LOSS,

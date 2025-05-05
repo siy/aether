@@ -106,14 +106,7 @@ public class TestCluster {
     }
 
     public boolean allNodesHaveValue(String k1, String v1) {
-        return stores.values()
-                     .stream()
-                     .allMatch(store -> v1.equals(store.snapshot().get(k1)));
-    }
-
-    public boolean nodesHaveValue(int from, int to, String k1, String v1) {
-        return ids.subList(from, to)
-                  .stream()
-                  .allMatch(id -> v1.equals(stores.get(id).snapshot().get(k1)));
+        return network.connectedNodes().stream()
+                      .allMatch(id -> v1.equals(stores.get(id).snapshot().get(k1)));
     }
 }

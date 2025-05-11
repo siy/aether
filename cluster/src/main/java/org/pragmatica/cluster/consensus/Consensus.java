@@ -15,5 +15,7 @@ public interface Consensus<T extends ProtocolMessage, C extends Command> {
     /// Attempt may fail (return `false`) if the node is dormant (not yet active or there is no quorum).
     <R> Promise<List<R>> apply(List<C> commands);
 
-    Promise<Unit> startPromise();
+    Promise<Unit> start();
+
+    Promise<Unit> stop();
 }

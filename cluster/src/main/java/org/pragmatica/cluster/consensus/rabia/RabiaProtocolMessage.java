@@ -28,12 +28,12 @@ public sealed interface RabiaProtocolMessage extends ProtocolMessage {
                 Batch<C> value)
                 implements Synchronous {}
 
-        /// Phase synchronization response.
+        /// State synchronization response.
         record SyncResponse<C extends Command>(NodeId sender, SavedState<C> state) implements Synchronous {}
     }
 
     sealed interface Asynchronous extends RabiaProtocolMessage {
-        /// Phase synchronization request.
+        /// State synchronization request.
         record SyncRequest(NodeId sender) implements Asynchronous {}
 
         /// Distribute a new batch

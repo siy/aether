@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.pragmatica.cluster.net.NodeId.nodeId;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 /**
@@ -182,7 +183,7 @@ public class CrashStopFailuresTest {
         log.info("Simulating recovery of crashed node: {}", nodeToFail);
 
         // Add a new node (same ID) to represent the recovered node
-        var recoveredNode = NodeId.create("node-recovered");
+        var recoveredNode = nodeId("node-recovered");
 
         cluster.addNewNode(recoveredNode);
         cluster.awaitNode(recoveredNode);

@@ -6,6 +6,7 @@ import org.pragmatica.cluster.consensus.rabia.infrastructure.TestCluster;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.local.LocalNetwork;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
+import org.pragmatica.lang.io.TimeSpan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +46,7 @@ public class MessageSemanticsTest {
         log.info("Starting duplicate PROPOSE broadcasts test");
 
         // Enable message duplication in the network
-        LocalNetwork<RabiaProtocolMessage> network = cluster.network();
+        LocalNetwork network = cluster.network();
         network.getFaultInjector().setFault(LocalNetwork.FaultType.MESSAGE_DUPLICATE, true);
 
         // Use the first node as the client
@@ -91,16 +92,16 @@ public class MessageSemanticsTest {
         cluster.network().getFaultInjector().setNodeFault(targetNode, 
                                                          LocalNetwork.FaultType.MESSAGE_DELAY, 
                                                          true);
-        cluster.network().getFaultInjector().setMessageDelayMillis(50);
+        cluster.network().getFaultInjector().messageDelay(TimeSpan.timeSpan(50).millis());
 
         // Use a different node as the client
-        NodeId clientNode = cluster.getFirst();
+        var clientNode = cluster.getFirst();
 
         // Submit commands
-        List<KVCommand> commands = generatePutCommands(COMMAND_COUNT, "order-");
+        var commands = generatePutCommands(COMMAND_COUNT, "order-");
         submitCommands(clientNode, commands);
 
-        // Verify all nodes eventually have consistent state
+        // Verify all nodes eventually have the consistent state
         await().atMost(TIMEOUT)
                .pollInterval(1, TimeUnit.SECONDS)
                .until(() -> cluster.allNodesHaveValue("order-" + (COMMAND_COUNT - 1), 
@@ -114,14 +115,14 @@ public class MessageSemanticsTest {
 
     /**
      * Test 2.3: 10% random message loss for 30s
-     * Assertion: Commits proceed; latency increase only
+     * Assertion: Commits proceed; observe latency increase only
      */
     @Test
     void randomMessageLoss() {
         log.info("Starting random message loss test");
 
         // Configure 10% message loss
-        LocalNetwork<RabiaProtocolMessage> network = cluster.network();
+        LocalNetwork network = cluster.network();
         network.getFaultInjector().setFault(LocalNetwork.FaultType.MESSAGE_LOSS, true);
         network.getFaultInjector().setMessageLossRate(0.1);
 
@@ -168,7 +169,7 @@ public class MessageSemanticsTest {
         log.info("Normal throughput: {} commands/second", normalThroughput);
         log.info("Throughput ratio (with loss/normal): {}", throughputWithLoss / normalThroughput);
 
-        // We expect throughput with message loss to be lower but system should still function
+        // We expect throughput with message loss to be lower, but the system should still function
         assertTrue(throughputWithLoss > 0, "System should continue to make progress with message loss");
     }
 
@@ -180,7 +181,7 @@ public class MessageSemanticsTest {
     void staleViewNumbers() {
         log.info("Starting stale view numbers test");
 
-        // First establish a baseline state with some commands
+        // First, establish a baseline state with some commands
         NodeId clientNode = cluster.getFirst();
         List<KVCommand> initialCommands = generatePutCommands(100, "initial-");
         submitCommands(clientNode, initialCommands);

@@ -23,12 +23,12 @@ public record Batch<C extends Command>(BatchId id, CorrelationId correlationId, 
         return correlationId.id().compareTo(o.correlationId.id());
     }
 
-    public static <C extends Command> Batch<C> create(List<C> commands) {
-        return new Batch<>(BatchId.createRandom(), CorrelationId.createRandom(), System.nanoTime(), commands);
+    public static <C extends Command> Batch<C> batch(List<C> commands) {
+        return new Batch<>(BatchId.randomBatchId(), CorrelationId.randomCorrelationId(), System.nanoTime(), commands);
     }
 
-    public static <C extends Command> Batch<C> empty() {
-        return new Batch<>(BatchId.createEmpty(), CorrelationId.none(), System.nanoTime(), List.of());
+    public static <C extends Command> Batch<C> emptyBatch() {
+        return new Batch<>(BatchId.emptyBatchId(), CorrelationId.emptyCorrelationId(), System.nanoTime(), List.of());
     }
 
     @Override

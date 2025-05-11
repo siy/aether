@@ -1,24 +1,26 @@
 package org.pragmatica.cluster.net;
 
+import org.pragmatica.message.Message;
+
 import java.util.List;
 
 /// Notifications for topology change: node added/removed/down.
-public sealed interface TopologyChange {
-    /// The node which added or removed. For `NodeDown` notification this is the own ID of the node.
+public sealed interface TopologyChangeNotification extends Message.Local {
+    /// The node which added or removed. For the `NodeDown` notification, this is the own ID of the node.
     NodeId nodeId();
 
     /// Ordered list of the connected nodes in the cluster. The topology returned by this method
-    /// is the topology AFTER the change, i.e., current topology state as node knows it.
+    /// is the topology AFTER the change, i.e., current state of the topology as the node knows it.
     List<NodeId> topology();
 
     /// Node added notification
-    record NodeAdded(NodeId nodeId, List<NodeId> topology) implements TopologyChange {}
+    record NodeAdded(NodeId nodeId, List<NodeId> topology) implements TopologyChangeNotification {}
 
     /// Node removed notification
-    record NodeRemoved(NodeId nodeId, List<NodeId> topology) implements TopologyChange {}
+    record NodeRemoved(NodeId nodeId, List<NodeId> topology) implements TopologyChangeNotification {}
 
     /// Node down notification. Topology is always empty in this notification.
-    record NodeDown(NodeId nodeId, List<NodeId> topology) implements TopologyChange {}
+    record NodeDown(NodeId nodeId, List<NodeId> topology) implements TopologyChangeNotification {}
 
     static NodeAdded nodeAdded(NodeId nodeId, List<NodeId> changedView) {
         return new NodeAdded(nodeId, changedView);

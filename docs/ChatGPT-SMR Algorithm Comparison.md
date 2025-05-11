@@ -693,7 +693,7 @@ public class RacosNode {
             state[i] ^= cmdBytes[i];
         }
         commandCounter.incrementAndGet();
-        System.out.println("Applied command: " + command + "; State updated.");
+        System.out.println("Applied command: " + command + "; State updated");
     }
 
     public byte[] getEncodedState() {

@@ -6,17 +6,17 @@ import org.pragmatica.utility.ULID;
 public interface BatchId {
     String id();
 
-    static BatchId create(String id) {
+    static BatchId batchId(String id) {
         record batchId(String id) implements BatchId {}
 
         return new batchId(id);
     }
 
-    static BatchId createRandom() {
-        return create(ULID.randomULID().encoded());
+    static BatchId randomBatchId() {
+        return batchId(ULID.randomULID().encoded());
     }
 
-    static BatchId createEmpty() {
-        return create("empty");
+    static BatchId emptyBatchId() {
+        return batchId("empty");
     }
 }

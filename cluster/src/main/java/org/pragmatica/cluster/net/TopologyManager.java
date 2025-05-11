@@ -1,13 +1,17 @@
 package org.pragmatica.cluster.net;
 
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.io.TimeSpan;
 
 import java.net.SocketAddress;
 
 /// Representation of our knowledge about the cluster structure: known nodes and cluster/quorum size.
 /// Note that this is not a representation of the actual cluster topology.
-public interface AddressBook {
-    /// Retrieve information about node
+public interface TopologyManager {
+    /// This node information
+    NodeInfo self();
+
+    /// Retrieve information about the node
     Option<NodeInfo> get(NodeId id);
 
     /// Configured cluster size
@@ -25,4 +29,10 @@ public interface AddressBook {
 
     /// Mapping from IP address (host and port) to node ID
     Option<NodeId> reverseLookup(SocketAddress socketAddress);
+
+    void start();
+
+    void stop();
+
+    TimeSpan pingInterval();
 }

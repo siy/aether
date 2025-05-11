@@ -13,7 +13,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 class RabiaIntegrationTest {
@@ -98,7 +99,7 @@ class RabiaIntegrationTest {
                   .untilAsserted(() -> assertEquals(beforeSize, c.stores().get(c.ids().get(3)).snapshot().size()));
 
         // bring up node-6 as a replacement
-        var node6 = NodeId.create("node-6");
+        var node6 = NodeId.nodeId("node-6");
         c.addNewNode(node6);
         c.awaitNode(node6);
 
@@ -111,8 +112,6 @@ class RabiaIntegrationTest {
                               && "2".equals(mem.get("b"))
                               && "3".equals(mem.get("c"));
                   });
-
-        assertTrue(c.network().quorumConnected());
 
         // now nodes 4,5,6 form a quorum of 3: put e->5
         c.submitAndWait(node6, new KVCommand.Put<>("e", "5"));

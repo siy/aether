@@ -3,145 +3,216 @@ package org.pragmatica.cluster.net.netty;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import org.pragmatica.cluster.consensus.ProtocolMessage;
-import org.pragmatica.cluster.net.TopologyChange;
 import org.pragmatica.cluster.net.*;
+import org.pragmatica.cluster.net.NetworkManagementOperation.ListConnectedNodes;
+import org.pragmatica.cluster.net.NetworkMessage.Ping;
+import org.pragmatica.cluster.net.NetworkMessage.Pong;
+import org.pragmatica.cluster.net.serializer.Serializer;
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.utils.Causes;
+import org.pragmatica.lang.utils.SharedScheduler;
+import org.pragmatica.message.Message;
+import org.pragmatica.message.MessageRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+import static org.pragmatica.cluster.net.NetworkManagementOperation.ConnectNode;
+import static org.pragmatica.cluster.net.NetworkManagementOperation.DisconnectNode;
 import static org.pragmatica.cluster.net.netty.NettyClusterNetwork.ViewChangeOperation.*;
 
 /**
  * Manages network connections between nodes using Netty.
  */
-public class NettyClusterNetwork<T extends ProtocolMessage> implements ClusterNetwork<T> {
-    private static final Logger logger = LoggerFactory.getLogger(NettyClusterNetwork.class);
+public class NettyClusterNetwork implements ClusterNetwork {
+    private static final Logger log = LoggerFactory.getLogger(NettyClusterNetwork.class);
+    private static final double SCALE = 0.3d;
 
-    private final NodeId self;
+    private final NodeInfo self;
     private final Map<NodeId, Channel> peerLinks = new ConcurrentHashMap<>();
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
-    private final int port;
-    private final AddressBook addressBook;
+    private final TopologyManager topologyManager;
     private final Supplier<List<ChannelHandler>> handlers;
-
-    private Server server;
-    private Option<Consumer<TopologyChange>> viewObserver = Option.empty();
-    private Option<Consumer<T>> messageListener = Option.empty();
-    private Consumer<QuorumState> quorumObserver = _ -> {};
+    private final MessageRouter router;
+    private final AtomicReference<Server> server = new AtomicReference<>();
 
     enum ViewChangeOperation {
         ADD, REMOVE, SHUTDOWN
     }
 
-    public NettyClusterNetwork(NodeId self, int port, AddressBook addressBook, Serializer serializer) {
-        this.self = self;
-        this.port = port;
-        this.addressBook = addressBook;
-        this.handlers = () -> List.of(new MessageDecoder<>(serializer),
-                                      new MessageEncoder<>(serializer),
-                                      new ProtocolMessageHandler<>(this::peerConnected,
-                                                                   this::peerDisconnected,
-                                                                   this::messageReceived));
+    public NettyClusterNetwork(TopologyManager topologyManager, Serializer serializer, MessageRouter router) {
+        this.self = topologyManager.self();
+        this.topologyManager = topologyManager;
+        this.router = router;
+        this.handlers = () -> List.of(new Decoder(serializer),
+                                      new Encoder(serializer),
+                                      new Handler(this::peerConnected, this::peerDisconnected, router::route));
+
+        router.addRoute(ConnectNode.class, this::connect);
+        router.addRoute(DisconnectNode.class, this::disconnect);
+        router.addRoute(ListConnectedNodes.class, this::listNodes);
+
+        router.addRoute(Ping.class, this::handlePing);
+        router.addRoute(Pong.class, this::handlePong);
+
+        schedulePing();
     }
 
-    @Override
-    public void observeQuorumState(Consumer<QuorumState> quorumObserver) {
-        this.quorumObserver = quorumObserver;
+    private void schedulePing() {
+        SharedScheduler.schedule(this::pingNodes, topologyManager.pingInterval().randomize(SCALE));
     }
 
-    @Override
-    public boolean quorumConnected() {
-        return peerLinks.size() >= addressBook.quorumSize();
+    private Option<NodeId> randomNode() {
+        if (!isRunning.get() || peerLinks.isEmpty()) {
+            return Option.none();
+        }
+
+        var ids = new ArrayList<>(peerLinks.keySet());
+        Collections.shuffle(ids);
+
+        return Option.some(ids.getFirst());
     }
 
-    private void messageReceived(T protocolMessage) {
-        messageListener.onPresent(listener -> listener.accept(protocolMessage));
+    private void pingNodes() {
+        randomNode()
+                .onPresent(peerId -> sendToChannel(peerId, new Ping(self.id()), peerLinks.get(peerId)));
+
+        schedulePing();
+    }
+
+    private void handlePong(Pong pong) {
+        log.debug("Node {} received pong from {}", self, pong.sender());
+    }
+
+    private void handlePing(Ping ping) {
+        log.debug("Node {} received ping from {}", self.id(), ping.sender());
+        sendToChannel(ping.sender(), new Pong(self.id()), peerLinks.get(ping.sender()));
+    }
+
+    private void listNodes(ListConnectedNodes listConnectedNodes) {
+        router.route(new NetworkManagementOperation.ConnectedNodesList(List.copyOf(peerLinks.keySet())));
     }
 
     private void peerConnected(Channel channel) {
-        addressBook.reverseLookup(channel.remoteAddress())
-                   .onPresent(nodeId -> peerLinks.put(nodeId, channel))
-                   .onPresent(nodeId -> logger.info("Node {} connected.", nodeId))
-                   .onPresent(nodeId -> processViewChange(ADD, nodeId))
-                   .onEmpty(() -> logger.warn("Unknown node {}, disconnecting.", channel.remoteAddress()))
-                   .onEmpty(() -> channel.close().syncUninterruptibly());
+        topologyManager.reverseLookup(channel.remoteAddress())
+                       .orElse(() -> topologyManager.reverseLookup(channel.localAddress()))
+                       .onPresent(nodeId -> peerLinks.put(nodeId, channel))
+                       .onPresent(nodeId -> log.debug("Node {} connected", nodeId))
+                       .onPresent(nodeId -> processViewChange(ADD, nodeId))
+                       .onEmpty(() -> log.warn("Unknown node {}, disconnecting", channel.remoteAddress()))
+                       .onEmpty(() -> channel.close()
+                                             .addListener(_ -> log.trace("Host {} disconnected", channel.remoteAddress())));
     }
 
     private void peerDisconnected(Channel channel) {
-        addressBook.reverseLookup(channel.remoteAddress())
-                   .onPresent(peerLinks::remove)
-                   .onPresent(nodeId -> processViewChange(REMOVE, nodeId))
-                   .onPresent(nodeId -> logger.info("Peer {} diconnected.", nodeId));
+        topologyManager.reverseLookup(channel.remoteAddress())
+                       .onPresent(peerLinks::remove)
+                       .onPresent(nodeId -> processViewChange(REMOVE, nodeId))
+                       .onPresent(nodeId -> log.debug("Node {} diconnected", nodeId));
     }
 
     @Override
-    public void start() {
+    public Promise<Unit> start() {
         if (isRunning.compareAndSet(false, true)) {
-            server = Server.create("PeerNetworking", port, handlers);
+            return Server.server("NettyClusterNetwork", self.address().port(), handlers)
+                         .onSuccess(NettyClusterNetwork.this.server::set)
+                         .onFailure(_ -> isRunning.set(false))
+                         .mapToUnit();
         }
+
+        return Promise.unitPromise();
     }
 
     @Override
-    public void stop() {
+    public Promise<Unit> stop() {
         if (isRunning.compareAndSet(true, false)) {
-            logger.info("Stopping peer networking: notifying view change");
+            log.info("Stopping {}: notifying view change", server.get().name());
+            processViewChange(SHUTDOWN, self.id());
 
-            processViewChange(SHUTDOWN, self);
+            return server.get()
+                         .stop(() -> {
+                             log.info("Stopping {}: closing peer connections", server.get().name());
 
-            server.stop(() -> {
-                logger.info("Stopping {}: closing peer connections", server.name());
-
-                for (var link : peerLinks.values()) {
-                    link.close().sync();
-                }
-            });
+                             var promises = new ArrayList<Promise<Unit>>();
+                             for (var link : peerLinks.values()) {
+                                 var promise = Promise.<Unit>promise();
+                                 link.close()
+                                     .addListener(future -> {
+                                         if (future.isSuccess()) {
+                                             promise.succeed(Unit.unit());
+                                         } else {
+                                             promise.fail(Causes.fromThrowable(future.cause()));
+                                         }
+                                     });
+                                 promises.add(promise);
+                             }
+                             return Promise.allOf(promises)
+                                           .mapToUnit();
+                         });
         }
+
+        return Promise.unitPromise();
     }
 
-    @Override
-    public void connect(NodeId nodeId) {
+    private void connect(ConnectNode connectNode) {
         if (!isRunning.get()) {
-            logger.error("Attempt to connect {} while node is not running", nodeId);
+            log.error("Attempt to connect {} while node is not running", connectNode.node());
             return;
         }
-        addressBook.get(nodeId)
-                   .onPresent(this::connectPeer)
-                   .onEmpty(() -> logger.error("Unknown {}", nodeId));
+        topologyManager.get(connectNode.node())
+                       .onPresent(this::connectPeer)
+                       .onEmpty(() -> log.error("Unknown {}", connectNode.node()));
     }
 
     private void connectPeer(NodeInfo nodeInfo) {
         var peerId = nodeInfo.id();
 
         if (peerLinks.containsKey(peerId)) {
-            logger.warn("Peer {} already connected", peerId);
+            log.warn("Node {} already connected", peerId);
             return;
         }
 
-        peerLinks.put(peerId, server.connectTo(nodeInfo.address()));
-        processViewChange(ADD, peerId);
+        // Executed asynchronously to avoid blocking the main thread
+        server.get()
+              .connectTo(nodeInfo.address())
+              .onSuccess(channel -> {
+                  peerLinks.put(peerId, channel);
+                  processViewChange(ADD, peerId);
+              })
+              .onFailure(cause -> log.warn("Node {} failed to connect to {}: {}", peerId, nodeInfo.id(), cause));
     }
 
-    @Override
-    public void disconnect(NodeId peerId) {
-        var channel = peerLinks.remove(peerId);
-        processViewChange(REMOVE, peerId);
+    private void disconnect(DisconnectNode disconnectNode) {
+        var channel = peerLinks.remove(disconnectNode.nodeId());
 
-        if (channel != null) {
-            try {
-                channel.close().sync();
-                logger.info("Disconnected from peer {}", peerId);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("Failed to disconnect from peer " + peerId, e);
-            }
+        if (channel == null) {
+            return;
         }
+
+        processViewChange(REMOVE, disconnectNode.nodeId());
+
+        // Executed asynchronously to avoid blocking the main thread
+        channel.close()
+               .addListener(future -> {
+                   if (future.isSuccess()) {
+                       log.info("Node {} disconnected from node {}", self.id(), disconnectNode.nodeId());
+                   } else {
+                       log.warn("Node {} failed to disconnect from node {}: ",
+                                self.id(),
+                                disconnectNode.nodeId(),
+                                future.cause());
+                   }
+               });
     }
 
     @Override
@@ -149,18 +220,20 @@ public class NettyClusterNetwork<T extends ProtocolMessage> implements ClusterNe
         sendToChannel(peerId, message, peerLinks.get(peerId));
     }
 
-    private <M extends ProtocolMessage> void sendToChannel(NodeId peerId, M message, Channel channel) {
+    private <M extends Message.Wired> void sendToChannel(NodeId peerId, M message, Channel channel) {
         if (channel == null) {
-            logger.warn("Peer {} is not connected", peerId);
+            log.warn("Node {} is not connected", peerId);
             return;
         }
 
         if (!channel.isActive()) {
             peerLinks.remove(peerId);
             processViewChange(REMOVE, peerId);
-            logger.warn("Peer {} is not active", peerId);
+            log.warn("Node {} is not active", peerId);
             return;
         }
+
+        log.trace("Node {} sending message to {}: {}", self.id(), peerId, message);
 
         channel.writeAndFlush(message);
     }
@@ -170,37 +243,27 @@ public class NettyClusterNetwork<T extends ProtocolMessage> implements ClusterNe
         peerLinks.forEach((peerId, channel) -> sendToChannel(peerId, message, channel));
     }
 
-    @Override
-    public void observeViewChanges(Consumer<TopologyChange> observer) {
-        viewObserver = Option.option(observer);
-    }
-
-    @Override
-    public void listen(Consumer<T> listener) {
-        messageListener = Option.option(listener);
-    }
-
     private void processViewChange(ViewChangeOperation operation, NodeId peerId) {
         var viewChange = switch (operation) {
             case ADD -> {
-                if (peerLinks.size() == addressBook.quorumSize()) {
-                    quorumObserver.accept(QuorumState.APPEARED);
+                if ((peerLinks.size() + 1) == topologyManager.quorumSize()) {
+                    router.route(QuorumStateNotification.ESTABLISHED);
                 }
-                yield TopologyChange.nodeAdded(peerId, currentView());
+                yield TopologyChangeNotification.nodeAdded(peerId, currentView());
             }
             case REMOVE -> {
-                if (peerLinks.size() == addressBook.quorumSize() - 1) {
-                    quorumObserver.accept(QuorumState.DISAPPEARED);
+                if ((peerLinks.size() + 1) == topologyManager.quorumSize() - 1) {
+                    router.route(QuorumStateNotification.DISAPPEARED);
                 }
-                yield TopologyChange.nodeRemoved(peerId, currentView());
+                yield TopologyChangeNotification.nodeRemoved(peerId, currentView());
             }
             case SHUTDOWN -> {
-                quorumObserver.accept(QuorumState.APPEARED);
-                yield TopologyChange.nodeDown(peerId);
+                router.route(QuorumStateNotification.DISAPPEARED);
+                yield TopologyChangeNotification.nodeDown(peerId);
             }
         };
 
-        viewObserver.onPresent(observer -> observer.accept(viewChange));
+        router.route(viewChange);
     }
 
     private List<NodeId> currentView() {

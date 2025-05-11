@@ -9,13 +9,13 @@ public interface NodeAddress {
 
     int port();
 
-    static NodeAddress create(String host, int port) {
+    static NodeAddress nodeAddress(String host, int port) {
         record nodeAddress(String host, int port) implements NodeAddress {}
 
         return new nodeAddress(host, port);
     }
 
-    static NodeAddress create(InetSocketAddress socketAddress) {
-        return create(socketAddress.getAddress().toString(), socketAddress.getPort());
+    static NodeAddress nodeAddress(InetSocketAddress socketAddress) {
+        return nodeAddress(socketAddress.getHostName(), socketAddress.getPort());
     }
 }

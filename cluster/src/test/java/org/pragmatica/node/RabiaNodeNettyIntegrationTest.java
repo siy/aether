@@ -57,7 +57,10 @@ class RabiaNodeNettyIntegrationTest {
         var configuredNodes = NODES.subList(0, CLUSTER_SIZE);
 
         for (int i = 0; i < CLUSTER_SIZE; i++) {
-            var topologyConfig = new TopologyConfig(NODES.get(i).id(), RECONCILE_INTERVAL, PING_INTERVAL, configuredNodes);
+            var topologyConfig = new TopologyConfig(NODES.get(i).id(),
+                                                    RECONCILE_INTERVAL,
+                                                    PING_INTERVAL,
+                                                    configuredNodes);
             var router = MessageRouter.messageRouter();
 
             routers.add(router);
@@ -87,7 +90,7 @@ class RabiaNodeNettyIntegrationTest {
 
     @Disabled("Serializer crash")
     @Test
-     void happyPath_allNodesAgreeOnPutGetRemove() {
+    void happyPath_allNodesAgreeOnPutGetRemove() {
         // Put values via each node
         var list = new ArrayList<Promise<List<Object>>>();
 

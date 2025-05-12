@@ -102,6 +102,12 @@ class RabiaNodeNettyIntegrationTest {
                .onFailure(v -> fail("Failed to put values to state machine within timeout: " + v))
                .onSuccess(_ -> log.info("All nodes have been put successfully"));
 
+        for (int i = 0; i < CLUSTER_SIZE; i++) {
+            var store = stores.get(i);
+
+            log.info("Store {}, content {}", i, store.snapshot());
+        }
+
         // Await all nodes have all keys
         for (int i = 0; i < CLUSTER_SIZE; i++) {
             var key = "key-" + i;
@@ -123,7 +129,6 @@ class RabiaNodeNettyIntegrationTest {
                .until(() -> stores.stream().noneMatch(store -> store.snapshot().containsKey("key-0")));
     }
 
-    @Disabled("Not working yet, probably some issues with the test implementation")
     @Test
     void nodeCrashAndRecovery_catchesUpWithCluster() {
         // Put initial value

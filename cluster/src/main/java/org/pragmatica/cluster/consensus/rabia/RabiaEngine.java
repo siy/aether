@@ -544,7 +544,6 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
         final Map<NodeId, Batch<C>> proposals = new ConcurrentHashMap<>();
         final Map<NodeId, StateValue> round1Votes = new ConcurrentHashMap<>();
         final Map<NodeId, StateValue> round2Votes = new ConcurrentHashMap<>();
-        final AtomicReference<CorrelationId> votedFor = new AtomicReference<>();
         final AtomicBoolean hasDecided = new AtomicBoolean(false);
 
         PhaseData(Phase phase) {
@@ -579,21 +578,16 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
             var ownProposal = proposals.get(self);
 
             if (ownProposal != null && !ownProposal.commands().isEmpty()) {
-                votedFor.set(ownProposal.correlationId());
                 return StateValue.V1;
             }
 
             // If our own proposal is empty or doesn't exist, check received proposals
-            var anyNonEmptyProposal = proposals.values()
-                                               .stream()
-                                               .filter(batch -> batch != null
-                                                       && !batch.commands().isEmpty())
-                                               .findFirst();
-
-            anyNonEmptyProposal.ifPresent(proposal -> votedFor.set(proposal.correlationId()));
+            var haveProposal = proposals.values()
+                                        .stream()
+                                        .allMatch(batch -> batch != null && !batch.commands().isEmpty());
 
             // Vote V0 only if all known proposals (own included, if any) are empty.
-            return anyNonEmptyProposal.isPresent() ? StateValue.V1 : StateValue.V0;
+            return haveProposal ? StateValue.V1 : StateValue.V0;
         }
 
         public StateValue evaluateRound2Vote(int quorumSize) {

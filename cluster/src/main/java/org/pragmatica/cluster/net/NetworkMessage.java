@@ -2,7 +2,7 @@ package org.pragmatica.cluster.net;
 
 import org.pragmatica.message.Message;
 
-public interface NetworkMessage extends Message.Wired {
+public sealed interface NetworkMessage extends Message.Wired {
     /// Ping - test connection request
     record Ping(NodeId sender) implements NetworkMessage {}
 

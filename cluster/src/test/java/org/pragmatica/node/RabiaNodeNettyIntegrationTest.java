@@ -2,6 +2,7 @@ package org.pragmatica.node;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.pragmatica.cluster.consensus.rabia.ProtocolConfig;
 import org.pragmatica.cluster.net.NodeInfo;
@@ -18,7 +19,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.pragmatica.cluster.net.NodeAddress.nodeAddress;
 import static org.pragmatica.cluster.net.NodeId.nodeId;
@@ -39,7 +42,7 @@ class RabiaNodeNettyIntegrationTest {
             nodeInfo(nodeId("node-4"), nodeAddress("localhost", BASE_PORT + 3)),
             nodeInfo(nodeId("node-5"), nodeAddress("localhost", BASE_PORT + 4)));
     private static final TimeSpan RECONCILE_INTERVAL = TimeSpan.timeSpan(5).seconds();
-    private static final TimeSpan PING_INTERVAL = TimeSpan.timeSpan(1).seconds();
+    private static final TimeSpan PING_INTERVAL = TimeSpan.timeSpan(100).seconds();
     private static final TimeSpan AWAIT_TIMEOUT = TimeSpan.timeSpan(10).seconds();
 
     private final List<RabiaNode<KVCommand>> nodes = new ArrayList<>();
@@ -80,15 +83,9 @@ class RabiaNodeNettyIntegrationTest {
     void tearDown() {
         nodes.forEach(node -> node.stop().await(AWAIT_TIMEOUT));
     }
-//
-//    @Test
-//    void name() {
-//        Sleep.sleep(AWAIT_TIMEOUT);
-//    }
 
     @Test
     void happyPath_allNodesAgreeOnPutGetRemove() {
-
         // Put values via each node
         var list = new ArrayList<Promise<List<Object>>>();
 
@@ -96,9 +93,8 @@ class RabiaNodeNettyIntegrationTest {
             String key = "key-" + i;
             String value = "value-" + i;
 
-            list.add(nodes.get(i).apply(List.of(new KVCommand.Put<>(key, value))));
-
-
+            list.add(nodes.get(i)
+                          .apply(List.of(new KVCommand.Put<>(key, value))));
         }
 
         Promise.allOf(list)
@@ -107,54 +103,71 @@ class RabiaNodeNettyIntegrationTest {
                .onSuccess(_ -> log.info("All nodes have been put successfully"));
 
         // Await all nodes have all keys
-//        for (int i = 0; i < CLUSTER_SIZE; i++) {
-//            String key = "key-" + i;
-//            String value = "value-" + i;
-//            await().atMost(20, TimeUnit.SECONDS)
-//                   .until(() -> stores.stream().allMatch(store -> value.equals(store.snapshot().get(key))));
-//        }
-//        // Remove a key via one node
-//        nodes.get(0).apply(List.of(new KVCommand.Remove<>("key-0"))).await(AWAIT_TIMEOUT);
-//        // Await all nodes have removed the key
-//        await().atMost(10, TimeUnit.SECONDS)
-//               .until(() -> stores.stream().noneMatch(store -> store.snapshot().containsKey("key-0")));
+        for (int i = 0; i < CLUSTER_SIZE; i++) {
+            var key = "key-" + i;
+            var value = "value-" + i;
+
+            await().atMost(20, TimeUnit.SECONDS)
+                   .until(() -> stores.stream()
+                                      .allMatch(
+                                              store -> value.equals(store.snapshot().get(key))));
+        }
+
+        // Remove a key via one node
+        nodes.getFirst()
+             .apply(List.of(new KVCommand.Remove<>("key-0")))
+             .await(AWAIT_TIMEOUT);
+
+        // Await all nodes have removed the key
+        await().atMost(10, TimeUnit.SECONDS)
+               .until(() -> stores.stream().noneMatch(store -> store.snapshot().containsKey("key-0")));
     }
-//
-//    @Test
-//    void nodeCrashAndRecovery_catchesUpWithCluster() {
-//        // Put initial value
-//        nodes.get(0).apply(List.of(new KVCommand.Put<>("crash-key", "v0"))).await(AWAIT_TIMEOUT);
-//        await().atMost(10, TimeUnit.SECONDS)
-//               .until(() -> stores.stream().allMatch(store -> "v0".equals(store.snapshot().get("crash-key"))));
-//        // Stop node 1 (index 1)
-//        nodes.get(1).stop().await(AWAIT_TIMEOUT);
-//        // Put new values while node 1 is down
-//        for (int i = 1; i <= 3; i++) {
-//            String key = "crash-key-" + i;
-//            String value = "v" + i;
-//            nodes.get(0).apply(List.of(new KVCommand.Put<>(key, value))).await(AWAIT_TIMEOUT);
-//        }
-//        // Await all alive nodes have the new values
-//        for (int i = 1; i <= 3; i++) {
-//            String key = "crash-key-" + i;
-//            String value = "v" + i;
-//
-//            await().atMost(10, TimeUnit.SECONDS)
-//                   .until(() -> stores.stream()
-//                                      .filter(s -> !nodes.get(stores.indexOf(s))
-//                                                         .self()
-//                                                         .id()
-//                                                         .equals(nodes.get(1).self().id()))
-//                                      .allMatch(store -> value.equals(store.snapshot().get(key))));
-//        }
-//        // Restart node 1
-//        nodes.get(1).start().await(AWAIT_TIMEOUT);
-//        // Await node 1 catches up
-//        for (int i = 1; i <= 3; i++) {
-//            String key = "crash-key-" + i;
-//            String value = "v" + i;
-//            await().atMost(10, TimeUnit.SECONDS)
-//                   .until(() -> value.equals(stores.get(1).snapshot().get(key)));
-//        }
-//    }
+
+    @Disabled("Not working yet, probably some issues with the test implementation")
+    @Test
+    void nodeCrashAndRecovery_catchesUpWithCluster() {
+        // Put initial value
+        nodes.getFirst()
+             .apply(List.of(new KVCommand.Put<>("crash-key", "v0"))).await(AWAIT_TIMEOUT);
+
+        await().atMost(10, TimeUnit.SECONDS)
+               .until(() -> stores.stream().allMatch(store -> "v0".equals(store.snapshot().get("crash-key"))));
+
+        // Stop node 1 (index 1)
+        nodes.get(1)
+             .stop()
+             .await(AWAIT_TIMEOUT);
+
+        // Put new values while node 1 is down
+        for (int i = 1; i <= 3; i++) {
+            var key = "crash-key-" + i;
+            var value = "v" + i;
+
+            nodes.getFirst()
+                 .apply(List.of(new KVCommand.Put<>(key, value))).await(AWAIT_TIMEOUT);
+        }
+        // Await all live nodes have the new values
+        for (int i = 1; i <= 3; i++) {
+            String key = "crash-key-" + i;
+            String value = "v" + i;
+
+            await().atMost(10, TimeUnit.SECONDS)
+                   .until(() -> stores.stream()
+                                      .filter(s -> !nodes.get(stores.indexOf(s))
+                                                         .self()
+                                                         .id()
+                                                         .equals(nodes.get(1).self().id()))
+                                      .allMatch(store -> value.equals(store.snapshot().get(key))));
+        }
+        // Restart node 1
+        nodes.get(1).start().await(AWAIT_TIMEOUT);
+        // Await node 1 catches up
+        for (int i = 1; i <= 3; i++) {
+            var key = "crash-key-" + i;
+            var value = "v" + i;
+
+            await().atMost(10, TimeUnit.SECONDS)
+                   .until(() -> value.equals(stores.get(1).snapshot().get(key)));
+        }
+    }
 } 

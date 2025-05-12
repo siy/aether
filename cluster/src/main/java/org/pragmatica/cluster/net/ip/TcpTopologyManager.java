@@ -29,7 +29,19 @@ public interface TcpTopologyManager extends TopologyManager {
 
             private static final Logger log = LoggerFactory.getLogger(TcpTopologyManager.class);
 
-            Manager {
+            Manager(Map<NodeId, NodeInfo> nodesById,
+                    Map<NodeAddress, NodeId> nodeIdsByAddress,
+                    MessageRouter router,
+                    TopologyConfig config,
+                    AtomicBoolean active) {
+                this.config = config;
+                this.router = router;
+                this.nodesById = nodesById;
+                this.nodeIdsByAddress = nodeIdsByAddress;
+                this.active = active;
+
+                config().coreNodes().forEach(this::addNode);
+
                 router.addRoute(TopologyManagementMessage.AddNode.class, this::handleAddNodeMessage)
                       .addRoute(TopologyManagementMessage.RemoveNode.class, this::handleRemoveNodeMessage)
                       .addRoute(TopologyManagementMessage.DiscoverNodes.class, this::handleDiscoverNodesMessage)
@@ -130,10 +142,6 @@ public interface TcpTopologyManager extends TopologyManager {
 
             @Override
             public NodeInfo self() {
-                if (nodesById().isEmpty()) {
-                    config().coreNodes().forEach(this::addNode);
-                }
-
                 return nodesById().get(config.self());
             }
 

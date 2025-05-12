@@ -135,7 +135,7 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
 
         var batch = batch(commands);
 
-        log.debug("Node {}: client submitted {} command(s). Prepared batch: {}", self, commands.size(), batch);
+        log.trace("Node {}: client submitted {} command(s). Prepared batch: {}", self, commands.size(), batch);
 
         var pendingAnswer = Promise.<List<R>>promise();
 
@@ -165,7 +165,6 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
 
     @Override
     public void processMessage(RabiaProtocolMessage message) {
-        log.debug("Node {} received message {}", self, message);
         switch (message) {
             case Synchronous sync -> processMessageSync(sync);
             case Asynchronous async -> processMessageAsync(async);
@@ -176,7 +175,7 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
     private void processMessageSync(Synchronous message) {
         executor.execute(() -> {
             try {
-                log.debug("Node {} received synchronous message {}", self, message);
+                log.trace("Node {} received synchronous message {}", self, message);
                 switch (message) {
                     case Propose<?> propose -> handlePropose((Propose<C>) propose);
                     case VoteRound1 voteRnd1 -> handleVoteRound1(voteRnd1);
@@ -230,11 +229,6 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
 
         // Send initial batch
         network.broadcast(new Propose<>(self, phase, batch));
-
-        // Vote in round 1
-        var vote = phaseData.evaluateInitialVote(self);
-        network.broadcast(new VoteRound1(self, phase, vote));
-        phaseData.round1Votes.put(self, vote);
     }
 
     /// Synchronizes with other nodes to catch up if needed.
@@ -266,7 +260,7 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
             return;
         }
 
-        log.debug("Node {} received {} responses, collected: {}", self, syncResponses.size(), syncResponses);
+        log.trace("Node {} received {} responses, collected: {}", self, syncResponses.size(), syncResponses);
 
         // Use the latest known state among received responses
         var candidate = syncResponses.values()
@@ -275,7 +269,7 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
                                      .toList()
                                      .getLast();
 
-        log.debug("Node {} uses {} as synchronization candidate out of {}", self, candidate, syncResponses.size());
+        log.trace("Node {} uses {} as synchronization candidate out of {}", self, candidate, syncResponses.size());
         restoreState(candidate);
     }
 
@@ -309,7 +303,7 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
                     .succeed(Unit.unit());
         syncResponses.clear();
 
-        log.debug("Node {} activated in phase {}", self, currentPhase.get());
+        log.info("Node {} activated in phase {}", self, currentPhase.get());
         executor.execute(this::startPhase);
     }
 
@@ -323,7 +317,7 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
                         .onSuccess(response -> network.send(request.sender(), response))
                         .onFailure(cause -> log.error("Node {} failed to create snapshot: {}", self, cause));
         } else {
-            log.debug("Node {} is inactive, trying to share saved (or empty) state for request: {}", self, request);
+            log.trace("Node {} is inactive, trying to share saved (or empty) state for request: {}", self, request);
 
             var response = new SyncResponse<>(self, persistence.load()
                                                                .or(SavedState.empty()));
@@ -386,10 +380,10 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
         phaseData.proposals.putIfAbsent(propose.sender(), propose.value());
 
         // If we are active, now in this phase, and haven't voted R1 yet... Vote!
-        if (active.get() &&
-                isInPhase.get() && // Should be true now if phase matches currentPhaseValue
-                currentPhase.get().equals(propose.phase()) &&
-                !phaseData.round1Votes.containsKey(self)) {
+        if (active.get()
+                && isInPhase.get()
+                && currentPhase.get().equals(propose.phase()) // Should be true now if phase matches currentPhaseValue
+                && !phaseData.round1Votes.containsKey(self)) {
 
             // Call the (modified) evaluateInitialVote and broadcast R1 vote
             var vote = phaseData.evaluateInitialVote(self);
@@ -401,7 +395,7 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
             network.broadcast(new VoteRound1(self, propose.phase(), vote));
             phaseData.round1Votes.put(self, vote); // Record our own vote
         } else {
-            log.debug(
+            log.trace(
                     "Node {} conditions not met to vote R1 on proposal from {} for phase {}. Active: {}, InPhase: {}, CurrentPhase: {}, HasVotedR1: {}",
                     self,
                     propose.sender(),
@@ -434,6 +428,8 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
 
             if (phaseData.hasRound1MajorityVotes(topologyManager.quorumSize())) {
                 var round2Vote = phaseData.evaluateRound2Vote(topologyManager.quorumSize());
+
+                log.trace("Node {} votes in round 2 {}", self, round2Vote);
                 network.broadcast(new VoteRound2(self, vote.phase(), round2Vote));
                 phaseData.round2Votes.put(self, round2Vote);
             }
@@ -464,8 +460,8 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
                          .onPresent(decision -> processDecision(phaseData, decision));
             }
         } else {
-            log.debug("Node {} ignores VoteRound2 {}, inPhase: {}, currentPhase: {}, hasDecided: {} ",
-                      self, vote, isInPhase.get(),  currentPhase.get(), phaseData.hasDecided.get());
+            log.trace("Node {} ignores VoteRound2 {}, inPhase: {}, currentPhase: {}, hasDecided: {} ",
+                      self, vote, isInPhase.get(), currentPhase.get(), phaseData.hasDecided.get());
         }
     }
 
@@ -476,7 +472,6 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
 
         // Apply commands to state machine ONLY if it was a V1 decision with a non-empty batch
         if (decision.stateValue() == StateValue.V1 && !decision.value().commands().isEmpty()) {
-            log.debug("Node {} applying batch {} commands for phase {}", self, decision.value().id(), phaseData.phase);
             commitChanges(phaseData, decision);
         } else {
             log.trace("Node {} decided {} for phase {}, no commands to apply",
@@ -491,6 +486,8 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
 
     @SuppressWarnings("unchecked")
     private void commitChanges(PhaseData<C> phaseData, Decision<C> decision) {
+        log.trace("Node {} applies decision {}", self, decision);
+
         var results = stateMachine.process(decision.value().commands());
         lastCommittedPhase.set(phaseData.phase);
         pendingBatches.remove(decision.value().correlationId());
@@ -515,7 +512,6 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
             // Apply commands to the state machine if the decision is positive
             if (decision.stateValue() == StateValue.V1 && decision.value().isNotEmpty()) {
                 commitChanges(phaseData, decision);
-                log.debug("Node {} applied decision {}", self, decision);
             }
 
             // Move to the next phase
@@ -548,6 +544,7 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
         final Map<NodeId, Batch<C>> proposals = new ConcurrentHashMap<>();
         final Map<NodeId, StateValue> round1Votes = new ConcurrentHashMap<>();
         final Map<NodeId, StateValue> round2Votes = new ConcurrentHashMap<>();
+        final AtomicReference<CorrelationId> votedFor = new AtomicReference<>();
         final AtomicBoolean hasDecided = new AtomicBoolean(false);
 
         PhaseData(Phase phase) {
@@ -582,17 +579,21 @@ public class RabiaEngine<C extends Command> implements Consensus<RabiaProtocolMe
             var ownProposal = proposals.get(self);
 
             if (ownProposal != null && !ownProposal.commands().isEmpty()) {
+                votedFor.set(ownProposal.correlationId());
                 return StateValue.V1;
             }
 
             // If our own proposal is empty or doesn't exist, check received proposals
-            boolean anyNonEmptyProposal = proposals.values()
-                                                   .stream()
-                                                   .anyMatch(batch -> batch != null
-                                                           && !batch.commands().isEmpty());
+            var anyNonEmptyProposal = proposals.values()
+                                               .stream()
+                                               .filter(batch -> batch != null
+                                                       && !batch.commands().isEmpty())
+                                               .findFirst();
+
+            anyNonEmptyProposal.ifPresent(proposal -> votedFor.set(proposal.correlationId()));
 
             // Vote V0 only if all known proposals (own included, if any) are empty.
-            return anyNonEmptyProposal ? StateValue.V1 : StateValue.V0;
+            return anyNonEmptyProposal.isPresent() ? StateValue.V1 : StateValue.V0;
         }
 
         public StateValue evaluateRound2Vote(int quorumSize) {

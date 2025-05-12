@@ -8,6 +8,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import org.pragmatica.cluster.consensus.rabia.*;
+import org.pragmatica.cluster.net.NetworkMessage;
 import org.pragmatica.cluster.net.serializer.Serializer;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.utility.HierarchyScanner;
@@ -65,8 +66,11 @@ public interface KryoSerializer extends Serializer {
 
                 HierarchyScanner.concreteSubtypes(RabiaProtocolMessage.class)
                                 .forEach(kryo::register);
+                HierarchyScanner.concreteSubtypes(NetworkMessage.class)
+                                .forEach(kryo::register);
                 HierarchyScanner.concreteSubtypes(KVCommand.class)
                                 .forEach(kryo::register);
+
                 kryo.register(HashMap.class);
                 kryo.register(RabiaPersistence.SavedState.empty().getClass());
                 kryo.register(randomNodeId().getClass());
@@ -79,10 +83,6 @@ public interface KryoSerializer extends Serializer {
                 kryo.register(List.of().getClass());
                 kryo.register(List.of(1).getClass());
                 kryo.register(List.of(1, 2, 3).getClass());
-
-                kryo.register(RabiaProtocolMessage.class);
-                kryo.register(RabiaProtocolMessage.Synchronous.class);
-                kryo.register(RabiaProtocolMessage.Asynchronous.class);
 
                 return kryo;
             }

@@ -19,19 +19,11 @@ public class Decoder extends ByteToMessageDecoder {
     }
 
     @Override
-    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
+    protected synchronized void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
         if (in.readableBytes() < 4) {
             return;
         }
 
-//        in.markReaderIndex();
-//        int length = in.readInt();
-//
-//        if (in.readableBytes() < length) {
-//            in.resetReaderIndex();
-//            return;
-//        }
-//
         try {
             out.add(serializer.read(in));
         } catch (Exception e) {

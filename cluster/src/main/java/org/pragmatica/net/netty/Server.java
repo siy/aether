@@ -1,4 +1,4 @@
-package org.pragmatica.cluster.net.netty;
+package org.pragmatica.net.netty;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;

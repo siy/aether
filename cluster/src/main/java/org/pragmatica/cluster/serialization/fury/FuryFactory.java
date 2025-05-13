@@ -11,7 +11,7 @@ public sealed interface FuryFactory {
         int coreCount = Runtime.getRuntime().availableProcessors();
         var fury = Fury.builder()
                        .withLanguage(Language.JAVA)
-                       .buildThreadSafeFuryPool(coreCount, coreCount * 2);
+                       .buildThreadSafeFuryPool(coreCount * 2, coreCount * 4);
 
         CustomClasses.configure(fury::register);
 

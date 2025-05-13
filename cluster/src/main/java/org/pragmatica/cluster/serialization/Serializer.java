@@ -1,4 +1,4 @@
-package org.pragmatica.cluster.net.serializer;
+package org.pragmatica.cluster.serialization;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;

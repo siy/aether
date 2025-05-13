@@ -1,4 +1,4 @@
-package org.pragmatica.cluster.net.serializer.kryo;
+package org.pragmatica.cluster.serialization.kryo;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -7,20 +7,10 @@ import com.esotericsoftware.kryo.util.Pool;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
-import org.pragmatica.cluster.consensus.rabia.*;
-import org.pragmatica.cluster.net.NetworkMessage;
-import org.pragmatica.cluster.net.serializer.Serializer;
-import org.pragmatica.cluster.state.kvstore.KVCommand;
-import org.pragmatica.utility.HierarchyScanner;
+import org.pragmatica.cluster.serialization.CustomClasses;
+import org.pragmatica.cluster.serialization.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.HashMap;
-import java.util.List;
-
-import static org.pragmatica.cluster.consensus.rabia.BatchId.randomBatchId;
-import static org.pragmatica.cluster.consensus.rabia.CorrelationId.randomCorrelationId;
-import static org.pragmatica.cluster.net.NodeId.randomNodeId;
 
 public interface KryoSerializer extends Serializer {
     static KryoSerializer kryoSerializer() {
@@ -64,25 +54,7 @@ public interface KryoSerializer extends Serializer {
             protected Kryo create() {
                 var kryo = new Kryo();
 
-                HierarchyScanner.concreteSubtypes(RabiaProtocolMessage.class)
-                                .forEach(kryo::register);
-                HierarchyScanner.concreteSubtypes(NetworkMessage.class)
-                                .forEach(kryo::register);
-                HierarchyScanner.concreteSubtypes(KVCommand.class)
-                                .forEach(kryo::register);
-
-                kryo.register(HashMap.class);
-                kryo.register(RabiaPersistence.SavedState.empty().getClass());
-                kryo.register(randomNodeId().getClass());
-                kryo.register(randomBatchId().getClass());
-                kryo.register(randomCorrelationId().getClass());
-                kryo.register(Phase.class);
-                kryo.register(Batch.class);
-                kryo.register(StateValue.class);
-                kryo.register(byte[].class);
-                kryo.register(List.of().getClass());
-                kryo.register(List.of(1).getClass());
-                kryo.register(List.of(1, 2, 3).getClass());
+                CustomClasses.configure(kryo::register);
 
                 return kryo;
             }

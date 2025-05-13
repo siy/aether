@@ -3,7 +3,7 @@ package org.pragmatica.cluster.net.netty;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
-import org.pragmatica.cluster.net.serializer.Serializer;
+import org.pragmatica.cluster.serialization.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,7 +25,14 @@ public class Decoder extends ByteToMessageDecoder {
         }
 
         try {
-            out.add(serializer.read(in));
+            Object read = serializer.read(in);
+
+            if (read == null) {
+                log.error("Null object received!!!");
+            } else {
+            out.add(read);
+            }
+
         } catch (Exception e) {
             log.error("Error decoding message", e);
             ctx.close();

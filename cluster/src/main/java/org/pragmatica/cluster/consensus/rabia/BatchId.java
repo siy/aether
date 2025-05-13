@@ -3,20 +3,16 @@ package org.pragmatica.cluster.consensus.rabia;
 import org.pragmatica.utility.ULID;
 
 /// Unique identifier for the proposal value (list of commands).
-public interface BatchId {
-    String id();
-
-    static BatchId batchId(String id) {
-        record batchId(String id) implements BatchId {}
-
-        return new batchId(id);
+public record BatchId(String id) {
+    public static BatchId batchId(String id) {
+        return new BatchId(id);
     }
 
-    static BatchId randomBatchId() {
+    public static BatchId randomBatchId() {
         return batchId(ULID.randomULID().encoded());
     }
 
-    static BatchId emptyBatchId() {
+    public static BatchId emptyBatchId() {
         return batchId("empty");
     }
 }

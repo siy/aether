@@ -26,9 +26,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.pragmatica.cluster.net.NodeAddress.nodeAddress;
 import static org.pragmatica.cluster.net.NodeId.nodeId;
 import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
-import static org.pragmatica.cluster.net.serializer.kryo.KryoSerializer.kryoSerializer;
 import static org.pragmatica.cluster.node.rabia.NodeConfig.nodeConfig;
 import static org.pragmatica.cluster.node.rabia.RabiaNode.rabiaNode;
+import static org.pragmatica.cluster.serialization.fury.FurySerializer.furySerializer;
 
 class RabiaNodeNettyIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RabiaNodeNettyIntegrationTest.class);
@@ -53,7 +53,7 @@ class RabiaNodeNettyIntegrationTest {
     @BeforeEach
     void setUp() {
         var protocolConfig = ProtocolConfig.testConfig();
-        var serializer = kryoSerializer();
+        var serializer = furySerializer();
         var configuredNodes = NODES.subList(0, CLUSTER_SIZE);
 
         for (int i = 0; i < CLUSTER_SIZE; i++) {
@@ -88,7 +88,7 @@ class RabiaNodeNettyIntegrationTest {
         nodes.forEach(node -> node.stop().await(AWAIT_TIMEOUT));
     }
 
-    @Disabled("Serializer crash")
+//    @Disabled("Serializer crash")
     @Test
     void happyPath_allNodesAgreeOnPutGetRemove() {
         // Put values via each node

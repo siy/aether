@@ -7,7 +7,7 @@ import org.pragmatica.cluster.net.*;
 import org.pragmatica.cluster.net.NetworkManagementOperation.ListConnectedNodes;
 import org.pragmatica.cluster.net.NetworkMessage.Ping;
 import org.pragmatica.cluster.net.NetworkMessage.Pong;
-import org.pragmatica.cluster.net.serializer.Serializer;
+import org.pragmatica.cluster.serialization.Serializer;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;

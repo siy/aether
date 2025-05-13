@@ -1,33 +1,34 @@
-package org.pragmatica.cluster.net.serializer.kryo;
+package org.pragmatica.cluster.serialization.fury;
 
 import org.junit.jupiter.api.Test;
 import org.pragmatica.cluster.consensus.rabia.Batch;
 import org.pragmatica.cluster.consensus.rabia.Phase;
 import org.pragmatica.cluster.consensus.rabia.RabiaProtocolMessage;
 import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.serialization.kryo.KryoSerializer;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.pragmatica.cluster.serialization.fury.FurySerializer.furySerializer;
 
-class KryoSerializerTest {
-
+class FurySerializerTest {
     @Test
     void testRoundTripForProtocolMessage() {
-        var serializer = KryoSerializer.kryoSerializer();
+        var serializer = furySerializer();
+        var deserializer = furySerializer();
 
         var commands = List.of(new KVCommand.Put<>("k1", "v1"),
                                new KVCommand.Get<>("k2"),
                                new KVCommand.Remove<>("k3"));
         var message = new RabiaProtocolMessage.Synchronous.Propose<>(NodeId.randomNodeId(),
-                                                                   new Phase(123L),
-                                                                   Batch.batch(commands));
+                                                                     new Phase(123L),
+                                                                     Batch.batch(commands));
 
         var serialized = serializer.encode(message);
-        var deserialized = serializer.decode(serialized);
+        var deserialized = deserializer.decode(serialized);
 
         assertEquals(message, deserialized);
     }
+
 }

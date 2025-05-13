@@ -32,6 +32,5 @@ public interface CustomClasses {
         consumer.accept(List.of().getClass());
         consumer.accept(List.of(1).getClass());
         consumer.accept(List.of(1, 2, 3).getClass());
-
     }
 }

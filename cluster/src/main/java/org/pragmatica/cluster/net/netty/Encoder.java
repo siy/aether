@@ -18,7 +18,7 @@ public class Encoder extends MessageToByteEncoder<Message.Wired> {
     }
 
     @Override
-    protected synchronized void encode(ChannelHandlerContext ctx, Message.Wired msg, ByteBuf out) {
+    protected void encode(ChannelHandlerContext ctx, Message.Wired msg, ByteBuf out) {
         try {
             serializer.write(out, msg);
         } catch (Exception e) {

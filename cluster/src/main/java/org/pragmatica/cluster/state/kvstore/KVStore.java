@@ -1,5 +1,6 @@
 package org.pragmatica.cluster.state.kvstore;
 
+import org.pragmatica.cluster.serialization.Deserializer;
 import org.pragmatica.cluster.serialization.Serializer;
 import org.pragmatica.cluster.state.StateMachine;
 import org.pragmatica.cluster.state.StateMachineNotification;
@@ -22,10 +23,12 @@ import java.util.function.Consumer;
 public class KVStore<K, V> implements StateMachine<KVCommand> {
     private final Map<K, V> storage = new ConcurrentHashMap<>();
     private final Serializer serializer;
+    private final Deserializer deserializer;
     private Consumer<? super StateMachineNotification> observer = _ -> {};
 
-    public KVStore(Serializer serializer) {
+    public KVStore(Serializer serializer, Deserializer deserializer) {
         this.serializer = serializer;
+        this.deserializer = deserializer;
     }
 
     @SuppressWarnings("unchecked")
@@ -71,7 +74,7 @@ public class KVStore<K, V> implements StateMachine<KVCommand> {
     @SuppressWarnings("unchecked")
     @Override
     public Result<Unit> restoreSnapshot(byte[] snapshot) {
-        return Result.lift(Causes::fromThrowable, () -> serializer.decode(snapshot))
+        return Result.lift(Causes::fromThrowable, () -> deserializer.decode(snapshot))
                      .map(map -> (Map<K, V>) map)
                      .onSuccessRun(storage::clear)
                      .onSuccess(storage::putAll)

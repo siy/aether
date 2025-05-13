@@ -5,6 +5,7 @@ import org.pragmatica.cluster.consensus.rabia.Batch;
 import org.pragmatica.cluster.consensus.rabia.Phase;
 import org.pragmatica.cluster.consensus.rabia.RabiaProtocolMessage;
 import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.cluster.serialization.kryo.KryoDeserializer;
 import org.pragmatica.cluster.serialization.kryo.KryoSerializer;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 
@@ -17,6 +18,7 @@ class KryoSerializerTest {
     @Test
     void testRoundTripForProtocolMessage() {
         var serializer = KryoSerializer.kryoSerializer();
+        var deserializer = KryoDeserializer.kryoDeserializer();
 
         var commands = List.of(new KVCommand.Put<>("k1", "v1"),
                                new KVCommand.Get<>("k2"),
@@ -26,7 +28,7 @@ class KryoSerializerTest {
                                                                    Batch.batch(commands));
 
         var serialized = serializer.encode(message);
-        var deserialized = serializer.decode(serialized);
+        var deserialized = deserializer.decode(serialized);
 
         assertEquals(message, deserialized);
     }

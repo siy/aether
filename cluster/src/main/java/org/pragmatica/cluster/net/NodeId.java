@@ -1,7 +1,5 @@
 package org.pragmatica.cluster.net;
 
-import org.pragmatica.utility.ULID;
-
 /// Cluster node ID
 public record NodeId(String id) implements Comparable<NodeId> {
     @Override
@@ -16,6 +14,6 @@ public record NodeId(String id) implements Comparable<NodeId> {
 
     /// Automatically generate unique node ID.
     public static NodeId randomNodeId() {
-        return nodeId(ULID.randomULID().encoded());
+        return nodeId(IdGenerator.generate());
     }
 }

@@ -1,6 +1,6 @@
 package org.pragmatica.cluster.consensus.rabia;
 
-import org.pragmatica.utility.ULID;
+import org.pragmatica.cluster.net.IdGenerator;
 
 public record CorrelationId(String id) {
     public static CorrelationId correlationId(String id) {
@@ -8,7 +8,7 @@ public record CorrelationId(String id) {
     }
 
     public static CorrelationId randomCorrelationId() {
-        return correlationId(ULID.randomULID().encoded());
+        return correlationId(IdGenerator.generate());
     }
 
     public static CorrelationId emptyCorrelationId() {

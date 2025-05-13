@@ -2,11 +2,14 @@ package org.pragmatica.cluster.net.netty;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
 import org.pragmatica.cluster.consensus.ProtocolMessage;
 import org.pragmatica.cluster.net.*;
 import org.pragmatica.cluster.net.NetworkManagementOperation.ListConnectedNodes;
 import org.pragmatica.cluster.net.NetworkMessage.Ping;
 import org.pragmatica.cluster.net.NetworkMessage.Pong;
+import org.pragmatica.cluster.serialization.Deserializer;
 import org.pragmatica.cluster.serialization.Serializer;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
@@ -38,6 +41,9 @@ public class NettyClusterNetwork implements ClusterNetwork {
     private static final Logger log = LoggerFactory.getLogger(NettyClusterNetwork.class);
     private static final double SCALE = 0.3d;
 
+    private static final int LENGTH_FIELD_LEN = 4;
+    private static final int INITIAL_BYTES_TO_STRIP = LENGTH_FIELD_LEN;
+
     private final NodeInfo self;
     private final Map<NodeId, Channel> peerLinks = new ConcurrentHashMap<>();
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
@@ -50,13 +56,19 @@ public class NettyClusterNetwork implements ClusterNetwork {
         ADD, REMOVE, SHUTDOWN
     }
 
-    public NettyClusterNetwork(TopologyManager topologyManager, Serializer serializer, MessageRouter router) {
+    public NettyClusterNetwork(TopologyManager topologyManager,
+                               Serializer serializer,
+                               Deserializer deserializer,
+                               MessageRouter router) {
         this.self = topologyManager.self();
         this.topologyManager = topologyManager;
         this.router = router;
-        this.handlers = () -> List.of(new Decoder(serializer),
-                                      new Encoder(serializer),
-                                      new Handler(this::peerConnected, this::peerDisconnected, router::route));
+        this.handlers = () -> List.of(
+                new LengthFieldBasedFrameDecoder(1048576, 0, LENGTH_FIELD_LEN, 0, INITIAL_BYTES_TO_STRIP),
+                new LengthFieldPrepender(LENGTH_FIELD_LEN),
+                new Decoder(deserializer),
+                new Encoder(serializer),
+                new Handler(this::peerConnected, this::peerDisconnected, router::route));
 
         router.addRoute(ConnectNode.class, this::connect);
         router.addRoute(DisconnectNode.class, this::disconnect);
@@ -111,7 +123,8 @@ public class NettyClusterNetwork implements ClusterNetwork {
                        .onPresent(nodeId -> processViewChange(ADD, nodeId))
                        .onEmpty(() -> log.warn("Unknown node {}, disconnecting", channel.remoteAddress()))
                        .onEmpty(() -> channel.close()
-                                             .addListener(_ -> log.trace("Host {} disconnected", channel.remoteAddress())));
+                                             .addListener(_ -> log.info("Host {} disconnected",
+                                                                        channel.remoteAddress())));
     }
 
     private void peerDisconnected(Channel channel) {
@@ -233,7 +246,7 @@ public class NettyClusterNetwork implements ClusterNetwork {
             return;
         }
 
-        log.trace("Node {} sending message to {}: {}", self.id(), peerId, message);
+//        log.info("Node {} sending message {} to {}", self.id(), message, peerId);
 
         channel.writeAndFlush(message);
     }

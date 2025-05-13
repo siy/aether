@@ -5,6 +5,7 @@ import org.pragmatica.cluster.consensus.rabia.RabiaEngine;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.local.LocalNetwork;
 import org.pragmatica.cluster.net.local.LocalNetwork.FaultInjector;
+import org.pragmatica.cluster.serialization.Deserializer;
 import org.pragmatica.cluster.serialization.Serializer;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.pragmatica.cluster.net.NodeAddress.nodeAddress;
 import static org.pragmatica.cluster.net.NodeId.randomNodeId;
 import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
+import static org.pragmatica.cluster.serialization.kryo.KryoDeserializer.kryoDeserializer;
 import static org.pragmatica.cluster.serialization.kryo.KryoSerializer.kryoSerializer;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
@@ -30,6 +32,7 @@ public class TestCluster {
     private final Map<NodeId, RabiaEngine<KVCommand>> engines = new LinkedHashMap<>();
     private final Map<NodeId, KVStore<String, String>> stores = new LinkedHashMap<>();
     private final Serializer serializer = kryoSerializer();
+    private final Deserializer deserializer = kryoDeserializer();
     private final MessageRouter router = MessageRouter.messageRouter();
     private final int size;
 
@@ -72,7 +75,7 @@ public class TestCluster {
     }
 
     public void addNewNode(NodeId id) {
-        var store = new KVStore<String, String>(serializer);
+        var store = new KVStore<String, String>(serializer, deserializer);
         var topologyManager = new TestTopologyManager(size, nodeInfo(id, nodeAddress("localhost", 8090)));
         var engine = new RabiaEngine<>(topologyManager, network, store, router, ProtocolConfig.testConfig());
 

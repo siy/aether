@@ -10,13 +10,14 @@ import org.pragmatica.cluster.state.kvstore.KVCommand;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.pragmatica.cluster.serialization.fury.FuryDeserializer.furyDeserializer;
 import static org.pragmatica.cluster.serialization.fury.FurySerializer.furySerializer;
 
 class FurySerializerTest {
     @Test
     void testRoundTripForProtocolMessage() {
         var serializer = furySerializer();
-        var deserializer = furySerializer();
+        var deserializer = furyDeserializer();
 
         var commands = List.of(new KVCommand.Put<>("k1", "v1"),
                                new KVCommand.Get<>("k2"),

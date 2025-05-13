@@ -28,6 +28,7 @@ import static org.pragmatica.cluster.net.NodeId.nodeId;
 import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
 import static org.pragmatica.cluster.node.rabia.NodeConfig.nodeConfig;
 import static org.pragmatica.cluster.node.rabia.RabiaNode.rabiaNode;
+import static org.pragmatica.cluster.serialization.fury.FuryDeserializer.furyDeserializer;
 import static org.pragmatica.cluster.serialization.fury.FurySerializer.furySerializer;
 
 class RabiaNodeNettyIntegrationTest {
@@ -54,6 +55,7 @@ class RabiaNodeNettyIntegrationTest {
     void setUp() {
         var protocolConfig = ProtocolConfig.testConfig();
         var serializer = furySerializer();
+        var deserializer = furyDeserializer();
         var configuredNodes = NODES.subList(0, CLUSTER_SIZE);
 
         for (int i = 0; i < CLUSTER_SIZE; i++) {
@@ -64,12 +66,12 @@ class RabiaNodeNettyIntegrationTest {
             var router = MessageRouter.messageRouter();
 
             routers.add(router);
-            var store = new KVStore<String, String>(serializer);
+            var store = new KVStore<String, String>(serializer, deserializer);
 
             stores.add(store);
 
             var node = rabiaNode(nodeConfig(protocolConfig, topologyConfig),
-                                 router, store, serializer);
+                                 router, store, serializer, deserializer);
             nodes.add(node);
         }
         // Start all nodes

@@ -36,7 +36,7 @@ public interface StateMachine<T extends Command> {
     /// The observer will be called whenever the state machine's state is modified by a command.
     ///
     /// @param observer Internal state change observer
-    void observeStateChanges(Consumer<? super Notification> observer);
+    void observeStateChanges(Consumer<? super StateMachineNotification> observer);
 
     /// Reset state machine to its initial state
     void reset();

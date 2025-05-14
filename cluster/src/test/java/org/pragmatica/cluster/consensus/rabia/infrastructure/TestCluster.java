@@ -2,13 +2,15 @@ package org.pragmatica.cluster.consensus.rabia.infrastructure;
 
 import org.pragmatica.cluster.consensus.rabia.ProtocolConfig;
 import org.pragmatica.cluster.consensus.rabia.RabiaEngine;
-import org.pragmatica.cluster.consensus.rabia.RabiaProtocolMessage;
 import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.net.QuorumState;
 import org.pragmatica.cluster.net.local.LocalNetwork;
+import org.pragmatica.cluster.net.local.LocalNetwork.FaultInjector;
+import org.pragmatica.cluster.serialization.Deserializer;
+import org.pragmatica.cluster.serialization.Serializer;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.message.MessageRouter;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -16,31 +18,39 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.pragmatica.cluster.net.NodeAddress.nodeAddress;
+import static org.pragmatica.cluster.net.NodeId.randomNodeId;
+import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
+import static org.pragmatica.cluster.serialization.fury.FuryDeserializer.furyDeserializer;
+import static org.pragmatica.cluster.serialization.fury.FurySerializer.furySerializer;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 /// Holds a small Rabia cluster wired over a single LocalNetwork.
 public class TestCluster {
-    private final LocalNetwork<RabiaProtocolMessage> network;
+    private final LocalNetwork network;
     private final List<NodeId> ids = new ArrayList<>();
-    private final Map<NodeId, RabiaEngine<RabiaProtocolMessage, KVCommand>> engines = new LinkedHashMap<>();
+    private final Map<NodeId, RabiaEngine<KVCommand>> engines = new LinkedHashMap<>();
     private final Map<NodeId, KVStore<String, String>> stores = new LinkedHashMap<>();
-    private final TestAddressBook addressBook;
-    private final TestSerializer serializer = new TestSerializer();
+    private final Serializer serializer = furySerializer();
+    private final Deserializer deserializer = furyDeserializer();
+    private final MessageRouter router = MessageRouter.messageRouter();
+    private final int size;
 
     public TestCluster(int size) {
-        addressBook = new TestAddressBook(size);
-        network = new LocalNetwork<>(addressBook);
+        this.size = size;
+        var topologyManager = new TestTopologyManager(size, nodeInfo(randomNodeId(), nodeAddress("localhost", 8090)));
+        network = new LocalNetwork(topologyManager, router, new FaultInjector());
 
         // create nodes
         for (int i = 1; i <= size; i++) {
-            var id = NodeId.create("node-" + i);
+            var id = NodeId.nodeId("node-" + i);
             ids.add(id);
             addNewNode(id);
         }
         network.start();
     }
 
-    public Map<NodeId, RabiaEngine<RabiaProtocolMessage, KVCommand>> engines() {
+    public Map<NodeId, RabiaEngine<KVCommand>> engines() {
         return engines;
     }
 
@@ -56,13 +66,8 @@ public class TestCluster {
         return ids;
     }
 
-    public LocalNetwork<RabiaProtocolMessage> network() {
+    public LocalNetwork network() {
         return network;
-    }
-
-    private void quorumChange(QuorumState quorumState) {
-        engines.values()
-               .forEach(engine -> engine.quorumState(quorumState));
     }
 
     public void disconnect(NodeId id) {
@@ -70,9 +75,10 @@ public class TestCluster {
     }
 
     public void addNewNode(NodeId id) {
-        var store = new KVStore<String, String>(serializer);
-        var engine = new RabiaEngine<>(id, addressBook, network, store, ProtocolConfig.testConfig());
-        network.observeQuorumState(this::quorumChange);
+        var store = new KVStore<String, String>(serializer, deserializer);
+        var topologyManager = new TestTopologyManager(size, nodeInfo(id, nodeAddress("localhost", 8090)));
+        var engine = new RabiaEngine<>(topologyManager, network, store, router, ProtocolConfig.testConfig());
+
         network.addNode(id, engine::processMessage);
         stores.put(id, store);
         engines.put(id, engine);
@@ -81,7 +87,7 @@ public class TestCluster {
 
     public void awaitNode(NodeId nodeId) {
         engines.get(nodeId)
-               .startPromise()
+               .start()
                .await(timeSpan(10).seconds())
                .onFailure(cause -> fail("Failed to start " + nodeId.id() + " " + cause));
     }
@@ -89,7 +95,7 @@ public class TestCluster {
     public void awaitStart() {
         var promises = engines.values()
                               .stream()
-                              .map(RabiaEngine::startPromise)
+                              .map(RabiaEngine::start)
                               .toList();
 
         Promise.allOf(promises)

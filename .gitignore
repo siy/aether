@@ -2,6 +2,8 @@
 
 target
 
+.vscode
+
 ### STS ###
 .apt_generated
 .classpath

@@ -455,7 +455,7 @@ result.map(String::toUpperCase)
 Functions as an asynchronous version of `Result` with features for:
 - Sequential transformation of values
 - Asynchronous processing
-- Event notification with "exactly once" semantics
+- Event stateMachineNotification with "exactly once" semantics
 
 ## Design Philosophy
 

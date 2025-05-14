@@ -1,26 +1,26 @@
 package org.pragmatica.cluster.net.local;
 
 import org.pragmatica.cluster.consensus.ProtocolMessage;
-import org.pragmatica.cluster.net.*;
+import org.pragmatica.cluster.consensus.rabia.RabiaProtocolMessage;
+import org.pragmatica.cluster.net.ClusterNetwork;
+import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.cluster.topology.QuorumStateNotification;
+import org.pragmatica.cluster.topology.TopologyManager;
+import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.io.TimeSpan;
+import org.pragmatica.message.MessageRouter;
+import org.pragmatica.utility.Sleep;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /// Local network implementation suitable for testing purposes
-public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T> {
-    private final Map<NodeId, Consumer<T>> nodes = new ConcurrentHashMap<>();
-    private final AddressBook addressBook;
-    private Consumer<QuorumState> quorumObserver = _ -> {
-    };
-
-    public List<NodeId> connectedNodes() {
-        return List.copyOf(nodes.keySet());
-    }
-
-    // Fault injection support
+public class LocalNetwork implements ClusterNetwork {
     public enum FaultType {
         MESSAGE_LOSS,
         MESSAGE_DELAY,
@@ -31,18 +31,21 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
         NODE_BYZANTINE
     }
 
-    // Fault injection configuration
-    private FaultInjector faultInjector;
+    private final Map<NodeId, Consumer<RabiaProtocolMessage>> nodes = new ConcurrentHashMap<>();
+    private final TopologyManager topologyManager;
     private final Map<NodeId, List<NodeId>> partitions = new ConcurrentHashMap<>();
     private final Executor executor = Executors.newFixedThreadPool(5);
+    private final MessageRouter router;
+    private FaultInjector faultInjector;
 
-    public LocalNetwork(AddressBook addressBook) {
-        this(addressBook, new FaultInjector());
+    public LocalNetwork(TopologyManager topologyManager, MessageRouter router, FaultInjector faultInjector) {
+        this.topologyManager = topologyManager;
+        this.router = router;
+        this.faultInjector = faultInjector;
     }
 
-    public LocalNetwork(AddressBook addressBook, FaultInjector faultInjector) {
-        this.addressBook = addressBook;
-        this.faultInjector = faultInjector;
+    public List<NodeId> connectedNodes() {
+        return List.copyOf(nodes.keySet());
     }
 
     @Override
@@ -51,7 +54,6 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
              .forEach(nodeId -> send(nodeId, message));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <M extends ProtocolMessage> void send(NodeId nodeId, M message) {
         // For Byzantine behavior - only check if it's a Byzantine node if we can get the sender
@@ -62,56 +64,40 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
         }
 
         if (nodes.containsKey(nodeId)) {
-            processWithFaultInjection(nodeId, (T) message);
+            processWithFaultInjection(nodeId, (RabiaProtocolMessage) message);
         }
     }
 
-    @Override
-    public void connect(NodeId nodeId) {
-    }
-
-    @Override
     public void disconnect(NodeId nodeId) {
         nodes.remove(nodeId);
-        if (nodes.size() == addressBook.quorumSize() - 1) {
-            quorumObserver.accept(QuorumState.DISAPPEARED);
+        if (nodes.size() == topologyManager.quorumSize() - 1) {
+            router.route(QuorumStateNotification.DISAPPEARED);
         }
     }
 
     @Override
-    public void observeViewChanges(Consumer<TopologyChange> observer) {
+    public Promise<Unit> start() {
+        return Promise.unitPromise();
     }
 
     @Override
-    public void listen(Consumer<T> listener) {
+    public Promise<Unit> stop() {
+        return Promise.unitPromise();
     }
 
-    @Override
-    public void start() {
-    }
-
-    @Override
-    public void stop() {
-    }
-
-    @Override
-    public boolean quorumConnected() {
-        return nodes.size() >= addressBook.quorumSize();
-    }
-
-    public void addNode(NodeId nodeId, Consumer<T> listener) {
+    public void addNode(NodeId nodeId, Consumer<RabiaProtocolMessage> listener) {
         // Use processWithFaultInjection to wrap the listener
         nodes.put(nodeId, listener);
-        if (nodes.size() == addressBook.quorumSize()) {
-            quorumObserver.accept(QuorumState.APPEARED);
+        if (nodes.size() == topologyManager.quorumSize()) {
+            router.route(QuorumStateNotification.ESTABLISHED);
         }
     }
 
     // Method to process messages with fault injection
-    protected <M extends T> void processWithFaultInjection(NodeId destination, M message) {
+    protected <M extends RabiaProtocolMessage> void processWithFaultInjection(NodeId destination, M message) {
         var sender = message.sender();
 
-        // Check for node crash
+        // Check for the node crash
         if (sender != null && faultInjector.isFaultyNode(destination, FaultType.NODE_CRASH)) {
             return; // Dropped
         }
@@ -129,25 +115,22 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
 
         // Check for message delay
         if (faultInjector.shouldDelayMessage()) {
-            long delay = faultInjector.getMessageDelay();
-            try {
-                Thread.sleep(delay);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            Sleep.sleep(faultInjector.messageDelay());
         }
 
         // Process the message
-        Consumer<T> listener = nodes.get(destination);
+        var listener = nodes.get(destination);
+
+        if (listener == null) {
+            return;
+        }
 
         executor.execute(() -> {
-            if (listener != null) {
-                listener.accept(message);
+            listener.accept(message);
 
-                // Check for message duplication
-                if (faultInjector.shouldDuplicateMessage()) {
-                    listener.accept(message);
-                }
+            // Check for message duplication
+            if (faultInjector.shouldDuplicateMessage()) {
+                listener.accept(message);
             }
         });
     }
@@ -174,23 +157,17 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
         this.faultInjector = faultInjector;
     }
 
-    @Override
-    public void observeQuorumState(Consumer<QuorumState> quorumObserver) {
-        this.quorumObserver = quorumObserver;
-    }
-
     // Fault injector implementation
     public static class FaultInjector {
         private final Map<FaultType, Boolean> activeFaults = new EnumMap<>(FaultType.class);
         private final Map<NodeId, Set<FaultType>> nodeSpecificFaults = new ConcurrentHashMap<>();
         private final Random random = new Random();
         private double messageLossRate = 0.0;
-        private long messageDelayMillis = 0;
+        private TimeSpan messageDelay = TimeSpan.timeSpan(0).millis();
 
         public FaultInjector() {
-            for (FaultType type : FaultType.values()) {
-                activeFaults.put(type, false);
-            }
+            Stream.of(FaultType.values())
+                  .forEach(type -> activeFaults.put(type, false));
         }
 
         public void setFault(FaultType type, boolean active) {
@@ -210,8 +187,8 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
             this.messageLossRate = Math.max(0.0, Math.min(1.0, rate));
         }
 
-        public void setMessageDelayMillis(long delayMillis) {
-            this.messageDelayMillis = Math.max(0, delayMillis);
+        public void messageDelay(TimeSpan delay) {
+            this.messageDelay = delay;
         }
 
         public boolean shouldDropMessage() {
@@ -222,8 +199,8 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
             return activeFaults.get(FaultType.MESSAGE_DELAY);
         }
 
-        public long getMessageDelay() {
-            return messageDelayMillis;
+        public TimeSpan messageDelay() {
+            return messageDelay;
         }
 
         public boolean shouldDuplicateMessage() {
@@ -241,7 +218,7 @@ public class LocalNetwork<T extends ProtocolMessage> implements ClusterNetwork<T
             }
             nodeSpecificFaults.clear();
             messageLossRate = 0.0;
-            messageDelayMillis = 0;
+            messageDelay = TimeSpan.timeSpan(0).millis();
         }
     }
 }

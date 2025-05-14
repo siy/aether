@@ -25,9 +25,9 @@ public interface RabiaPersistence<C extends Command> {
                                      Phase lastCommittedPhase,
                                      Collection<Batch<C>> pendingBatches) {
                 return stateMachine.makeSnapshot()
-                                   .map(snapshot -> SavedState.create(snapshot,
-                                                                      lastCommittedPhase,
-                                                                      List.copyOf(pendingBatches)))
+                                   .map(snapshot -> SavedState.savedState(snapshot,
+                                                                          lastCommittedPhase,
+                                                                          List.copyOf(pendingBatches)))
                                    .onSuccess(state::set)
                                    .onFailure(_ -> state.set(null))
                                    .map(_ -> Unit.unit());
@@ -49,9 +49,9 @@ public interface RabiaPersistence<C extends Command> {
 
         List<Batch<C>> pendingBatches();
 
-        static <C extends Command> SavedState<C> create(byte[] snapshot,
-                                                        Phase lastCommittedPhase,
-                                                        Collection<Batch<C>> pendingBatches) {
+        static <C extends Command> SavedState<C> savedState(byte[] snapshot,
+                                                            Phase lastCommittedPhase,
+                                                            Collection<Batch<C>> pendingBatches) {
             record savedState<C extends Command>(byte[] snapshot, Phase lastCommittedPhase,
                                                  List<Batch<C>> pendingBatches) implements SavedState<C> {
                 @Override
@@ -75,7 +75,7 @@ public interface RabiaPersistence<C extends Command> {
         }
 
         static <C extends Command> SavedState<C> empty() {
-            return create(new byte[0], Phase.ZERO, List.of());
+            return savedState(new byte[0], Phase.ZERO, List.of());
         }
     }
 }

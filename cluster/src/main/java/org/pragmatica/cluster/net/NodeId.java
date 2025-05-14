@@ -1,19 +1,21 @@
 package org.pragmatica.cluster.net;
 
-import org.pragmatica.utility.ULID;
+import org.pragmatica.utility.IdGenerator;
 
 /// Cluster node ID
-public interface NodeId {
-    String id();
+public record NodeId(String id) implements Comparable<NodeId> {
+    @Override
+    public int compareTo(NodeId o) {
+        return id().compareTo(o.id());
+    }
 
     /// Create new node ID from the given string.
-    static NodeId create(String id) {
-        record nodeId(String id) implements NodeId {}
-        return new nodeId(id);
+    public static NodeId nodeId(String id) {
+        return new NodeId(id);
     }
 
     /// Automatically generate unique node ID.
-    static NodeId createRandom() {
-        return create(ULID.randomULID().encoded());
+    public static NodeId randomNodeId() {
+        return nodeId(IdGenerator.generate("node"));
     }
 }

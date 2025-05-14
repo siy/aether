@@ -1,21 +1,17 @@
 package org.pragmatica.cluster.consensus.rabia;
 
-import org.pragmatica.utility.ULID;
+import org.pragmatica.utility.IdGenerator;
 
-public interface CorrelationId {
-    String id();
-
-    static CorrelationId create(String id) {
-        record correlationId(String id) implements CorrelationId {}
-
-        return new correlationId(id);
+public record CorrelationId(String id) {
+    public static CorrelationId correlationId(String id) {
+        return new CorrelationId(id);
     }
 
-    static CorrelationId createRandom() {
-        return create(ULID.randomULID().encoded());
+    public static CorrelationId randomCorrelationId() {
+        return correlationId(IdGenerator.generate("xref"));
     }
 
-    static CorrelationId none() {
-        return create("");
+    public static CorrelationId emptyCorrelationId() {
+        return correlationId("");
     }
 }

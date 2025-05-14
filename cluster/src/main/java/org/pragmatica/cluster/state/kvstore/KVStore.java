@@ -1,14 +1,15 @@
 package org.pragmatica.cluster.state.kvstore;
 
-import org.pragmatica.cluster.net.netty.Serializer;
-import org.pragmatica.cluster.state.Notification;
+import org.pragmatica.cluster.serialization.Deserializer;
+import org.pragmatica.cluster.serialization.Serializer;
 import org.pragmatica.cluster.state.StateMachine;
+import org.pragmatica.cluster.state.StateMachineNotification;
 import org.pragmatica.cluster.state.kvstore.KVCommand.Get;
 import org.pragmatica.cluster.state.kvstore.KVCommand.Put;
 import org.pragmatica.cluster.state.kvstore.KVCommand.Remove;
-import org.pragmatica.cluster.state.kvstore.KVNotification.ValueGet;
-import org.pragmatica.cluster.state.kvstore.KVNotification.ValuePut;
-import org.pragmatica.cluster.state.kvstore.KVNotification.ValueRemove;
+import org.pragmatica.cluster.state.kvstore.KVStateMachineNotification.ValueGet;
+import org.pragmatica.cluster.state.kvstore.KVStateMachineNotification.ValuePut;
+import org.pragmatica.cluster.state.kvstore.KVStateMachineNotification.ValueRemove;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
@@ -22,10 +23,12 @@ import java.util.function.Consumer;
 public class KVStore<K, V> implements StateMachine<KVCommand> {
     private final Map<K, V> storage = new ConcurrentHashMap<>();
     private final Serializer serializer;
-    private Consumer<? super Notification> observer = _ -> {};
+    private final Deserializer deserializer;
+    private Consumer<? super StateMachineNotification> observer = _ -> {};
 
-    public KVStore(Serializer serializer) {
+    public KVStore(Serializer serializer, Deserializer deserializer) {
         this.serializer = serializer;
+        this.deserializer = deserializer;
     }
 
     @SuppressWarnings("unchecked")
@@ -71,7 +74,7 @@ public class KVStore<K, V> implements StateMachine<KVCommand> {
     @SuppressWarnings("unchecked")
     @Override
     public Result<Unit> restoreSnapshot(byte[] snapshot) {
-        return Result.lift(Causes::fromThrowable, () -> serializer.decode(snapshot, HashMap.class))
+        return Result.lift(Causes::fromThrowable, () -> deserializer.decode(snapshot))
                      .map(map -> (Map<K, V>) map)
                      .onSuccessRun(storage::clear)
                      .onSuccess(storage::putAll)
@@ -79,7 +82,7 @@ public class KVStore<K, V> implements StateMachine<KVCommand> {
     }
 
     @Override
-    public void observeStateChanges(Consumer<? super Notification> observer) {
+    public void observeStateChanges(Consumer<? super StateMachineNotification> observer) {
         this.observer = observer;
     }
 

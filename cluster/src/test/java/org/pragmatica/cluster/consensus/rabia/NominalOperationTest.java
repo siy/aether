@@ -50,13 +50,11 @@ public class NominalOperationTest {
         log.info("Starting single client sequential test with {} requests", REQUEST_COUNT);
 
         // Get the first node to submit commands
-        NodeId clientNode = cluster.getFirst();
+        var clientNode = cluster.getFirst();
 
         // Capture start time for throughput and latency calculations
         long startTime = System.currentTimeMillis();
-
-        // Submit commands sequentially in small batches to avoid overwhelming the system
-        List<Long> commandLatencies = new ArrayList<>();
+        var commandLatencies = new ArrayList<Long>();
         int batchSize = 100;
 
         for (int idx = 0; idx < REQUEST_COUNT; idx += batchSize) {
@@ -119,8 +117,9 @@ public class NominalOperationTest {
 
         // Verify all keys are present (no gaps)
         for (int i = 0; i < REQUEST_COUNT; i++) {
-            String key = "key-" + i;
-            String expectedValue = "value-" + i;
+            var key = "key-" + i;
+            var expectedValue = "value-" + i;
+
             assertTrue(cluster.allNodesHaveValue(key, expectedValue),
                        "All nodes should have " + key + " with value " + expectedValue);
         }
@@ -167,8 +166,8 @@ public class NominalOperationTest {
             var targetNode = cluster.ids().get(random.nextInt(CLUSTER_SIZE));
 
             for (int j = 0; j < COMMANDS_PER_CLIENT; j++) {
-                String key = "client-" + i + "-key-" + j;
-                String value = "client-" + i + "-value-" + j;
+                var key = "client-" + i + "-key-" + j;
+                var value = "client-" + i + "-value-" + j;
 
                 valueMap.put(key, value);
 

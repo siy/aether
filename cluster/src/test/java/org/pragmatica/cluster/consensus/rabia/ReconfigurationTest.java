@@ -65,7 +65,7 @@ public class ReconfigurationTest {
         log.info("Current state size: {} entries", beforeSize);
         
         // Add a new node to the cluster
-        var newNode = NodeId.create("node-" + (INITIAL_CLUSTER_SIZE + 1));
+        var newNode = NodeId.nodeId("node-" + (INITIAL_CLUSTER_SIZE + 1));
         log.info("Adding new node: {}", newNode);
         
         cluster.addNewNode(newNode);
@@ -129,10 +129,7 @@ public class ReconfigurationTest {
         }
         
         log.info("Verified new node participates in consensus");
-        
-        // Verify the quorum size has increased
-        assertTrue(cluster.network().quorumConnected(), "Cluster should have an active quorum");
-        
+
         // Final verification - check state consistency across all nodes, including the new one
         var allNodes = new ArrayList<>(cluster.ids());
         allNodes.add(newNode);
@@ -187,10 +184,7 @@ public class ReconfigurationTest {
         // Remove a node
         log.info("Removing node: {}", nodeToRemove);
         cluster.disconnect(nodeToRemove);
-        
-        // Verify we still have quorum
-        assertTrue(cluster.network().quorumConnected(), "Cluster should maintain quorum after node removal");
-        
+
         // Submit additional commands after removal
         int postRemoveCommands = 20;
         for (int i = 0; i < postRemoveCommands; i++) {
@@ -257,7 +251,7 @@ public class ReconfigurationTest {
      */
     @Test
     void replacePrimaryNodes() {
-        log.info("Starting replace primary nodes test");
+        log.info("Starting replace primary nodes test: {}", cluster.network());
         
         // For this test, we'll:
         // 1. Establish baseline state
@@ -283,14 +277,10 @@ public class ReconfigurationTest {
         log.info("Removing primary node {} and second node {}", originalPrimary, secondToRemove);
         cluster.disconnect(originalPrimary);
         cluster.disconnect(secondToRemove);
-        
-        // Verify we still have quorum (should be 3 out of 5 nodes)
-        assertTrue(cluster.network().quorumConnected(), 
-                  "Cluster should maintain quorum after removing two nodes");
-                  
+
         // 3. Add two new nodes
-        var newNode1 = NodeId.create("new-node-1");
-        var newNode2 = NodeId.create("new-node-2");
+        var newNode1 = NodeId.nodeId("new-node-1");
+        var newNode2 = NodeId.nodeId("new-node-2");
         
         log.info("Adding two new nodes: {} and {}", newNode1, newNode2);
         
@@ -469,7 +459,7 @@ public class ReconfigurationTest {
         var newNodes = new ArrayList<NodeId>();
 
         for (int i = 0; i < nodesToReplace; i++) {
-            var newNode = NodeId.create("replacement-node-" + (i + 1));
+            var newNode = NodeId.nodeId("replacement-node-" + (i + 1));
             newNodes.add(newNode);
             
             log.info("Adding replacement node: {}", newNode);

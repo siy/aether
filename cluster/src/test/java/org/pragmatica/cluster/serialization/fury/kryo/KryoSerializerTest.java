@@ -1,4 +1,4 @@
-package org.pragmatica.cluster.net.serializer.kryo;
+package org.pragmatica.cluster.serialization.fury.kryo;
 
 import org.junit.jupiter.api.Test;
 import org.pragmatica.cluster.consensus.rabia.Batch;

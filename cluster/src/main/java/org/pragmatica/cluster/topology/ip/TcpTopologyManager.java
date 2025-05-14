@@ -1,6 +1,8 @@
-package org.pragmatica.cluster.net.ip;
+package org.pragmatica.cluster.topology.ip;
 
 import org.pragmatica.cluster.net.*;
+import org.pragmatica.cluster.topology.TopologyManagementMessage;
+import org.pragmatica.cluster.topology.TopologyManager;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.io.TimeSpan;
 import org.pragmatica.lang.utils.SharedScheduler;

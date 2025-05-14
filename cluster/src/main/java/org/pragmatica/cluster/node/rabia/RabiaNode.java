@@ -1,10 +1,11 @@
 package org.pragmatica.cluster.node.rabia;
 
 import org.pragmatica.cluster.consensus.rabia.RabiaEngine;
+import org.pragmatica.cluster.leader.LeaderManager;
 import org.pragmatica.cluster.net.ClusterNetwork;
 import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.net.TopologyManager;
-import org.pragmatica.cluster.net.ip.TcpTopologyManager;
+import org.pragmatica.cluster.topology.TopologyManager;
+import org.pragmatica.cluster.topology.ip.TcpTopologyManager;
 import org.pragmatica.cluster.net.netty.NettyClusterNetwork;
 import org.pragmatica.cluster.node.ClusterNode;
 import org.pragmatica.cluster.serialization.Deserializer;
@@ -32,7 +33,8 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
                                             StateMachine<C> stateMachine,
                                             ClusterNetwork network,
                                             TopologyManager topologyManager,
-                                            RabiaEngine<C> consensus) implements RabiaNode<C> {
+                                            RabiaEngine<C> consensus,
+                                            LeaderManager leaderManager) implements RabiaNode<C> {
             @Override
             public NodeId self() {
                 return config().topology().self();
@@ -59,10 +61,11 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
         }
 
         var topologyManager = TcpTopologyManager.tcpTopologyManager(config.topology(), router);
+        var leaderManager = LeaderManager.leaderManager(config.topology().self(), router);
         var network = new NettyClusterNetwork(topologyManager, serializer, deserializer, router);
         var consensus = new RabiaEngine<>(topologyManager, network, stateMachine,
                                           router, config.protocol());
 
-        return new rabiaNode<>(config, router, stateMachine, network, topologyManager, consensus);
+        return new rabiaNode<>(config, router, stateMachine, network, topologyManager, consensus, leaderManager);
     }
 }

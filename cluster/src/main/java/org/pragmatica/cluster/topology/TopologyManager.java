@@ -1,5 +1,7 @@
-package org.pragmatica.cluster.net;
+package org.pragmatica.cluster.topology;
 
+import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.cluster.net.NodeInfo;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.io.TimeSpan;
 

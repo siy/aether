@@ -1,4 +1,4 @@
-package org.pragmatica.cluster.net.ip;
+package org.pragmatica.cluster.topology.ip;
 
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.NodeInfo;

@@ -2,7 +2,8 @@ package org.pragmatica.cluster.net;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.pragmatica.cluster.net.ip.TopologyConfig;
+import org.pragmatica.cluster.topology.ip.TopologyConfig;
+import org.pragmatica.cluster.topology.TopologyManager;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.io.TimeSpan;
 import org.pragmatica.message.MessageRouter;
@@ -13,7 +14,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.pragmatica.cluster.net.NodeId.randomNodeId;
 import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
-import static org.pragmatica.cluster.net.ip.TcpTopologyManager.tcpTopologyManager;
+import static org.pragmatica.cluster.topology.ip.TcpTopologyManager.tcpTopologyManager;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 class TcpTopologyManagerTest {

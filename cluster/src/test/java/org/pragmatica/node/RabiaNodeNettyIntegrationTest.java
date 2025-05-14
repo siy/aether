@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.pragmatica.cluster.consensus.rabia.ProtocolConfig;
 import org.pragmatica.cluster.net.NodeInfo;
-import org.pragmatica.cluster.net.ip.TopologyConfig;
+import org.pragmatica.cluster.topology.ip.TopologyConfig;
 import org.pragmatica.cluster.node.ClusterNode;
 import org.pragmatica.cluster.node.rabia.RabiaNode;
 import org.pragmatica.cluster.state.kvstore.KVCommand;

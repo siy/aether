@@ -2,9 +2,9 @@ package org.pragmatica.utility;
 
 import org.junit.jupiter.api.Test;
 import org.pragmatica.cluster.consensus.rabia.RabiaProtocolMessage;
-import org.pragmatica.cluster.net.QuorumStateNotification;
-import org.pragmatica.cluster.net.TopologyChangeNotification;
-import org.pragmatica.cluster.net.TopologyManagementMessage;
+import org.pragmatica.cluster.topology.QuorumStateNotification;
+import org.pragmatica.cluster.topology.TopologyChangeNotification;
+import org.pragmatica.cluster.topology.TopologyManagementMessage;
 import org.pragmatica.cluster.state.kvstore.KVStateMachineNotification;
 
 import java.util.List;

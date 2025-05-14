@@ -1,4 +1,4 @@
-package org.pragmatica.cluster.net;
+package org.pragmatica.cluster.topology;
 
 import org.pragmatica.message.Message;
 

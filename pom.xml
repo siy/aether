@@ -12,6 +12,7 @@
         <module>cluster</module>
         <module>net-core</module>
         <module>common</module>
+        <module>node</module>
     </modules>
 
     <properties>

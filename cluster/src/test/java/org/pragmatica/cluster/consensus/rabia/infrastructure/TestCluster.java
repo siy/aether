@@ -6,8 +6,8 @@ import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.local.LocalNetwork;
 import org.pragmatica.cluster.net.local.LocalNetwork.FaultInjector;
 import org.pragmatica.cluster.node.rabia.CustomClasses;
-import org.pragmatica.serialization.binary.Deserializer;
-import org.pragmatica.serialization.binary.Serializer;
+import org.pragmatica.net.serialization.Deserializer;
+import org.pragmatica.net.serialization.Serializer;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.lang.Promise;
@@ -22,8 +22,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.pragmatica.net.NodeAddress.nodeAddress;
 import static org.pragmatica.cluster.net.NodeId.randomNodeId;
 import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
-import static org.pragmatica.serialization.binary.fury.FuryDeserializer.furyDeserializer;
-import static org.pragmatica.serialization.binary.fury.FurySerializer.furySerializer;
+import static org.pragmatica.net.serialization.binary.fury.FuryDeserializer.furyDeserializer;
+import static org.pragmatica.net.serialization.binary.fury.FurySerializer.furySerializer;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 /// Holds a small Rabia cluster wired over a single LocalNetwork.

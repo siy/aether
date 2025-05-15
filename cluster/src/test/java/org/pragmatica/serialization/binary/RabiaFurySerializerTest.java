@@ -1,4 +1,4 @@
-package org.pragmatica.serialization.binary.fury;
+package org.pragmatica.serialization.binary;
 
 import org.junit.jupiter.api.Test;
 import org.pragmatica.cluster.consensus.rabia.Batch;
@@ -11,10 +11,10 @@ import org.pragmatica.cluster.state.kvstore.KVCommand;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.pragmatica.serialization.binary.fury.FuryDeserializer.furyDeserializer;
-import static org.pragmatica.serialization.binary.fury.FurySerializer.furySerializer;
+import static org.pragmatica.net.serialization.binary.fury.FuryDeserializer.furyDeserializer;
+import static org.pragmatica.net.serialization.binary.fury.FurySerializer.furySerializer;
 
-class FurySerializerTest {
+class RabiaFurySerializerTest {
     @Test
     void testRoundTripForProtocolMessage() {
         var serializer = furySerializer(CustomClasses::configure);

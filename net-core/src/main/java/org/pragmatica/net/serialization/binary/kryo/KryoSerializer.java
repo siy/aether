@@ -1,4 +1,4 @@
-package org.pragmatica.serialization.binary.kryo;
+package org.pragmatica.net.serialization.binary.kryo;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Output;
@@ -6,7 +6,7 @@ import com.esotericsoftware.kryo.util.Pool;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufOutputStream;
 import org.pragmatica.serialization.binary.ClassRegistrator;
-import org.pragmatica.serialization.binary.Serializer;
+import org.pragmatica.net.serialization.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

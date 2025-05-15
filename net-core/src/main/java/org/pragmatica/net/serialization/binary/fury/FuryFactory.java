@@ -1,4 +1,4 @@
-package org.pragmatica.serialization.binary.fury;
+package org.pragmatica.net.serialization.binary.fury;
 
 import org.apache.fury.Fury;
 import org.apache.fury.ThreadSafeFury;

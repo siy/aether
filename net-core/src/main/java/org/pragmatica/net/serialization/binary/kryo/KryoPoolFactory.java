@@ -1,4 +1,4 @@
-package org.pragmatica.serialization.binary.kryo;
+package org.pragmatica.net.serialization.binary.kryo;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.util.Pool;

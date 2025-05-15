@@ -1,4 +1,4 @@
-package org.pragmatica.serialization.binary;
+package org.pragmatica.net.serialization;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;

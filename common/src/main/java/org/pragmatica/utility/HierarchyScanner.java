@@ -85,5 +85,6 @@ public sealed interface HierarchyScanner {
         }
     }
 
+    @SuppressWarnings("unused")
     record unused() implements HierarchyScanner {}
 }

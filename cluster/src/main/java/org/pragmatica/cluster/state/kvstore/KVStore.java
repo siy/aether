@@ -1,7 +1,7 @@
 package org.pragmatica.cluster.state.kvstore;
 
-import org.pragmatica.cluster.serialization.Deserializer;
-import org.pragmatica.cluster.serialization.Serializer;
+import org.pragmatica.serialization.binary.Deserializer;
+import org.pragmatica.serialization.binary.Serializer;
 import org.pragmatica.cluster.state.StateMachine;
 import org.pragmatica.cluster.state.StateMachineNotification;
 import org.pragmatica.cluster.state.kvstore.KVCommand.Get;

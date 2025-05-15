@@ -1,5 +1,7 @@
 package org.pragmatica.cluster.net;
 
+import org.pragmatica.net.NodeAddress;
+
 /// Node information: ID and address.
 public interface NodeInfo {
     NodeId id();

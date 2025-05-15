@@ -1,14 +1,15 @@
-package org.pragmatica.cluster.serialization.fury;
+package org.pragmatica.serialization.binary.fury;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufOutputStream;
 import org.apache.fury.ThreadSafeFury;
-import org.pragmatica.cluster.serialization.Serializer;
+import org.pragmatica.serialization.binary.ClassRegistrator;
+import org.pragmatica.serialization.binary.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public interface FurySerializer extends Serializer {
-    static FurySerializer furySerializer() {
+    static FurySerializer furySerializer(ClassRegistrator registrator) {
         record furySerializer(ThreadSafeFury fury) implements FurySerializer {
             private static final Logger log = LoggerFactory.getLogger(FurySerializer.class);
 
@@ -23,6 +24,6 @@ public interface FurySerializer extends Serializer {
             }
         }
 
-        return new furySerializer(FuryFactory.fury());
+        return new furySerializer(FuryFactory.fury(registrator));
     }
 }

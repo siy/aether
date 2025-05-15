@@ -5,8 +5,9 @@ import org.pragmatica.cluster.consensus.rabia.RabiaEngine;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.local.LocalNetwork;
 import org.pragmatica.cluster.net.local.LocalNetwork.FaultInjector;
-import org.pragmatica.cluster.serialization.Deserializer;
-import org.pragmatica.cluster.serialization.Serializer;
+import org.pragmatica.cluster.node.rabia.CustomClasses;
+import org.pragmatica.serialization.binary.Deserializer;
+import org.pragmatica.serialization.binary.Serializer;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.lang.Promise;
@@ -18,11 +19,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.pragmatica.cluster.net.NodeAddress.nodeAddress;
+import static org.pragmatica.net.NodeAddress.nodeAddress;
 import static org.pragmatica.cluster.net.NodeId.randomNodeId;
 import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
-import static org.pragmatica.cluster.serialization.fury.FuryDeserializer.furyDeserializer;
-import static org.pragmatica.cluster.serialization.fury.FurySerializer.furySerializer;
+import static org.pragmatica.serialization.binary.fury.FuryDeserializer.furyDeserializer;
+import static org.pragmatica.serialization.binary.fury.FurySerializer.furySerializer;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 /// Holds a small Rabia cluster wired over a single LocalNetwork.
@@ -31,8 +32,8 @@ public class TestCluster {
     private final List<NodeId> ids = new ArrayList<>();
     private final Map<NodeId, RabiaEngine<KVCommand>> engines = new LinkedHashMap<>();
     private final Map<NodeId, KVStore<String, String>> stores = new LinkedHashMap<>();
-    private final Serializer serializer = furySerializer();
-    private final Deserializer deserializer = furyDeserializer();
+    private final Serializer serializer = furySerializer(CustomClasses::configure);
+    private final Deserializer deserializer = furyDeserializer(CustomClasses::configure);
     private final MessageRouter router = MessageRouter.messageRouter();
     private final int size;
 

@@ -1,4 +1,4 @@
-package org.pragmatica.cluster.serialization;
+package org.pragmatica.cluster.node.rabia;
 
 import org.pragmatica.cluster.consensus.rabia.*;
 import org.pragmatica.cluster.net.NetworkMessage;
@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 import static org.pragmatica.utility.HierarchyScanner.concreteSubtypes;
 
 public interface CustomClasses {
+
     static void configure(Consumer<Class<?>> consumer) {
         concreteSubtypes(RabiaProtocolMessage.class)
                         .forEach(consumer);

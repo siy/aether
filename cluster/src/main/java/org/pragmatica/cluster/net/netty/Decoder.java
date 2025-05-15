@@ -3,7 +3,7 @@ package org.pragmatica.cluster.net.netty;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
-import org.pragmatica.cluster.serialization.Deserializer;
+import org.pragmatica.serialization.binary.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

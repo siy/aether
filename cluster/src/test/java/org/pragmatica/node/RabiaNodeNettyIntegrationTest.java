@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.pragmatica.cluster.consensus.rabia.ProtocolConfig;
 import org.pragmatica.cluster.net.NodeInfo;
+import org.pragmatica.cluster.node.rabia.CustomClasses;
 import org.pragmatica.cluster.topology.ip.TopologyConfig;
 import org.pragmatica.cluster.node.ClusterNode;
 import org.pragmatica.cluster.node.rabia.RabiaNode;
@@ -23,13 +24,13 @@ import java.util.List;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.pragmatica.cluster.net.NodeAddress.nodeAddress;
+import static org.pragmatica.net.NodeAddress.nodeAddress;
 import static org.pragmatica.cluster.net.NodeId.nodeId;
 import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
 import static org.pragmatica.cluster.node.rabia.NodeConfig.nodeConfig;
 import static org.pragmatica.cluster.node.rabia.RabiaNode.rabiaNode;
-import static org.pragmatica.cluster.serialization.fury.FuryDeserializer.furyDeserializer;
-import static org.pragmatica.cluster.serialization.fury.FurySerializer.furySerializer;
+import static org.pragmatica.serialization.binary.fury.FuryDeserializer.furyDeserializer;
+import static org.pragmatica.serialization.binary.fury.FurySerializer.furySerializer;
 
 class RabiaNodeNettyIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RabiaNodeNettyIntegrationTest.class);
@@ -54,8 +55,8 @@ class RabiaNodeNettyIntegrationTest {
     @BeforeEach
     void setUp() {
         var protocolConfig = ProtocolConfig.testConfig();
-        var serializer = furySerializer();
-        var deserializer = furyDeserializer();
+        var serializer = furySerializer(CustomClasses::configure);
+        var deserializer = furyDeserializer(CustomClasses::configure);
         var configuredNodes = NODES.subList(0, CLUSTER_SIZE);
 
         for (int i = 0; i < CLUSTER_SIZE; i++) {

@@ -1,16 +1,17 @@
-package org.pragmatica.cluster.serialization.kryo;
+package org.pragmatica.serialization.binary.kryo;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.util.Pool;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
-import org.pragmatica.cluster.serialization.Deserializer;
+import org.pragmatica.serialization.binary.ClassRegistrator;
+import org.pragmatica.serialization.binary.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public interface KryoDeserializer extends Deserializer {
-    static KryoDeserializer kryoDeserializer() {
+    static KryoDeserializer kryoDeserializer(ClassRegistrator registrator) {
         record kryoDeserializer(Pool<Kryo> pool) implements KryoDeserializer {
             private static final Logger log = LoggerFactory.getLogger(KryoDeserializer.class);
 
@@ -31,6 +32,6 @@ public interface KryoDeserializer extends Deserializer {
             }
         }
 
-        return new kryoDeserializer(KryoPoolFactory.kryoPool());
+        return new kryoDeserializer(KryoPoolFactory.kryoPool(registrator));
     }
 }

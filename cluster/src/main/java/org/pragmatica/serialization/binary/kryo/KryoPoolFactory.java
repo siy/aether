@@ -1,18 +1,18 @@
-package org.pragmatica.cluster.serialization.kryo;
+package org.pragmatica.serialization.binary.kryo;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.util.Pool;
-import org.pragmatica.cluster.serialization.CustomClasses;
+import org.pragmatica.serialization.binary.ClassRegistrator;
 
 public sealed interface KryoPoolFactory {
 
-    static Pool<Kryo> kryoPool() {
+    static Pool<Kryo> kryoPool(ClassRegistrator registrator) {
         return new Pool<>(true, false, Runtime.getRuntime().availableProcessors() * 2) {
             @Override
             protected Kryo create() {
                 var kryo = new Kryo();
 
-                CustomClasses.configure(kryo::register);
+                registrator.registerClasses(kryo::register);
 
                 return kryo;
             }

@@ -215,7 +215,7 @@ public Result<UserWithProfile> getUserWithProfile(User.Id userId) {
                         .toResult(Causes.cause("User with ID " \+ userId \+ " not found"));  
 }
 ```
-Note how indentation helps to group code into logically linked parts.
+Note how indentation helps to groupId code into logically linked parts.
 
 Let’s analyze the resulting code.
 
@@ -401,7 +401,7 @@ Each container has a few *core* methods:
 * `flatMap()` transformation method, which, beside transformation, may also change *special state*: convert present `Option<T>` into empty or success `Result<T>` into failure.
 * `fold()` method, which handles both cases (present/empty for `Option<T>` and success/failure for `Result<T>`) at once.
 
-Apart from *core* methods, there are a bunch of *helper* methods, which are useful in frequently observed use cases. Among these methods, there is a group of methods which are explicitly designed to produce *side effects*.
+Apart from *core* methods, there are a bunch of *helper* methods, which are useful in frequently observed use cases. Among these methods, there is a groupId of methods which are explicitly designed to produce *side effects*.
 
 `Option<T>` has the following methods for *side effects*:
 

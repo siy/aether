@@ -6768,7 +6768,7 @@ The Iteration pattern handles repeated application of functions over collections
 - Example: Converting a collection of records into a hierarchical structure
 
 **Example Use Case:**
-Processing a dataset of financial transactions to filter valid entries, transform them into a standardized format, group by category, and calculate aggregated statistics for each group.
+Processing a dataset of financial transactions to filter valid entries, transform them into a standardized format, groupId by category, and calculate aggregated statistics for each groupId.
 
 ## Summary and Advantages
 

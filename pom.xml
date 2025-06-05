@@ -6,10 +6,12 @@
 
     <groupId>org.pragmatica-lite.aether</groupId>
     <artifactId>aether</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <packaging>pom</packaging>
     <modules>
         <module>node</module>
+        <module>slice-api</module>
+        <module>slice</module>
     </modules>
 
     <properties>
@@ -22,7 +24,7 @@
         <junit.version>5.11.4</junit.version>
         <assertj-core.version>3.26.3</assertj-core.version>
         <mockito.version>5.14.2</mockito.version>
-        <pragmatica.version>0.7.0</pragmatica.version>
+        <pragmatica.version>0.7.9</pragmatica.version>
         <awaitility.version>4.2.1</awaitility.version>
         <tinylog.version>2.7.0</tinylog.version>
         <netty.version>4.2.0.Final</netty.version>
@@ -44,6 +46,18 @@
                 <groupId>org.pragmatica-lite</groupId>
                 <artifactId>common</artifactId>
                 <version>${pragmatica.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.pragmatica-lite</groupId>
+                <artifactId>cluster</artifactId>
+                <version>${pragmatica.version}</version>
+            </dependency>
+
+            <!-- Internal -->
+            <dependency>
+                <groupId>org.pragmatica-lite.aether</groupId>
+                <artifactId>slice-api</artifactId>
+                <version>${project.version}</version>
             </dependency>
 
             <!-- Logging -->
@@ -121,12 +135,6 @@
         <repository>
             <id>github</id>
             <url>https://maven.pkg.github.com/siy/pragmatica-lite</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
         </repository>
     </repositories>
 

@@ -393,7 +393,7 @@ public class RacosServer {
 
         try {
             ServerBootstrap b = new ServerBootstrap();
-            b.group(bossGroup, workerGroup)
+            b.groupId(bossGroup, workerGroup)
              .channel(NioServerSocketChannel.class)
              .option(ChannelOption.SO_BACKLOG, 128)
              .childHandler(new ChannelInitializer<Channel>() {
@@ -439,11 +439,11 @@ public class RacosClient {
     }
 
     public void sendCommand(byte[] command) throws InterruptedException {
-        EventLoopGroup group = new NioEventLoopGroup();
+        EventLoopGroup groupId = new NioEventLoopGroup();
 
         try {
             Bootstrap b = new Bootstrap();
-            b.group(group)
+            b.groupId(groupId)
              .channel(NioSocketChannel.class)
              .option(ChannelOption.SO_KEEPALIVE, true)
              .handler(new ChannelInitializer<Channel>() {
@@ -461,7 +461,7 @@ public class RacosClient {
             // Wait for the response from the server
             f.channel().closeFuture().sync();
         } finally {
-            group.shutdownGracefully();
+            groupId.shutdownGracefully();
         }
     }
 
@@ -706,7 +706,7 @@ public class RacosNode {
 
         try {
             ServerBootstrap bootstrap = new ServerBootstrap();
-            bootstrap.group(bossGroup, workerGroup)
+            bootstrap.groupId(bossGroup, workerGroup)
                      .channel(NioServerSocketChannel.class)
                      .childHandler(new ChannelInitializer<Channel>() {
                          @Override
@@ -757,10 +757,10 @@ public class RacosClient {
     }
 
     public void sendCommand(String command) throws InterruptedException {
-        EventLoopGroup group = new NioEventLoopGroup();
+        EventLoopGroup groupId = new NioEventLoopGroup();
         try {
             Bootstrap bootstrap = new Bootstrap();
-            bootstrap.group(group)
+            bootstrap.groupId(groupId)
                      .channel(NioSocketChannel.class)
                      .handler(new ChannelInitializer<Channel>() {
                          @Override
@@ -784,7 +784,7 @@ public class RacosClient {
             future.channel().writeAndFlush(new Message(Message.Type.COMMAND, command, null));
             future.channel().closeFuture().sync();
         } finally {
-            group.shutdownGracefully();
+            groupId.shutdownGracefully();
         }
     }
 

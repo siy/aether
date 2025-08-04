@@ -1,0 +1,85 @@
+{
+  "name": "Aether AI Agent Design Assistant",
+  "description": "Specialized agent for Aether AI Agent architecture and implementation",
+  "model": "claude-3-opus-20240229",
+  "temperature": 0.3,
+  "max_tokens": 4096,
+  "system_prompt_file": "./CLAUDE-AGENT-PROMPT.md",
+  "context_files": [
+    "./DESIGN-FINALIZATION.md",
+    "./agent-architecture-design.md", 
+    "./detailed-design-specification.md",
+    "./discussion-20250803-smart-runtime-agent.md",
+    "./discussion-20250803-functional-measurement.md",
+    "./discussion-20250803-implementation-roadmap.md",
+    "../../CLAUDE.md"
+  ],
+  "behavior": {
+    "maintain_context": true,
+    "enforce_design_decisions": true,
+    "prefer_functional_style": true,
+    "prioritize_privacy": true,
+    "optimize_token_usage": true
+  },
+  "constraints": {
+    "java_version": "21_with_preview",
+    "target_java_version": "25",
+    "framework": "pragmatica-lite-0.7.9",
+    "architecture": "single_agent_smr_consensus",
+    "llm_strategy": "hybrid_local_first",
+    "measurement": "functional_no_instrumentation"
+  },
+  "response_patterns": {
+    "code_style": "functional_immutable",
+    "error_handling": "result_monad",
+    "async_pattern": "promise_monad", 
+    "concurrency": "virtual_threads",
+    "messaging": "sealed_hierarchies"
+  },
+  "validation_rules": [
+    "no_multi_agent_suggestions",
+    "no_enabled_audit_by_default",
+    "no_autonomous_actions_by_default",
+    "no_direct_component_dependencies",
+    "no_blocking_operations",
+    "maintain_backward_compatibility"
+  ],
+  "knowledge_base": {
+    "implementation_timeline": "24_weeks",
+    "current_status": "design_complete_awaiting_implementation",
+    "performance_targets": {
+      "response_time_ms": 2000,
+      "events_per_second": 10000,
+      "memory_overhead_mb": 100,
+      "tokens_per_minute": 1000
+    },
+    "llm_models": {
+      "local_primary": "qwen3-8b-instruct",
+      "local_backup": "qwen3-4b-instruct",
+      "local_coder": "qwen3-coder-8b",
+      "cloud_providers": ["anthropic", "openai", "google", "alibaba"]
+    }
+  },
+  "tasks": {
+    "architecture_review": {
+      "validate_against": "core_principles",
+      "check_consistency": true,
+      "suggest_improvements": "within_constraints"
+    },
+    "implementation_planning": {
+      "follow_roadmap": true,
+      "maintain_phases": true,
+      "track_dependencies": true
+    },
+    "code_review": {
+      "enforce_style": "functional",
+      "check_thread_safety": true,
+      "validate_messaging": true
+    },
+    "documentation": {
+      "maintain_accuracy": true,
+      "update_decisions": true,
+      "track_changes": true
+    }
+  }
+}

@@ -142,14 +142,14 @@ public class AetherAgent {
     /**
      * Gets the current agent state.
      */
-    public AgentState getCurrentState() {
+    public AgentState currentState() {
         return state.get();
     }
     
     /**
      * Gets the current agent configuration.
      */
-    public AgentConfiguration getCurrentConfiguration() {
+    public AgentConfiguration currentConfiguration() {
         return configuration.get();
     }
     
@@ -163,9 +163,9 @@ public class AetherAgent {
     /**
      * Gets agent health information for monitoring.
      */
-    public AgentHealth getHealth() {
+    public AgentHealth health() {
         var processingStats = messagePreprocessor != null ? 
-            messagePreprocessor.getStats() : null;
+            messagePreprocessor.stats() : null;
         
         return new AgentHealth(
             nodeId,
@@ -277,7 +277,7 @@ public class AetherAgent {
         /**
          * Gets the uptime of the agent.
          */
-        public java.time.Duration getUptime() {
+        public java.time.Duration uptime() {
             return startTime != null ? 
                 java.time.Duration.between(startTime, Instant.now()) : 
                 java.time.Duration.ZERO;

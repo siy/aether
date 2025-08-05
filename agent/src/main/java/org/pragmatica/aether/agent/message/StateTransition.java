@@ -123,14 +123,14 @@ public record StateTransition(
     /**
      * Gets the elapsed time since this transition occurred.
      */
-    public long getAgeMillis() {
+    public long ageMillis() {
         return System.currentTimeMillis() - timestamp;
     }
     
     /**
      * Creates a string representation suitable for logging and analysis.
      */
-    public String getTransitionSummary() {
+    public String transitionSummary() {
         return String.format("%s: %s -> %s (%s)", 
             sourceComponent, fromState, toState, reason);
     }

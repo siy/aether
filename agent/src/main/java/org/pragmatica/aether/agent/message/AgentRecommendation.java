@@ -165,7 +165,7 @@ public record AgentRecommendation(
     /**
      * Gets the total estimated time to complete all action steps.
      */
-    public Duration getTotalEstimatedDuration() {
+    public Duration totalEstimatedDuration() {
         return actionSteps.stream()
             .map(ActionStep::estimatedDuration)
             .reduce(Duration.ZERO, Duration::plus);
@@ -182,7 +182,7 @@ public record AgentRecommendation(
     /**
      * Creates a human-readable summary of this recommendation.
      */
-    public String getDisplaySummary() {
+    public String displaySummary() {
         return String.format("[%s] %s (Confidence: %.1f%%, Risk: %s)", 
             recommendationType, summary, confidence * 100, riskLevel);
     }

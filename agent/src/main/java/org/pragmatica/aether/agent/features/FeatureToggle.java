@@ -1,8 +1,8 @@
 package org.pragmatica.aether.agent.features;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import org.pragmatica.lang.Option;
 
 /**
  * Feature toggle system for the Aether Agent.
@@ -52,30 +52,30 @@ public interface FeatureToggle {
             this.defaultValue = defaultValue;
         }
         
-        public String getKey() { return key; }
-        public String getDescription() { return description; }
-        public boolean getDefaultValue() { return defaultValue; }
+        public String key() { return key; }
+        public String description() { return description; }
+        public boolean defaultValue() { return defaultValue; }
     }
     
     /**
      * Toggle evaluation context for user segmentation and A/B testing.
      */
     record EvaluationContext(
-        Optional<String> userId,
-        Optional<String> nodeId,
-        Optional<String> clusterId,
+        Option<String> userId,
+        Option<String> nodeId,
+        Option<String> clusterId,
         Map<String, String> customAttributes
     ) {
         public static EvaluationContext empty() {
-            return new EvaluationContext(Optional.empty(), Optional.empty(), Optional.empty(), Map.of());
+            return new EvaluationContext(Option.none(), Option.none(), Option.none(), Map.of());
         }
         
         public static EvaluationContext forNode(String nodeId) {
-            return new EvaluationContext(Optional.empty(), Optional.of(nodeId), Optional.empty(), Map.of());
+            return new EvaluationContext(Option.none(), Option.some(nodeId), Option.none(), Map.of());
         }
         
         public static EvaluationContext forCluster(String clusterId) {
-            return new EvaluationContext(Optional.empty(), Optional.empty(), Optional.of(clusterId), Map.of());
+            return new EvaluationContext(Option.none(), Option.none(), Option.some(clusterId), Map.of());
         }
         
         public EvaluationContext withAttribute(String key, String value) {
@@ -91,12 +91,12 @@ public interface FeatureToggle {
     record ToggleConfig(
         String featureKey,
         boolean enabled,
-        Optional<Double> rolloutPercentage,
+        Option<Double> rolloutPercentage,
         Set<String> enabledUserIds,
         Set<String> enabledNodeIds,
         Set<String> enabledClusterIds,
         Map<String, String> attributeFilters,
-        Optional<String> description
+        Option<String> description
     ) {
         
         public static Builder builder(String featureKey) {
@@ -106,12 +106,12 @@ public interface FeatureToggle {
         public static class Builder {
             private final String featureKey;
             private boolean enabled = false;
-            private Optional<Double> rolloutPercentage = Optional.empty();
+            private Option<Double> rolloutPercentage = Option.none();
             private Set<String> enabledUserIds = Set.of();
             private Set<String> enabledNodeIds = Set.of();
             private Set<String> enabledClusterIds = Set.of();
             private Map<String, String> attributeFilters = Map.of();
-            private Optional<String> description = Optional.empty();
+            private Option<String> description = Option.none();
             
             Builder(String featureKey) {
                 this.featureKey = featureKey;
@@ -126,7 +126,7 @@ public interface FeatureToggle {
                 if (percentage < 0.0 || percentage > 100.0) {
                     throw new IllegalArgumentException("Rollout percentage must be between 0 and 100");
                 }
-                this.rolloutPercentage = Optional.of(percentage);
+                this.rolloutPercentage = Option.some(percentage);
                 return this;
             }
             
@@ -151,7 +151,7 @@ public interface FeatureToggle {
             }
             
             public Builder description(String description) {
-                this.description = Optional.of(description);
+                this.description = Option.some(description);
                 return this;
             }
             
@@ -182,7 +182,7 @@ public interface FeatureToggle {
      * @return true if the feature is enabled
      */
     default boolean isEnabled(KnownFeature feature, EvaluationContext context) {
-        return isEnabled(feature.getKey(), context);
+        return isEnabled(feature.key(), context);
     }
     
     /**
@@ -202,7 +202,7 @@ public interface FeatureToggle {
      * @return true if the feature is globally enabled
      */
     default boolean isEnabled(KnownFeature feature) {
-        return isEnabled(feature.getKey());
+        return isEnabled(feature.key());
     }
     
     /**
@@ -217,16 +217,16 @@ public interface FeatureToggle {
      * Gets the current configuration for a feature toggle.
      * 
      * @param featureKey The feature key
-     * @return The current toggle configuration, or empty if not configured
+     * @return The current toggle configuration, or none if not configured
      */
-    Optional<ToggleConfig> getToggleConfig(String featureKey);
+    Option<ToggleConfig> toggleConfig(String featureKey);
     
     /**
      * Gets all currently configured toggles.
      * 
      * @return Map of feature keys to their configurations
      */
-    Map<String, ToggleConfig> getAllToggles();
+    Map<String, ToggleConfig> allToggles();
     
     /**
      * Removes a feature toggle configuration, reverting to default behavior.

@@ -49,7 +49,7 @@ public class AgentLLMService {
         this.metrics = new ServiceMetrics();
         
         logger.info("AgentLLMService initialized with provider: {} and feature toggles", 
-                   llmProvider.getProviderId());
+                   llmProvider.providerId());
     }
     
     /**
@@ -132,7 +132,7 @@ public class AgentLLMService {
      * Gets recent recommendations for CLI display.
      * This provides Track C with data to show users.
      */
-    public List<AgentRecommendation> getRecentRecommendations(int limit) {
+    public List<AgentRecommendation> recentRecommendations(int limit) {
         return recentRecommendations.stream()
             .skip(Math.max(0, recentRecommendations.size() - limit))
             .toList();
@@ -141,14 +141,14 @@ public class AgentLLMService {
     /**
      * Gets service metrics for monitoring and CLI display.
      */
-    public ServiceMetrics getMetrics() {
+    public ServiceMetrics metrics() {
         return metrics;
     }
     
     /**
      * Gets the current LLM provider health for status monitoring.
      */
-    public CompletableFuture<SimpleLLMProvider.Health> getLLMHealth() {
+    public CompletableFuture<SimpleLLMProvider.Health> llmHealth() {
         return llmProvider.healthCheck();
     }
     
@@ -424,16 +424,16 @@ public class AgentLLMService {
             totalErrors.incrementAndGet();
         }
         
-        public long getTotalRecommendations() { return totalRecommendations.get(); }
-        public long getTotalErrors() { return totalErrors.get(); }
-        public double getTotalCost() { return totalCost; }
-        public java.time.Duration getAverageResponseTime() { 
+        public long totalRecommendations() { return totalRecommendations.get(); }
+        public long totalErrors() { return totalErrors.get(); }
+        public double totalCost() { return totalCost; }
+        public java.time.Duration averageResponseTime() { 
             long total = totalRecommendations.get();
             return total > 0 ? totalResponseTime.dividedBy(total) : java.time.Duration.ZERO;
         }
-        public Instant getLastRecommendationTime() { return lastRecommendationTime; }
+        public Instant lastRecommendationTime() { return lastRecommendationTime; }
         
-        public double getSuccessRate() {
+        public double successRate() {
             long total = totalRecommendations.get() + totalErrors.get();
             return total > 0 ? (double) totalRecommendations.get() / total : 1.0;
         }

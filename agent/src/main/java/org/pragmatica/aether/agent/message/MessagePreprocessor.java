@@ -118,7 +118,7 @@ public class MessagePreprocessor {
     /**
      * Gets processing statistics for monitoring and observability.
      */
-    public ProcessingStats getStats() {
+    public ProcessingStats stats() {
         return new ProcessingStats(
             processedMessageCount.get(),
             droppedMessageCount.get(),

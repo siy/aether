@@ -1,9 +1,9 @@
 package org.pragmatica.aether.agent.features;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.pragmatica.lang.Option;
 
 /**
  * Simple feature toggle implementation for testing and demonstration.
@@ -40,14 +40,14 @@ public class SimpleFeatureToggle implements FeatureToggle {
     }
     
     @Override
-    public Optional<ToggleConfig> getToggleConfig(String featureKey) {
-        return Optional.of(ToggleConfig.builder(featureKey)
+    public Option<ToggleConfig> toggleConfig(String featureKey) {
+        return Option.some(ToggleConfig.builder(featureKey)
             .enabled(features.getOrDefault(featureKey, false))
             .build());
     }
     
     @Override
-    public Map<String, ToggleConfig> getAllToggles() {
+    public Map<String, ToggleConfig> allToggles() {
         return features.entrySet().stream()
             .collect(java.util.stream.Collectors.toMap(
                 Map.Entry::getKey,

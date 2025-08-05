@@ -61,5 +61,5 @@ public interface SimpleLLMProvider {
     /**
      * Gets provider ID.
      */
-    String getProviderId();
+    String providerId();
 }

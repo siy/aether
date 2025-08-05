@@ -109,7 +109,7 @@ public class SimpleMockLLMProvider implements SimpleLLMProvider {
     }
     
     @Override
-    public String getProviderId() {
+    public String providerId() {
         return providerId;
     }
     

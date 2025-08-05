@@ -2,6 +2,7 @@ package org.pragmatica.aether.agent.config;
 
 import java.time.Duration;
 import java.util.List;
+import org.pragmatica.lang.Option;
 import java.util.Map;
 
 /**
@@ -282,9 +283,11 @@ public sealed interface AgentConfiguration
         }
         
         private void validateConfiguration() {
-            if (llmProviders == null || llmProviders.providers().isEmpty()) {
-                throw new IllegalArgumentException("At least one LLM provider must be configured");
-            }
+            Option.option(llmProviders)
+                  .filter(providers -> !providers.providers().isEmpty())
+                  .onEmpty(() -> {
+                      throw new IllegalArgumentException("At least one LLM provider must be configured");
+                  });
             
             if (performance.maxMemoryUsageMB() <= 0) {
                 throw new IllegalArgumentException("Max memory usage must be positive");

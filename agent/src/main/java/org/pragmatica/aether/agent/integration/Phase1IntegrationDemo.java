@@ -3,13 +3,17 @@ package org.pragmatica.aether.agent.integration;
 import org.pragmatica.aether.agent.AetherAgent;
 import org.pragmatica.aether.agent.config.AgentConfiguration;
 import org.pragmatica.aether.agent.features.SimpleFeatureToggle;
+import static org.pragmatica.aether.agent.features.FeatureToggle.KnownFeature.*;
 import org.pragmatica.aether.agent.llm.SimpleMockLLMProvider;
+import org.pragmatica.aether.agent.message.AgentRecommendation;
 import org.pragmatica.aether.agent.message.ClusterEvent;
 import org.pragmatica.cluster.net.NodeId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
+import org.pragmatica.lang.Result.Success;
+import org.pragmatica.lang.Result.Failure;
 
 /**
  * Simple demonstration of Phase 1 integration.
@@ -65,7 +69,12 @@ public class Phase1IntegrationDemo {
                 0.1
             );
             
-            var response = llmProvider.complete(testRequest).get(10, TimeUnit.SECONDS);
+            var response = switch(llmProvider.complete(testRequest).await()) {
+                case Success s -> (SimpleMockLLMProvider.CompletionResponse) s.value();
+                case Failure f -> {
+                    throw new RuntimeException("LLM request failed: " + f.cause().message());
+                }
+            };
             System.out.println("✅ LLM Response Generated:");
             System.out.println("   Content: " + response.content().substring(0, Math.min(100, response.content().length())) + "...");
             System.out.println("   Tokens: " + response.tokensUsed());
@@ -80,7 +89,12 @@ public class Phase1IntegrationDemo {
             System.out.println("   Slices: " + telemetryBatch.sliceMetrics().size());
             System.out.println("   Total events: " + telemetryBatch.totalEvents());
             
-            var recommendation = agentLLMService.processTelemetry(telemetryBatch).get(15, TimeUnit.SECONDS);
+            var recommendation = switch(agentLLMService.processTelemetry(telemetryBatch).await()) {
+                case Success s -> (AgentRecommendation) s.value();
+                case Failure f -> {
+                    throw new RuntimeException("Telemetry processing failed: " + f.cause().message());
+                }
+            };
             System.out.println("✅ Recommendation generated:");
             System.out.println("   ID: " + recommendation.analysisId());
             System.out.println("   Type: " + recommendation.recommendationType());
@@ -96,7 +110,12 @@ public class Phase1IntegrationDemo {
             System.out.println("   Type: " + clusterEvent.eventType());
             System.out.println("   Severity: " + clusterEvent.severity());
             
-            var eventRecommendation = agentLLMService.processClusterEvent(clusterEvent).get(15, TimeUnit.SECONDS);
+            var eventRecommendation = switch(agentLLMService.processClusterEvent(clusterEvent).await()) {
+                case Success s -> (AgentRecommendation) s.value();
+                case Failure f -> {
+                    throw new RuntimeException("Event processing failed: " + f.cause().message());
+                }
+            };
             System.out.println("✅ Event recommendation generated:");
             System.out.println("   Analysis ID: " + eventRecommendation.analysisId());
             System.out.println("   Risk Level: " + eventRecommendation.riskLevel());
@@ -106,16 +125,21 @@ public class Phase1IntegrationDemo {
             System.out.println("-".repeat(50));
             
             System.out.println("✅ Initial toggle states:");
-            System.out.println("   Agent enabled: " + featureToggle.isEnabled("agent.enabled"));
-            System.out.println("   Recommendations enabled: " + featureToggle.isEnabled("agent.recommendations.enabled"));
-            System.out.println("   LLM local enabled: " + featureToggle.isEnabled("llm.local.enabled"));
+            System.out.println("   Agent enabled: " + AGENT_ENABLED.in(featureToggle));
+            System.out.println("   Recommendations enabled: " + AGENT_RECOMMENDATIONS_ENABLED.in(featureToggle));
+            System.out.println("   LLM local enabled: " + LLM_LOCAL_ENABLED.in(featureToggle));
             
             System.out.println("\n   Testing toggle disable...");
-            featureToggle.setEnabled("agent.recommendations.enabled", false);
-            var disabledRecommendation = agentLLMService.processTelemetry(telemetryBatch).get(10, TimeUnit.SECONDS);
-            System.out.println("   Disabled result: " + disabledRecommendation.rationale().substring(0, 50) + "...");
+            featureToggle.updateToggle(AGENT_RECOMMENDATIONS_ENABLED, false);
+            var disabledRecommendation = switch(agentLLMService.processTelemetry(telemetryBatch).await()) {
+                case Success s -> (AgentRecommendation) s.value();
+                case Failure f -> {
+                    throw new RuntimeException("Disabled telemetry processing failed: " + f.cause().message());
+                }
+            };
+            System.out.println("   Disabled result: " + disabledRecommendation.summary().substring(0, Math.min(50, disabledRecommendation.summary().length())) + "...");
             
-            featureToggle.setEnabled("agent.recommendations.enabled", true);
+            featureToggle.updateToggle(AGENT_RECOMMENDATIONS_ENABLED, true);
             System.out.println("   ✅ Feature restored");
             
             // Demonstrate emergency mode

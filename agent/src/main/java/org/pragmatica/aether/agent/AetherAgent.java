@@ -10,7 +10,10 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.utils.Causes;
+import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.Option;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -60,67 +63,63 @@ public class AetherAgent {
      * Starts the agent and registers with MessageRouter.
      * The agent will begin processing messages only when it becomes the consensus leader.
      */
-    public CompletableFuture<Void> start() {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                if (!state.compareAndSet(AgentState.DORMANT, AgentState.STARTING)) {
-                    logger.warn("Agent is already running or in invalid state: {}", state.get());
-                    return;
-                }
-                
-                startTime = Instant.now();
-                
-                // Initialize message preprocessor
-                var preprocessorConfig = MessagePreprocessor.PreprocessorConfig.defaultConfig();
-                messagePreprocessor = new MessagePreprocessor(messageRouter, preprocessorConfig);
-                
-                // Register for leadership change notifications
-                messageRouter.addRoute(QuorumStateNotification.class, this::onQuorumStateChange);
-                
-                // Initialize other components would go here
-                
-                state.set(AgentState.INACTIVE);
-                logger.info("AetherAgent started successfully on node {} at {}", nodeId, startTime);
-                
-            } catch (Exception e) {
-                state.set(AgentState.FAILED);
-                logger.error("Failed to start AetherAgent: {}", e.getMessage(), e);
-                throw new RuntimeException("Agent startup failed", e);
+    public Promise<Unit> start() {
+        return Promise.lift(Causes::fromThrowable, () -> {
+            if (!state.compareAndSet(AgentState.DORMANT, AgentState.STARTING)) {
+                logger.warn("Agent is already running or in invalid state: {}", state.get());
+                return Unit.unit();
             }
+            
+            startTime = Instant.now();
+            
+            // Initialize message preprocessor
+            var preprocessorConfig = MessagePreprocessor.PreprocessorConfig.defaultConfig();
+            messagePreprocessor = new MessagePreprocessor(messageRouter, preprocessorConfig);
+            
+            // Register for leadership change notifications
+            messageRouter.addRoute(QuorumStateNotification.class, this::onQuorumStateChange);
+            
+            // Initialize other components would go here
+            
+            state.set(AgentState.INACTIVE);
+            logger.info("AetherAgent started successfully on node {} at {}", nodeId, startTime);
+            return Unit.unit();
+        }).recover(error -> {
+            state.set(AgentState.FAILED);
+            logger.error("Failed to start AetherAgent: {}", error.message());
+            return Unit.unit();
         });
     }
     
     /**
      * Stops the agent and cleans up resources.
      */
-    public CompletableFuture<Void> stop() {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                AgentState currentState = state.get();
-                if (currentState == AgentState.DORMANT || currentState == AgentState.STOPPING) {
-                    logger.debug("Agent is already stopped or stopping");
-                    return;
-                }
-                
-                state.set(AgentState.STOPPING);
-                
-                // Stop message processing if active
-                if (messagePreprocessor != null && isLeader) {
-                    messagePreprocessor.stop();
-                }
-                
-                isLeader = false;
-                
-                state.set(AgentState.DORMANT);
-                
-                Duration uptime = Duration.between(startTime, Instant.now());
-                logger.info("AetherAgent stopped successfully. Uptime: {}", uptime);
-                
-            } catch (Exception e) {
-                state.set(AgentState.FAILED);
-                logger.error("Error during agent shutdown: {}", e.getMessage(), e);
-                throw new RuntimeException("Agent shutdown failed", e);
+    public Promise<Unit> stop() {
+        return Promise.lift(Causes::fromThrowable, () -> {
+            AgentState currentState = state.get();
+            if (currentState == AgentState.DORMANT || currentState == AgentState.STOPPING) {
+                logger.debug("Agent is already stopped or stopping");
+                return Unit.unit();
             }
+            
+            state.set(AgentState.STOPPING);
+            
+            // Stop message processing if active
+            Option.option(messagePreprocessor)
+                  .filter(unused -> isLeader)
+                  .onPresent(MessagePreprocessor::stop);
+            
+            isLeader = false;
+            
+            state.set(AgentState.DORMANT);
+            
+            Duration uptime = Duration.between(startTime, Instant.now());
+            logger.info("AetherAgent stopped successfully. Uptime: {}", uptime);
+            return Unit.unit();
+        }).recover(error -> {
+            state.set(AgentState.FAILED);
+            logger.error("Error during agent shutdown: {}", error.message());
+            return Unit.unit();
         });
     }
     
@@ -133,9 +132,12 @@ public class AetherAgent {
         logger.info("Agent configuration updated from {} to {}", oldConfig, newConfig);
         
         // Apply configuration changes if agent is active
-        if (state.get() == AgentState.ACTIVE && messagePreprocessor != null) {
-            // Configuration changes would be applied here
-            logger.debug("Applied configuration changes to active agent components");
+        if (state.get() == AgentState.ACTIVE) {
+            Option.option(messagePreprocessor)
+                  .onPresent(processor -> {
+                      // Configuration changes would be applied here
+                      logger.debug("Applied configuration changes to active agent components");
+                  });
         }
     }
     
@@ -164,14 +166,14 @@ public class AetherAgent {
      * Gets agent health information for monitoring.
      */
     public AgentHealth health() {
-        var processingStats = messagePreprocessor != null ? 
-            messagePreprocessor.stats() : null;
+        var processingStats = Option.option(messagePreprocessor)
+                                    .map(MessagePreprocessor::stats);
         
         return new AgentHealth(
             nodeId,
             state.get(),
             isLeader,
-            startTime,
+            Option.option(startTime),
             processingStats
         );
     }
@@ -203,9 +205,8 @@ public class AetherAgent {
             
             if (state.compareAndSet(AgentState.INACTIVE, AgentState.ACTIVE)) {
                 // Start message processing
-                if (messagePreprocessor != null) {
-                    messagePreprocessor.start();
-                }
+                Option.option(messagePreprocessor)
+                      .onPresent(MessagePreprocessor::start);
                 
                 logger.info("AetherAgent became active leader on node {}", nodeId);
             }
@@ -225,9 +226,8 @@ public class AetherAgent {
             
             if (state.compareAndSet(AgentState.ACTIVE, AgentState.INACTIVE)) {
                 // Stop message processing
-                if (messagePreprocessor != null) {
-                    messagePreprocessor.stop();
-                }
+                Option.option(messagePreprocessor)
+                      .onPresent(MessagePreprocessor::stop);
                 
                 logger.info("AetherAgent stepped down from leadership on node {}", nodeId);
             }
@@ -263,8 +263,8 @@ public class AetherAgent {
         NodeId nodeId,
         AgentState state,
         boolean isLeader,
-        Instant startTime,
-        MessagePreprocessor.ProcessingStats processingStats
+        Option<Instant> startTime,
+        Option<MessagePreprocessor.ProcessingStats> processingStats
     ) {
         
         /**
@@ -277,10 +277,9 @@ public class AetherAgent {
         /**
          * Gets the uptime of the agent.
          */
-        public java.time.Duration uptime() {
-            return startTime != null ? 
-                java.time.Duration.between(startTime, Instant.now()) : 
-                java.time.Duration.ZERO;
+        public Duration uptime() {
+            return startTime.map(start -> Duration.between(start, Instant.now()))
+                           .or(Duration.ZERO);
         }
     }
 }

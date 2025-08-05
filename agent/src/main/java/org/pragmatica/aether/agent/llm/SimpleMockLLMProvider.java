@@ -7,7 +7,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.utils.Causes;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
@@ -41,10 +42,10 @@ public class SimpleMockLLMProvider implements SimpleLLMProvider {
     ) {}
     
     @Override
-    public CompletableFuture<CompletionResponse> complete(CompletionRequest request) {
+    public Promise<CompletionResponse> complete(CompletionRequest request) {
         long requestId = requestCounter.incrementAndGet();
         
-        return CompletableFuture.supplyAsync(() -> {
+        return Promise.lift(Causes::fromThrowable, () -> {
             try {
                 var startTime = Instant.now();
                 
@@ -86,8 +87,8 @@ public class SimpleMockLLMProvider implements SimpleLLMProvider {
     }
     
     @Override
-    public CompletableFuture<Health> healthCheck() {
-        return CompletableFuture.supplyAsync(() -> {
+    public Promise<Health> healthCheck() {
+        return Promise.lift(Causes::fromThrowable, () -> {
             // Simulate occasional health issues for testing
             if (ThreadLocalRandom.current().nextDouble() < 0.01) { // 1% chance
                 return new Health(

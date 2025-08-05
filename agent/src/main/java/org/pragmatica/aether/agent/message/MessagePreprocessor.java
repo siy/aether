@@ -1,6 +1,7 @@
 package org.pragmatica.aether.agent.message;
 
 import org.pragmatica.message.MessageRouter;
+import org.pragmatica.lang.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,14 +154,11 @@ public class MessagePreprocessor {
     
     private void routeImmediately(AgentMessage message) {
         @SuppressWarnings("unchecked")
-        MessageHandler<AgentMessage> handler = 
-            (MessageHandler<AgentMessage>) handlers.get(message.getClass());
+        var handler = (MessageHandler<AgentMessage>) handlers.get(message.getClass());
         
-        if (handler != null) {
-            handler.handle(message);
-        } else {
-            logger.warn("No handler found for message type: {}", message.getClass().getSimpleName());
-        }
+        Option.option(handler)
+              .onPresent(h -> h.handle(message))
+              .onEmpty(() -> logger.warn("No handler found for message type: {}", message.getClass().getSimpleName()));
     }
     
     private void checkAndFlushBatch() {
@@ -179,9 +177,9 @@ public class MessagePreprocessor {
             return;
         }
         
-        AgentMessage message;
-        while ((message = batchBuffer.poll()) != null) {
-            routeImmediately(message);
+        while (!batchBuffer.isEmpty()) {
+            Option.option(batchBuffer.poll())
+                  .onPresent(this::routeImmediately);
         }
         
         lastBatchFlush = Instant.now();

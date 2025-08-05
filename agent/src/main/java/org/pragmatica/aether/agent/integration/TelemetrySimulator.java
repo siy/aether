@@ -2,16 +2,19 @@ package org.pragmatica.aether.agent.integration;
 
 import org.pragmatica.aether.agent.message.ClusterEvent;
 import org.pragmatica.aether.agent.message.SliceTelemetryBatch;
-import org.pragmatica.aether.agent.message.AgentMessage;
 import org.pragmatica.cluster.net.NodeId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Telemetry simulator for Phase 1 integration testing.
@@ -69,7 +72,7 @@ public class TelemetrySimulator {
         
         var telemetryEntries = SLICE_NAMES.stream()
             .limit(random.nextInt(3, 6)) // 3-5 slices
-            .collect(java.util.stream.Collectors.toMap(
+            .collect(Collectors.toMap(
                 sliceName -> sliceName,
                 sliceName -> generateNormalMetrics()
             ));
@@ -84,7 +87,7 @@ public class TelemetrySimulator {
         return SliceTelemetryBatch.create(
             NODE_IDS.get(random.nextInt(NODE_IDS.size())).toString(),
             sliceMetrics,
-            java.time.Duration.ofSeconds(300),
+            Duration.ofSeconds(300),
             sliceMetrics.size() * 100L
         );
     }
@@ -100,7 +103,7 @@ public class TelemetrySimulator {
         
         var telemetryEntries = SLICE_NAMES.stream()
             .limit(random.nextInt(4, 7))
-            .collect(java.util.stream.Collectors.toMap(
+            .collect(Collectors.toMap(
                 sliceName -> sliceName,
                 sliceName -> sliceName.equals(problematicSlice) ? 
                     generateHighCPUMetrics() : generateNormalMetrics()
@@ -116,7 +119,7 @@ public class TelemetrySimulator {
         return SliceTelemetryBatch.create(
             NODE_IDS.get(random.nextInt(NODE_IDS.size())).toString(),
             sliceMetrics,
-            java.time.Duration.ofSeconds(300),
+            Duration.ofSeconds(300),
             sliceMetrics.size() * 100L
         );
     }
@@ -132,7 +135,7 @@ public class TelemetrySimulator {
         
         var telemetryEntries = SLICE_NAMES.stream()
             .limit(random.nextInt(4, 6))
-            .collect(java.util.stream.Collectors.toMap(
+            .collect(Collectors.toMap(
                 sliceName -> sliceName,
                 sliceName -> sliceName.equals(problematicSlice) ?
                     generateMemoryLeakMetrics() : generateNormalMetrics()
@@ -148,7 +151,7 @@ public class TelemetrySimulator {
         return SliceTelemetryBatch.create(
             NODE_IDS.get(random.nextInt(NODE_IDS.size())).toString(),
             sliceMetrics,
-            java.time.Duration.ofSeconds(300),
+            Duration.ofSeconds(300),
             sliceMetrics.size() * 100L
         );
     }
@@ -164,7 +167,7 @@ public class TelemetrySimulator {
         
         var telemetryEntries = SLICE_NAMES.stream()
             .limit(random.nextInt(5, 7))
-            .collect(java.util.stream.Collectors.toMap(
+            .collect(Collectors.toMap(
                 sliceName -> sliceName,
                 sliceName -> sliceName.equals(highLoadSlice) ?
                     generateHighLoadMetrics() : generateNormalMetrics()
@@ -180,7 +183,7 @@ public class TelemetrySimulator {
         return SliceTelemetryBatch.create(
             NODE_IDS.get(random.nextInt(NODE_IDS.size())).toString(),
             sliceMetrics,
-            java.time.Duration.ofSeconds(300),
+            Duration.ofSeconds(300),
             sliceMetrics.size() * 100L
         );
     }
@@ -222,27 +225,27 @@ public class TelemetrySimulator {
     public List<SliceTelemetryBatch> generateTelemetrySequence(TelemetryScenario scenario, int batchCount) {
         return switch (scenario) {
             case NORMAL_OPERATION -> 
-                java.util.stream.IntStream.range(0, batchCount)
+                IntStream.range(0, batchCount)
                     .mapToObj(i -> generateNormalTelemetry())
                     .toList();
                     
             case PERFORMANCE_DEGRADATION ->
-                java.util.stream.IntStream.range(0, batchCount)
+                IntStream.range(0, batchCount)
                     .mapToObj(i -> generatePerformanceIssueTelemetry())
                     .toList();
                     
             case MEMORY_ISSUES ->
-                java.util.stream.IntStream.range(0, batchCount)
+                IntStream.range(0, batchCount)
                     .mapToObj(i -> generateMemoryIssueTelemetry())
                     .toList();
                     
             case SCALING_NEEDS ->
-                java.util.stream.IntStream.range(0, batchCount)
+                IntStream.range(0, batchCount)
                     .mapToObj(i -> generateScalingNeedsTelemetry())
                     .toList();
                     
             case MIXED_SCENARIO -> {
-                var batches = new java.util.ArrayList<SliceTelemetryBatch>();
+                var batches = new ArrayList<SliceTelemetryBatch>();
                 for (int i = 0; i < batchCount; i++) {
                     batches.add(switch (i % 4) {
                         case 0 -> generateNormalTelemetry();

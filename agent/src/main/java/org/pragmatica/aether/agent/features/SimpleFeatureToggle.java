@@ -1,107 +1,165 @@
 package org.pragmatica.aether.agent.features;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
+
 import org.pragmatica.lang.Option;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.pragmatica.aether.agent.features.FeatureToggle.KnownFeature;
 
 /**
- * Simple feature toggle implementation for testing and demonstration.
+ * Simple, efficient implementation of FeatureToggle using enum-first design.
+ * <p>
+ * Features:
+ * - ConcurrentHashMap for thread-safe concurrent access
+ * - Enum-based keys for type safety and performance
+ * - Simple API: just enable/disable, no complex configuration
+ * - Configuration loading/exporting for external integration
+ * - Emergency mode for system-wide disable
  */
 public class SimpleFeatureToggle implements FeatureToggle {
-    private final Map<String, Boolean> features = new ConcurrentHashMap<>();
+    private static final Logger logger = LoggerFactory.getLogger(SimpleFeatureToggle.class);
+
+    // Primary storage: concurrent map with enum keys for efficiency
+    private final ConcurrentHashMap<KnownFeature, Boolean> features = new ConcurrentHashMap<>();
+
+    // Thread-safe listener storage
+    private final ConcurrentHashMap<KnownFeature, CopyOnWriteArrayList<ToggleListener>> listeners = new ConcurrentHashMap<>();
+
+    // Emergency mode flag
     private volatile boolean emergencyMode = false;
-    
+
     public SimpleFeatureToggle() {
-        // Initialize with default values
         initializeDefaults();
+        logger.info("SimpleFeatureToggle initialized with {} default features", features.size());
     }
-    
+
     @Override
-    public boolean isEnabled(String featureKey, EvaluationContext context) {
+    public boolean isEnabled(KnownFeature feature, EvaluationContext context) {
         if (emergencyMode) {
             return false;
         }
-        
-        return features.getOrDefault(featureKey, false);
+
+        return features.getOrDefault(feature, feature.defaultValue());
     }
-    
-    public boolean isEnabled(String featureKey) {
-        return isEnabled(featureKey, EvaluationContext.empty());
-    }
-    
-    public void setEnabled(String featureKey, boolean enabled) {
-        features.put(featureKey, enabled);
-    }
-    
+
+    // WARNING: update is not thread safe, but in real life it might not be that
+    // important given that feature toggles most likely will come from single source
+    // anyway.
     @Override
-    public void updateToggle(ToggleConfig config) {
-        features.put(config.featureKey(), config.enabled());
+    public void updateToggle(KnownFeature feature, boolean enabled) {
+        boolean oldValue = features.getOrDefault(feature, feature.defaultValue());
+        features.put(feature, enabled);
+
+        if (oldValue != enabled) {
+            notifyListeners(feature, oldValue, enabled);
+            logger.debug("Feature {} changed: {} -> {}", feature.key(), oldValue, enabled);
+        }
     }
-    
+
     @Override
-    public Option<ToggleConfig> toggleConfig(String featureKey) {
-        return Option.some(ToggleConfig.builder(featureKey)
-            .enabled(features.getOrDefault(featureKey, false))
-            .build());
+    public void loadFromConfig(Map<String, Boolean> config) {
+        logger.info("Loading configuration with {} entries", config.size());
+
+        config.forEach((key, enabled) -> {
+            KnownFeature.fromKey(key)
+                        .onPresent(feature -> updateToggle(feature, enabled))
+                        .onEmpty(() -> logger.warn("Unknown feature key in config: {}", key));
+        });
+
+        logger.info("Configuration loaded successfully");
     }
-    
+
     @Override
-    public Map<String, ToggleConfig> allToggles() {
-        return features.entrySet().stream()
-            .collect(java.util.stream.Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> ToggleConfig.builder(entry.getKey())
-                    .enabled(entry.getValue())
-                    .build()
-            ));
+    public Map<String, Boolean> exportConfig() {
+        return features.entrySet()
+                       .stream()
+                       .collect(Collectors.toMap(
+                               entry -> entry.getKey().key(),
+                               Map.Entry::getValue
+                       ));
     }
-    
+
     @Override
-    public void removeToggle(String featureKey) {
-        features.remove(featureKey);
+    public void addToggleListener(KnownFeature feature, ToggleListener listener) {
+        listeners.computeIfAbsent(feature, k -> new CopyOnWriteArrayList<>()).add(listener);
+        logger.debug("Added listener for feature: {}", feature.key());
     }
-    
+
     @Override
-    public void addToggleListener(String featureKey, ToggleListener listener) {
-        // Simple implementation - no listeners for now
+    public void removeToggleListener(KnownFeature feature, ToggleListener listener) {
+        listeners.computeIfPresent(feature, (k, list) -> {
+            list.remove(listener);
+            return list.isEmpty() ? null : list;
+        });
+        logger.debug("Removed listener for feature: {}", feature.key());
     }
-    
-    @Override
-    public void removeToggleListener(String featureKey, ToggleListener listener) {
-        // Simple implementation - no listeners for now
-    }
-    
+
     @Override
     public void emergencyDisableAll() {
+        logger.warn("EMERGENCY MODE ACTIVATED - All features disabled");
         emergencyMode = true;
     }
-    
+
     @Override
     public void restoreFromEmergency() {
+        logger.info("Emergency mode deactivated - Normal feature operation restored");
         emergencyMode = false;
     }
-    
+
     @Override
     public boolean isEmergencyMode() {
         return emergencyMode;
     }
-    
+
+    /**
+     * Initialize all known features with their default values.
+     */
     private void initializeDefaults() {
-        // Set defaults for known features
-        features.put("agent.enabled", true);
-        features.put("agent.shadow_mode", false);
-        features.put("agent.recommendations.enabled", true);
-        features.put("agent.cli.natural_language", true);
-        
-        features.put("llm.local.enabled", true);
-        features.put("llm.cloud.enabled", false);
-        features.put("llm.fallback.enabled", true);
-        features.put("llm.cost_limits.enabled", true);
-        
-        features.put("agent.learning.enabled", false);
-        features.put("agent.autonomy.enabled", false);
-        features.put("agent.predictive.enabled", false);
-        features.put("agent.cross_cluster.enabled", false);
+        for (KnownFeature feature : KnownFeature.values()) {
+            features.put(feature, feature.defaultValue());
+        }
+        logger.debug("Initialized {} features with default values", features.size());
+    }
+
+    /**
+     * Notify all listeners of a feature change.
+     */
+    private void notifyListeners(KnownFeature feature, boolean oldValue, boolean newValue) {
+        Option.option(listeners.get(feature))
+              .filter(list -> !list.isEmpty())
+              .onPresent(featureListeners -> {
+                  for (var listener : featureListeners) {
+                      try {
+                          listener.onToggleChanged(feature, oldValue, newValue);
+                      } catch (Exception e) {
+                          logger.error("Error notifying toggle listener for feature {}: {}",
+                                       feature.key(),
+                                       e.getMessage(),
+                                       e);
+                      }
+                  }
+              });
+    }
+
+    /**
+     * Get current feature count for monitoring.
+     */
+    public int featureCount() {
+        return features.size();
+    }
+
+    /**
+     * Get enabled feature count for monitoring.
+     */
+    public long enabledFeatureCount() {
+        return features.values()
+                       .stream()
+                       .mapToLong(enabled -> enabled ? 1 : 0)
+                       .sum();
     }
 }

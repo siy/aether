@@ -3,7 +3,7 @@ package org.pragmatica.aether.agent.llm;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import org.pragmatica.lang.Promise;
 
 /**
  * Simplified LLM provider interface that avoids complex dependencies.
@@ -51,12 +51,12 @@ public interface SimpleLLMProvider {
     /**
      * Generates a completion.
      */
-    CompletableFuture<CompletionResponse> complete(CompletionRequest request);
+    Promise<CompletionResponse> complete(CompletionRequest request);
     
     /**
      * Gets provider health.
      */
-    CompletableFuture<Health> healthCheck();
+    Promise<Health> healthCheck();
     
     /**
      * Gets provider ID.

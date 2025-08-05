@@ -8,10 +8,12 @@ import org.pragmatica.aether.agent.message.SliceTelemetryBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Cause;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -56,10 +58,10 @@ public class AgentLLMService {
      * Processes telemetry data and generates recommendations.
      * This represents the core Track A -> Track B integration.
      */
-    public CompletableFuture<AgentRecommendation> processTelemetry(SliceTelemetryBatch telemetry) {
+    public Promise<AgentRecommendation> processTelemetry(SliceTelemetryBatch telemetry) {
         if (!featureToggle.isEnabled(FeatureToggle.KnownFeature.AGENT_RECOMMENDATIONS_ENABLED)) {
             logger.debug("Recommendations disabled - skipping telemetry processing");
-            return CompletableFuture.completedFuture(createDisabledRecommendation(telemetry));
+            return Promise.success(createDisabledRecommendation(telemetry));
         }
         
         long requestId = requestCounter.incrementAndGet();
@@ -68,7 +70,7 @@ public class AgentLLMService {
         logger.debug("Processing telemetry batch {} with {} entries", requestId, telemetry.sliceMetrics().size());
         
         return analyzeTelemetryWithLLM(telemetry, requestId)
-            .thenApply(llmResponse -> {
+            .map(llmResponse -> {
                 var recommendation = createRecommendation(telemetry, llmResponse, requestId, startTime);
                 
                 // Store for CLI access
@@ -85,8 +87,8 @@ public class AgentLLMService {
                 
                 return recommendation;
             })
-            .exceptionally(error -> {
-                logger.warn("Failed to process telemetry {}: {}", requestId, error.getMessage());
+            .recover(error -> {
+                logger.warn("Failed to process telemetry {}: {}", requestId, error.message());
                 metrics.recordError();
                 return createErrorRecommendation(telemetry, error, requestId);
             });
@@ -96,9 +98,9 @@ public class AgentLLMService {
      * Processes cluster events and generates relevant recommendations.
      * This handles cluster-wide issues and scaling decisions.
      */
-    public CompletableFuture<AgentRecommendation> processClusterEvent(ClusterEvent event) {
+    public Promise<AgentRecommendation> processClusterEvent(ClusterEvent event) {
         if (!featureToggle.isEnabled(FeatureToggle.KnownFeature.AGENT_RECOMMENDATIONS_ENABLED)) {
-            return CompletableFuture.completedFuture(createDisabledEventRecommendation(event));
+            return Promise.success(createDisabledEventRecommendation(event));
         }
         
         long requestId = requestCounter.incrementAndGet();
@@ -107,7 +109,7 @@ public class AgentLLMService {
         logger.debug("Processing cluster event {} of type {}", requestId, event.eventType());
         
         return analyzeEventWithLLM(event, requestId)
-            .thenApply(llmResponse -> {
+            .map(llmResponse -> {
                 var recommendation = createEventRecommendation(event, llmResponse, requestId, startTime);
                 
                 recentRecommendations.offer(recommendation);
@@ -121,8 +123,8 @@ public class AgentLLMService {
                 
                 return recommendation;
             })
-            .exceptionally(error -> {
-                logger.warn("Failed to process event {}: {}", requestId, error.getMessage());
+            .recover(error -> {
+                logger.warn("Failed to process event {}: {}", requestId, error.message());
                 metrics.recordError();
                 return createEventErrorRecommendation(event, error, requestId);
             });
@@ -148,14 +150,14 @@ public class AgentLLMService {
     /**
      * Gets the current LLM provider health for status monitoring.
      */
-    public CompletableFuture<SimpleLLMProvider.Health> llmHealth() {
+    public Promise<SimpleLLMProvider.Health> llmHealth() {
         return llmProvider.healthCheck();
     }
     
     /**
      * Analyzes telemetry data using the LLM provider.
      */
-    private CompletableFuture<SimpleLLMProvider.CompletionResponse> analyzeTelemetryWithLLM(
+    private Promise<SimpleLLMProvider.CompletionResponse> analyzeTelemetryWithLLM(
             SliceTelemetryBatch telemetry, long requestId) {
         
         var analysisPrompt = buildTelemetryAnalysisPrompt(telemetry);
@@ -172,7 +174,7 @@ public class AgentLLMService {
     /**
      * Analyzes cluster events using the LLM provider.
      */
-    private CompletableFuture<SimpleLLMProvider.CompletionResponse> analyzeEventWithLLM(
+    private Promise<SimpleLLMProvider.CompletionResponse> analyzeEventWithLLM(
             ClusterEvent event, long requestId) {
         
         var analysisPrompt = buildEventAnalysisPrompt(event);
@@ -260,11 +262,11 @@ public class AgentLLMService {
                 "requestId", requestId,
                 "sliceCount", telemetry.sliceMetrics().size(),
                 "llmModel", llmResponse.modelUsed(),
-                "processingTimeMs", java.time.Duration.between(startTime, Instant.now()).toMillis(),
+                "processingTimeMs", Duration.between(startTime, Instant.now()).toMillis(),
                 "tokensUsed", llmResponse.tokensUsed(),
                 "cost", llmResponse.cost()
             ),
-            java.time.Duration.ofHours(24), // Recommendations valid for 24 hours
+            Duration.ofHours(24), // Recommendations valid for 24 hours
             List.of(), // Affected components
             AgentRecommendation.RiskLevel.LOW
         );
@@ -307,11 +309,11 @@ public class AgentLLMService {
                 "nodeId", event.sourceNodeId(),
                 "severity", event.severity().toString(),
                 "llmModel", llmResponse.modelUsed(),
-                "processingTimeMs", java.time.Duration.between(startTime, Instant.now()).toMillis(),
+                "processingTimeMs", Duration.between(startTime, Instant.now()).toMillis(),
                 "tokensUsed", llmResponse.tokensUsed(),
                 "cost", llmResponse.cost()
             ),
-            java.time.Duration.ofHours(12), // Event recommendations expire faster
+            Duration.ofHours(12), // Event recommendations expire faster
             List.of(), // Affected components
             riskLevel
         );
@@ -328,8 +330,8 @@ public class AgentLLMService {
             "Agent recommendations are currently disabled via feature toggle. Enable 'agent.recommendations.enabled' to receive AI-powered insights.",
             1.0, // Full confidence in this message
             List.of(),
-            Map.of("reason", "feature_disabled", "featureToggle", "agent.recommendations.enabled"),
-            java.time.Duration.ofMinutes(5),
+            Map.of("reason", "feature_disabled", "featureToggle", FeatureToggle.KnownFeature.AGENT_RECOMMENDATIONS_ENABLED.key()),
+            Duration.ofMinutes(5),
             List.of(),
             AgentRecommendation.RiskLevel.LOW
         );
@@ -347,7 +349,7 @@ public class AgentLLMService {
             1.0,
             List.of(),
             Map.of("reason", "feature_disabled", "eventType", event.eventType().toString()),
-            java.time.Duration.ofMinutes(5),
+            Duration.ofMinutes(5),
             List.of(),
             AgentRecommendation.RiskLevel.LOW
         );
@@ -358,19 +360,19 @@ public class AgentLLMService {
      */
     private AgentRecommendation createErrorRecommendation(
             SliceTelemetryBatch telemetry, 
-            Throwable error, 
+            Cause error, 
             long requestId) {
         
         return AgentRecommendation.create(
             "error-" + requestId,
             AgentRecommendation.RecommendationType.OPERATIONAL_GUIDANCE,
             "Analysis Error",
-            "Failed to generate recommendation due to: " + error.getMessage() + 
+            "Failed to generate recommendation due to: " + error.message() + 
             ". The system will retry on the next telemetry batch.",
             0.0, // No confidence in error cases
             List.of(),
-            Map.of("error", error.getMessage(), "requestId", requestId, "type", "telemetry_error"),
-            java.time.Duration.ofMinutes(15),
+            Map.of("error", error.message(), "requestId", requestId, "type", "telemetry_error"),
+            Duration.ofMinutes(15),
             List.of(),
             AgentRecommendation.RiskLevel.LOW
         );
@@ -381,23 +383,23 @@ public class AgentLLMService {
      */
     private AgentRecommendation createEventErrorRecommendation(
             ClusterEvent event, 
-            Throwable error, 
+            Cause error, 
             long requestId) {
         
         return AgentRecommendation.create(
             "error-event-" + requestId,
             AgentRecommendation.RecommendationType.OPERATIONAL_GUIDANCE,
             "Event Analysis Error",
-            "Failed to analyze cluster event due to: " + error.getMessage(),
+            "Failed to analyze cluster event due to: " + error.message(),
             0.0,
             List.of(),
             Map.of(
-                "error", error.getMessage(), 
+                "error", error.message(), 
                 "requestId", requestId, 
                 "eventType", event.eventType().toString(),
                 "type", "event_error"
             ),
-            java.time.Duration.ofMinutes(15),
+            Duration.ofMinutes(15),
             List.of(),
             AgentRecommendation.RiskLevel.LOW
         );
@@ -410,10 +412,10 @@ public class AgentLLMService {
         private final AtomicLong totalRecommendations = new AtomicLong(0);
         private final AtomicLong totalErrors = new AtomicLong(0);
         private volatile double totalCost = 0.0;
-        private volatile java.time.Duration totalResponseTime = java.time.Duration.ZERO;
+        private volatile Duration totalResponseTime = Duration.ZERO;
         private volatile Instant lastRecommendationTime;
         
-        void recordRecommendation(double cost, java.time.Duration responseTime) {
+        void recordRecommendation(double cost, Duration responseTime) {
             totalRecommendations.incrementAndGet();
             totalCost += cost;
             totalResponseTime = totalResponseTime.plus(responseTime);
@@ -427,9 +429,9 @@ public class AgentLLMService {
         public long totalRecommendations() { return totalRecommendations.get(); }
         public long totalErrors() { return totalErrors.get(); }
         public double totalCost() { return totalCost; }
-        public java.time.Duration averageResponseTime() { 
+        public Duration averageResponseTime() { 
             long total = totalRecommendations.get();
-            return total > 0 ? totalResponseTime.dividedBy(total) : java.time.Duration.ZERO;
+            return total > 0 ? totalResponseTime.dividedBy(total) : Duration.ZERO;
         }
         public Instant lastRecommendationTime() { return lastRecommendationTime; }
         

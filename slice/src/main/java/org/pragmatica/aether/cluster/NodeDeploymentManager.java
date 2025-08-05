@@ -47,7 +47,7 @@ public interface NodeDeploymentManager {
                     case DISAPPEARED -> state().set(new NodeDeploymentState.DormantNodeDeploymentState());
                 }
             }
-            
+
             private Pattern buildPattern() {
                 // Create pattern based on node ID for slice deployment matching
                 return Pattern.compile("slice-" + self.id() + "-.*");

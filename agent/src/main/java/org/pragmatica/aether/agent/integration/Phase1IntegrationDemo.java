@@ -125,12 +125,12 @@ public class Phase1IntegrationDemo {
             System.out.println("-".repeat(50));
             
             System.out.println("✅ Initial toggle states:");
-            System.out.println("   Agent enabled: " + AGENT_ENABLED.in(featureToggle));
-            System.out.println("   Recommendations enabled: " + AGENT_RECOMMENDATIONS_ENABLED.in(featureToggle));
-            System.out.println("   LLM local enabled: " + LLM_LOCAL_ENABLED.in(featureToggle));
+            System.out.println("   Agent enabled: " + featureToggle.isEnabled(AGENT_ENABLED));
+            System.out.println("   Recommendations enabled: " + featureToggle.isEnabled(AGENT_RECOMMENDATIONS_ENABLED));
+            System.out.println("   LLM local enabled: " + featureToggle.isEnabled(LLM_LOCAL_ENABLED));
             
             System.out.println("\n   Testing toggle disable...");
-            featureToggle.updateToggle(AGENT_RECOMMENDATIONS_ENABLED, false);
+            featureToggle.setEnabled(AGENT_RECOMMENDATIONS_ENABLED, false);
             var disabledRecommendation = switch(agentLLMService.processTelemetry(telemetryBatch).await()) {
                 case Success s -> (AgentRecommendation) s.value();
                 case Failure f -> {
@@ -139,7 +139,7 @@ public class Phase1IntegrationDemo {
             };
             System.out.println("   Disabled result: " + disabledRecommendation.summary().substring(0, Math.min(50, disabledRecommendation.summary().length())) + "...");
             
-            featureToggle.updateToggle(AGENT_RECOMMENDATIONS_ENABLED, true);
+            featureToggle.setEnabled(AGENT_RECOMMENDATIONS_ENABLED, true);
             System.out.println("   ✅ Feature restored");
             
             // Demonstrate emergency mode

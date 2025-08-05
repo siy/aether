@@ -166,12 +166,12 @@ class SimplePhase1IntegrationTest {
         assertThat(normalRecommendation).isNotNull();
         
         // Test with recommendations disabled
-        ((FeatureToggle) featureToggle).updateToggle(AGENT_RECOMMENDATIONS_ENABLED, false);
+        ((FeatureToggle) featureToggle).setEnabled(AGENT_RECOMMENDATIONS_ENABLED, false);
         var disabledRecommendation = agentLLMService.processTelemetry(telemetryBatch).await();
         assertThat(disabledRecommendation).isNull(); // Should be null when disabled
         
         // Test emergency mode
-        ((FeatureToggle) featureToggle).updateToggle(AGENT_RECOMMENDATIONS_ENABLED, true);
+        ((FeatureToggle) featureToggle).setEnabled(AGENT_RECOMMENDATIONS_ENABLED, true);
         featureToggle.emergencyDisableAll();
         var emergencyRecommendation = agentLLMService.processTelemetry(telemetryBatch).await();
         assertThat(emergencyRecommendation).isNull(); // Should be null in emergency mode

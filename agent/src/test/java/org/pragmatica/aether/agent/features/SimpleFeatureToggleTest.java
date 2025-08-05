@@ -30,11 +30,11 @@ class SimpleFeatureToggleTest {
         assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
         
         // Enable/disable the feature
-        featureToggle.updateToggle(AGENT_ENABLED, false);
+        featureToggle.setEnabled(AGENT_ENABLED, false);
         assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isFalse();
         
         // Re-enable the feature
-        featureToggle.updateToggle(AGENT_ENABLED, true);
+        featureToggle.setEnabled(AGENT_ENABLED, true);
         assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
     }
     
@@ -52,7 +52,7 @@ class SimpleFeatureToggleTest {
     @DisplayName("Test emergency mode")
     void testEmergencyMode() {
         // Enable a feature and verify normal state
-        featureToggle.updateToggle(AGENT_RECOMMENDATIONS_ENABLED, true);
+        featureToggle.setEnabled(AGENT_RECOMMENDATIONS_ENABLED, true);
         assertThat(featureToggle.isEnabled(AGENT_RECOMMENDATIONS_ENABLED)).isTrue();
         assertThat(featureToggle.isEmergencyMode()).isFalse();
         
@@ -76,38 +76,22 @@ class SimpleFeatureToggleTest {
     @Test
     @DisplayName("Test multiple features")
     void testMultipleFeatures() {
-        featureToggle.updateToggle(AGENT_ENABLED, true);
-        featureToggle.updateToggle(AGENT_SHADOW_MODE, false);
-        featureToggle.updateToggle(LLM_LOCAL_ENABLED, true);
+        featureToggle.setEnabled(AGENT_ENABLED, true);
+        featureToggle.setEnabled(AGENT_SHADOW_MODE, false);
+        featureToggle.setEnabled(LLM_LOCAL_ENABLED, true);
         
         assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
         assertThat(featureToggle.isEnabled(AGENT_SHADOW_MODE)).isFalse();
         assertThat(featureToggle.isEnabled(LLM_LOCAL_ENABLED)).isTrue();
     }
     
-    @Test
-    @DisplayName("Test natural syntax with in() and notIn() methods")
-    void testNaturalSyntax() {
-        // Test the natural FEATURE.in(toggle) syntax
-        assertThat(AGENT_ENABLED.in(featureToggle)).isTrue();
-        assertThat(AGENT_SHADOW_MODE.in(featureToggle)).isFalse();
-        
-        // Test the natural FEATURE.notIn(toggle) syntax
-        assertThat(AGENT_ENABLED.notIn(featureToggle)).isFalse();
-        assertThat(AGENT_SHADOW_MODE.notIn(featureToggle)).isTrue();
-        
-        // Change feature state and test again
-        featureToggle.updateToggle(AGENT_SHADOW_MODE, true);
-        assertThat(AGENT_SHADOW_MODE.in(featureToggle)).isTrue();
-        assertThat(AGENT_SHADOW_MODE.notIn(featureToggle)).isFalse();
-    }
     
     @Test
     @DisplayName("Test config loading and exporting")
     void testConfigLoadingExporting() {
         // Modify some features
-        featureToggle.updateToggle(AGENT_SHADOW_MODE, true);
-        featureToggle.updateToggle(LLM_CLOUD_ENABLED, true);
+        featureToggle.setEnabled(AGENT_SHADOW_MODE, true);
+        featureToggle.setEnabled(LLM_CLOUD_ENABLED, true);
         
         // Export config
         var config = featureToggle.exportConfig();
@@ -116,7 +100,7 @@ class SimpleFeatureToggleTest {
         
         // Create new toggle and load config
         var newToggle = new SimpleFeatureToggle();
-        newToggle.loadFromConfig(config);
+        newToggle.loadConfig(config);
         
         // Verify the state was loaded
         assertThat(newToggle.isEnabled(AGENT_SHADOW_MODE)).isTrue();
@@ -134,7 +118,7 @@ class SimpleFeatureToggleTest {
         );
         
         // Should load known features and ignore unknown ones
-        featureToggle.loadFromConfig(config);
+        featureToggle.loadConfig(config);
         
         assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
         assertThat(featureToggle.isEnabled(LLM_LOCAL_ENABLED)).isFalse();

@@ -53,20 +53,17 @@ class FeatureToggleOptionTest {
     }
 
     @Test
-    @DisplayName("Test notIn() method for natural disabled checking")
-    void testNotInMethod() {
+    @DisplayName("Test basic feature state checking")
+    void testFeatureStateChecking() {
         // Test with enabled feature
-        assertThat(AGENT_ENABLED.in((FeatureToggle) featureToggle)).isTrue();
-        assertThat(AGENT_ENABLED.notIn((FeatureToggle) featureToggle)).isFalse();
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
 
         // Test with disabled feature
-        assertThat(AGENT_SHADOW_MODE.in((FeatureToggle) featureToggle)).isFalse();
-        assertThat(AGENT_SHADOW_MODE.notIn((FeatureToggle) featureToggle)).isTrue();
+        assertThat(featureToggle.isEnabled(AGENT_SHADOW_MODE)).isFalse();
 
         // Test after changing feature state
-        ((FeatureToggle) featureToggle).updateToggle(AGENT_SHADOW_MODE, true);
-        assertThat(AGENT_SHADOW_MODE.in((FeatureToggle) featureToggle)).isTrue();
-        assertThat(AGENT_SHADOW_MODE.notIn((FeatureToggle) featureToggle)).isFalse();
+        featureToggle.setEnabled(AGENT_SHADOW_MODE, true);
+        assertThat(featureToggle.isEnabled(AGENT_SHADOW_MODE)).isTrue();
     }
 
     @Test
@@ -111,13 +108,13 @@ class FeatureToggleOptionTest {
 
         // Test functional combination without extraction
         KnownFeature.fromKey("agent.enabled")
-                    .map(feature -> feature.in((FeatureToggle) featureToggle))
+                    .map(feature -> featureToggle.isEnabled(feature))
                     .onEmpty(Assertions::fail)
                     .onPresent(enabled -> assertThat(enabled).isTrue());
 
         // Test with fallback using or() for missing features
         var unknownFeatureEnabled = KnownFeature.fromKey("unknown")
-                                                .map(feature -> feature.in((FeatureToggle) featureToggle))
+                                                .map(feature -> featureToggle.isEnabled(feature))
                                                 .or(() -> false);
         assertThat(unknownFeatureEnabled).isFalse();
     }
@@ -131,21 +128,20 @@ class FeatureToggleOptionTest {
                     .onPresent(feature -> {
                         assertThat(feature.key()).isEqualTo("agent.enabled");
                         assertThat(feature.defaultValue()).isTrue();
-                        assertThat(feature.in((FeatureToggle) featureToggle)).isTrue();
+                        assertThat(featureToggle.isEnabled(feature)).isTrue();
                     });
 
         // Pattern 2: Chained operations with validation
         KnownFeature.fromKey("llm.cloud.enabled")
                     .filter(feature -> !feature.defaultValue()) // Should pass - default is false
                     .onEmpty(() -> fail("Feature should be found and pass filter"))
-                    .onPresent(feature -> assertThat(feature.notIn((FeatureToggle) featureToggle)).isTrue()); // notIn should be true since feature is disabled by default
+                    .onPresent(feature -> assertThat(!featureToggle.isEnabled(feature)).isTrue()); // Should be disabled by default
 
         // Pattern 3: Side effects with onPresent, then validation
         KnownFeature.fromKey("agent.shadow_mode")
-                    .onPresent(feature -> ((FeatureToggle) featureToggle).updateToggle(feature, true)) // Enable it first
+                    .onPresent(feature -> featureToggle.setEnabled(feature, true)) // Enable it first
                     .onPresent(feature -> {
-                        assertThat(feature.in((FeatureToggle) featureToggle)).isTrue();
-                        assertThat(feature.notIn((FeatureToggle) featureToggle)).isFalse();
+                        assertThat(featureToggle.isEnabled(feature)).isTrue();
                     });
 
         // Pattern 4: Conditional execution based on feature existence

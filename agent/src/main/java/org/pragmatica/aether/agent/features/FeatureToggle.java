@@ -8,17 +8,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Feature toggle system for the Aether Agent.
+ * Simplified feature toggle system for the Aether Agent.
  * <p>
  * Provides runtime configuration management without requiring restarts,
- * enabling gradual rollouts, A/B testing, and emergency kill switches.
+ * enabling gradual rollouts and emergency kill switches.
  * Integrates with the consensus system to ensure consistent feature states
  * across all cluster nodes.
- * <p>
- * The feature toggle system supports hierarchical features with inheritance,
- * user segmentation for targeted rollouts, and percentage-based gradual
- * deployments. All toggle states are stored in consensus to maintain
- * consistency across the distributed system.
  */
 public interface FeatureToggle {
 
@@ -68,22 +63,6 @@ public interface FeatureToggle {
         }
 
         /**
-         * Natural syntax for checking if a feature is enabled.
-         * Usage: AGENT_ENABLED.in(toggle)
-         */
-        public boolean in(FeatureToggle toggle) {
-            return toggle.isEnabled(this);
-        }
-
-        /**
-         * Natural syntax for checking if a feature is disabled.
-         * Usage: AGENT_ENABLED.notIn(toggle)
-         */
-        public boolean notIn(FeatureToggle toggle) {
-            return !toggle.isEnabled(this);
-        }
-
-        /**
          * Lookup map for converting string keys to enum values.
          */
         private static final Map<String, KnownFeature> BY_KEY =
@@ -104,46 +83,23 @@ public interface FeatureToggle {
     }
 
     /**
-     * Simple evaluation context for basic feature toggle evaluation.
-     * Currently simplified to just empty context, but can be extended later if needed.
-     */
-    record EvaluationContext() {
-        public static EvaluationContext empty() {
-            return new EvaluationContext();
-        }
-    }
-
-
-    /**
-     * Evaluates whether a feature is enabled for the given context.
+     * Evaluates whether a feature is enabled.
      * Primary API - uses enum for type safety.
      *
      * @param feature The feature to evaluate
-     * @param context The evaluation context with user/node/cluster information
      *
-     * @return true if the feature is enabled for this context
+     * @return true if the feature is enabled
      */
-    boolean isEnabled(KnownFeature feature, EvaluationContext context);
+    boolean isEnabled(KnownFeature feature);
 
     /**
-     * Evaluates a feature with empty context (global setting).
-     *
-     * @param feature The feature to evaluate
-     *
-     * @return true if the feature is globally enabled
-     */
-    default boolean isEnabled(KnownFeature feature) {
-        return isEnabled(feature, EvaluationContext.empty());
-    }
-
-    /**
-     * Updates a feature toggle state.
+     * Sets a feature toggle state.
      * Simple API for basic enable/disable operations.
      *
      * @param feature The feature to update
      * @param enabled Whether the feature should be enabled
      */
-    void updateToggle(KnownFeature feature, boolean enabled);
+    void setEnabled(KnownFeature feature, boolean enabled);
 
     /**
      * Loads configuration from external sources (JSON, properties, etc.).
@@ -151,7 +107,7 @@ public interface FeatureToggle {
      *
      * @param config Map of feature keys to enabled states
      */
-    void loadFromConfig(Map<String, Boolean> config);
+    void loadConfig(Map<String, Boolean> config);
 
     /**
      * Exports current configuration as string map.
@@ -160,37 +116,6 @@ public interface FeatureToggle {
      * @return Map of feature keys to their current states
      */
     Map<String, Boolean> exportConfig();
-
-    /**
-     * Registers a listener for feature toggle changes.
-     *
-     * @param feature  The feature to listen for
-     * @param listener The listener to notify of changes
-     */
-    void addToggleListener(KnownFeature feature, ToggleListener listener);
-
-    /**
-     * Removes a feature toggle listener.
-     *
-     * @param feature  The feature
-     * @param listener The listener to remove
-     */
-    void removeToggleListener(KnownFeature feature, ToggleListener listener);
-
-    /**
-     * Listener interface for feature toggle changes.
-     */
-    @FunctionalInterface
-    interface ToggleListener {
-        /**
-         * Called when a feature toggle configuration changes.
-         *
-         * @param feature  The feature that changed
-         * @param oldValue The previous value
-         * @param newValue The new value
-         */
-        void onToggleChanged(KnownFeature feature, boolean oldValue, boolean newValue);
-    }
 
     /**
      * Emergency kill switch that disables all features.

@@ -1,7 +1,7 @@
 package org.pragmatica.aether.agent;
 
 import org.pragmatica.aether.agent.config.AgentConfiguration;
-import org.pragmatica.aether.agent.message.MessagePreprocessor;
+import org.pragmatica.aether.agent.message.*;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.topology.QuorumStateNotification;
 import org.pragmatica.message.MessageRouter;
@@ -15,6 +15,9 @@ import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.Option;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * Main controller for the Aether AI Agent system.
@@ -38,8 +41,11 @@ public class AetherAgent {
     private final MessageRouter messageRouter;
     private final AtomicReference<AgentState> state;
     private final AtomicReference<AgentConfiguration> configuration;
-    private volatile MessagePreprocessor messagePreprocessor;
+    private final ConcurrentHashMap<Class<? extends AgentMessage>, Consumer<AgentMessage>> messageHandlers;
+    private final AtomicLong processedMessageCount;
+    private final AtomicLong droppedMessageCount;
     private volatile boolean isLeader;
+    private volatile boolean messageProcessingActive;
     private volatile Instant startTime;
     
     public AetherAgent(NodeId nodeId, MessageRouter messageRouter, AgentConfiguration initialConfig) {
@@ -47,8 +53,13 @@ public class AetherAgent {
         this.messageRouter = messageRouter;
         this.state = new AtomicReference<>(AgentState.DORMANT);
         this.configuration = new AtomicReference<>(initialConfig);
+        this.messageHandlers = new ConcurrentHashMap<>();
+        this.processedMessageCount = new AtomicLong(0);
+        this.droppedMessageCount = new AtomicLong(0);
         this.isLeader = false;
+        this.messageProcessingActive = false;
         
+        registerDefaultMessageHandlers();
         logger.info("AetherAgent created for node {} with configuration: {}", nodeId, initialConfig);
     }
     
@@ -71,10 +82,6 @@ public class AetherAgent {
             }
             
             startTime = Instant.now();
-            
-            // Initialize message preprocessor
-            var preprocessorConfig = MessagePreprocessor.PreprocessorConfig.defaultConfig();
-            messagePreprocessor = new MessagePreprocessor(messageRouter, preprocessorConfig);
             
             // Register for leadership change notifications
             messageRouter.addRoute(QuorumStateNotification.class, this::onQuorumStateChange);
@@ -105,9 +112,9 @@ public class AetherAgent {
             state.set(AgentState.STOPPING);
             
             // Stop message processing if active
-            Option.option(messagePreprocessor)
-                  .filter(unused -> isLeader)
-                  .onPresent(MessagePreprocessor::stop);
+            if (messageProcessingActive) {
+                stopMessageProcessing();
+            }
             
             isLeader = false;
             
@@ -133,11 +140,8 @@ public class AetherAgent {
         
         // Apply configuration changes if agent is active
         if (state.get() == AgentState.ACTIVE) {
-            Option.option(messagePreprocessor)
-                  .onPresent(processor -> {
-                      // Configuration changes would be applied here
-                      logger.debug("Applied configuration changes to active agent components");
-                  });
+            // Configuration changes would be applied here
+            logger.debug("Applied configuration changes to active agent components");
         }
     }
     
@@ -166,8 +170,11 @@ public class AetherAgent {
      * Gets agent health information for monitoring.
      */
     public AgentHealth health() {
-        var processingStats = Option.option(messagePreprocessor)
-                                    .map(MessagePreprocessor::stats);
+        var processingStats = Option.some(new ProcessingStats(
+            processedMessageCount.get(),
+            droppedMessageCount.get(),
+            messageProcessingActive
+        ));
         
         return new AgentHealth(
             nodeId,
@@ -205,8 +212,7 @@ public class AetherAgent {
             
             if (state.compareAndSet(AgentState.INACTIVE, AgentState.ACTIVE)) {
                 // Start message processing
-                Option.option(messagePreprocessor)
-                      .onPresent(MessagePreprocessor::start);
+                startMessageProcessing();
                 
                 logger.info("AetherAgent became active leader on node {}", nodeId);
             }
@@ -226,8 +232,7 @@ public class AetherAgent {
             
             if (state.compareAndSet(AgentState.ACTIVE, AgentState.INACTIVE)) {
                 // Stop message processing
-                Option.option(messagePreprocessor)
-                      .onPresent(MessagePreprocessor::stop);
+                stopMessageProcessing();
                 
                 logger.info("AetherAgent stepped down from leadership on node {}", nodeId);
             }
@@ -257,6 +262,96 @@ public class AetherAgent {
     }
     
     /**
+     * Processes an agent message directly without complex batching.
+     * Only processes messages when the agent is active and is the leader.
+     */
+    public void processMessage(AgentMessage message) {
+        if (!messageProcessingActive) {
+            logger.debug("Dropping message - agent not processing: {}", message.messageId());
+            droppedMessageCount.incrementAndGet();
+            return;
+        }
+        
+        try {
+            @SuppressWarnings("unchecked")
+            var handler = (Consumer<AgentMessage>) messageHandlers.get(message.getClass());
+            
+            if (handler != null) {
+                handler.accept(message);
+                processedMessageCount.incrementAndGet();
+            } else {
+                logger.warn("No handler found for message type: {}", message.getClass().getSimpleName());
+                droppedMessageCount.incrementAndGet();
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error processing message {}: {}", message.messageId(), e.getMessage(), e);
+            droppedMessageCount.incrementAndGet();
+        }
+    }
+    
+    /**
+     * Registers a custom message handler for a specific message type.
+     */
+    public <T extends AgentMessage> void registerMessageHandler(Class<T> messageType, Consumer<T> handler) {
+        @SuppressWarnings("unchecked")
+        Consumer<AgentMessage> wrappedHandler = (Consumer<AgentMessage>) handler;
+        messageHandlers.put(messageType, wrappedHandler);
+        logger.debug("Registered message handler for type: {}", messageType.getSimpleName());
+    }
+    
+    private void registerDefaultMessageHandlers() {
+        registerMessageHandler(SliceTelemetryBatch.class, this::handleTelemetryBatch);
+        registerMessageHandler(ClusterEvent.class, this::handleClusterEvent);
+        registerMessageHandler(StateTransition.class, this::handleStateTransition);
+        registerMessageHandler(AgentRecommendation.class, this::handleAgentRecommendation);
+    }
+    
+    private void startMessageProcessing() {
+        messageProcessingActive = true;
+        logger.debug("Message processing started on node {}", nodeId);
+    }
+    
+    private void stopMessageProcessing() {
+        messageProcessingActive = false;
+        logger.debug("Message processing stopped on node {}", nodeId);
+    }
+    
+    // Default message handlers - simplified without complex batching
+    private void handleTelemetryBatch(SliceTelemetryBatch batch) {
+        logger.debug("Processing telemetry batch from node {} with {} slice metrics", 
+                    batch.nodeId(), batch.sliceMetrics().size());
+        // Additional telemetry-specific processing can be added here
+    }
+    
+    private void handleClusterEvent(ClusterEvent event) {
+        logger.info("Processing cluster event: {} from node {} (severity: {})", 
+                   event.eventType(), event.sourceNodeId(), event.severity());
+        // Additional cluster event processing can be added here
+    }
+    
+    private void handleStateTransition(StateTransition transition) {
+        logger.debug("Processing state transition: {} - {} -> {}", 
+                    transition.sourceComponent(), transition.fromState(), transition.toState());
+        // Additional state transition processing can be added here
+    }
+    
+    private void handleAgentRecommendation(AgentRecommendation recommendation) {
+        logger.info("Processing agent recommendation: {} (confidence: {:.1f}%)", 
+                   recommendation.summary(), recommendation.confidence() * 100);
+        // Additional recommendation processing can be added here
+    }
+    
+    /**
+     * Processing statistics for monitoring.
+     */
+    public record ProcessingStats(
+        long processedMessages,
+        long droppedMessages,
+        boolean isRunning
+    ) {}
+    
+    /**
      * Health information for the agent.
      */
     public record AgentHealth(
@@ -264,7 +359,7 @@ public class AetherAgent {
         AgentState state,
         boolean isLeader,
         Option<Instant> startTime,
-        Option<MessagePreprocessor.ProcessingStats> processingStats
+        Option<ProcessingStats> processingStats
     ) {
         
         /**

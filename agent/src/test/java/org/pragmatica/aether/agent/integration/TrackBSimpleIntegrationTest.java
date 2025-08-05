@@ -130,11 +130,11 @@ class TrackBSimpleIntegrationTest {
         assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isTrue();
         
         // Disable LLM features
-        ((FeatureToggle) featureToggle).updateToggle(LLM_LOCAL_ENABLED, false);
+        ((FeatureToggle) featureToggle).setEnabled(LLM_LOCAL_ENABLED, false);
         assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isFalse();
         
         // Re-enable
-        ((FeatureToggle) featureToggle).updateToggle(LLM_LOCAL_ENABLED, true);
+        ((FeatureToggle) featureToggle).setEnabled(LLM_LOCAL_ENABLED, true);
         assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isTrue();
     }
     
@@ -191,14 +191,14 @@ class TrackBSimpleIntegrationTest {
         assertThat(response1).contains("performance");
         
         // Disable local LLM
-        ((FeatureToggle) featureToggle).updateToggle(LLM_LOCAL_ENABLED, false);
+        ((FeatureToggle) featureToggle).setEnabled(LLM_LOCAL_ENABLED, false);
         
         // Should return fallback response
         var response2 = llmIntegratedSystem.processRequest("Analyze system performance");
         assertThat(response2).contains("LLM features are disabled");
         
         // Re-enable local LLM
-        ((FeatureToggle) featureToggle).updateToggle(LLM_LOCAL_ENABLED, true);
+        ((FeatureToggle) featureToggle).setEnabled(LLM_LOCAL_ENABLED, true);
         
         // Should work again
         var response3 = llmIntegratedSystem.processRequest("Analyze system performance");

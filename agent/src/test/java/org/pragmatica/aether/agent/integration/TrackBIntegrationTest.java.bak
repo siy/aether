@@ -1,0 +1,384 @@
+package org.pragmatica.aether.agent.integration;
+
+import org.junit.jupiter.api.*;
+import org.pragmatica.aether.agent.features.FeatureToggle;
+import org.pragmatica.aether.agent.llm.HybridLLMManager;
+import org.pragmatica.aether.agent.llm.LLMProvider;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
+
+/**
+ * Comprehensive integration tests for Track B implementation.
+ * 
+ * These tests validate the complete Mock LLM Provider system and Feature Toggle
+ * framework working together in various scenarios. The tests demonstrate:
+ * - End-to-end functionality without cloud dependencies
+ * - Feature toggle runtime configuration
+ * - Mock provider deterministic responses
+ * - Hybrid LLM manager provider selection
+ * - Cost tracking and circuit breaker functionality
+ * - Progressive testing capabilities
+ */
+@DisplayName("Track B Integration Tests")
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class TrackBIntegrationTest {
+    
+    private TestEnvironment testEnvironment;
+    private TestScenarioRunner scenarioRunner;
+    
+    @BeforeEach
+    void setUp() {
+        testEnvironment = TestEnvironment.createForIntegrationTesting();
+        scenarioRunner = testEnvironment.getScenarioRunner();
+    }
+    
+    @AfterEach
+    void tearDown() {
+        if (testEnvironment != null) {
+            testEnvironment.shutdown().join();
+        }
+    }
+    
+    @Test
+    @Order(1)
+    @DisplayName("Verify test environment initialization")
+    void testEnvironmentInitialization() {
+        // Verify test environment is properly initialized
+        assertThat(testEnvironment.getFeatureToggle()).isNotNull();
+        assertThat(testEnvironment.getLLMManager()).isNotNull();
+        assertThat(testEnvironment.getScenarioRunner()).isNotNull();
+        assertThat(testEnvironment.getMessageRouter()).isNotNull();
+        
+        // Verify feature toggles are configured
+        var featureToggle = testEnvironment.getFeatureToggle();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.AGENT_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED)).isTrue();
+        
+        // Verify LLM manager health
+        var healthFuture = testEnvironment.getLLMManager().getProvidersHealth();
+        await().atMost(5, TimeUnit.SECONDS).until(() -> healthFuture.isDone());
+        
+        var healthResults = healthFuture.join();
+        assertThat(healthResults).isNotEmpty();
+        assertThat(healthResults.values()).allSatisfy(health -> 
+            assertThat(health.status()).isIn(
+                LLMProvider.ProviderStatus.HEALTHY, 
+                LLMProvider.ProviderStatus.DEGRADED
+            )
+        );
+    }
+    
+    @Test
+    @Order(2)
+    @DisplayName("Test MockLLMProvider deterministic responses")
+    void testMockProviderDeterministicResponses() throws Exception {
+        var llmManager = testEnvironment.getLLMManager();
+        
+        // Test performance analysis scenario
+        var performanceRequest = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("The CPU usage is high on node-1"))
+            .maxTokens(200)
+            .temperature(0.0) // Deterministic
+            .build();
+        
+        var response1 = llmManager.complete(performanceRequest).get(10, TimeUnit.SECONDS);
+        var response2 = llmManager.complete(performanceRequest).get(10, TimeUnit.SECONDS);
+        
+        assertThat(response1.isSuccess()).isTrue();
+        assertThat(response2.isSuccess()).isTrue();
+        
+        // Responses should be identical (deterministic)
+        assertThat(response1.value().content()).isEqualTo(response2.value().content());
+        assertThat(response1.value().tokensUsed()).isEqualTo(response2.value().tokensUsed());
+        
+        // Verify the response contains expected performance analysis
+        var content = response1.value().content();
+        assertThat(content.toLowerCase()).containsAnyOf("cpu", "performance", "recommend");
+    }
+    
+    @Test
+    @Order(3)
+    @DisplayName("Test scenario pattern matching")
+    void testScenarioPatternMatching() throws Exception {
+        var llmManager = testEnvironment.getLLMManager();
+        
+        // Test different types of requests to verify pattern matching
+        var testCases = List.of(
+            // Performance scenario
+            new TestCase("performance analysis", "High CPU usage on payment service", "cpu|performance|scaling"),
+            
+            // Error scenario  
+            new TestCase("error analysis", "Multiple exceptions in authentication service", "error|exception|failure"),
+            
+            // Security scenario
+            new TestCase("security analysis", "Potential security breach detected", "security|attack|breach"),
+            
+            // Cost scenario
+            new TestCase("cost analysis", "Need to optimize infrastructure costs", "cost|budget|optimize")
+        );
+        
+        for (var testCase : testCases) {
+            var request = LLMProvider.CompletionRequest.builder()
+                .addMessage(LLMProvider.ChatMessage.user(testCase.input))
+                .maxTokens(200)
+                .build();
+            
+            var response = llmManager.complete(request).get(10, TimeUnit.SECONDS);
+            assertThat(response.isSuccess()).isTrue();
+            
+            var content = response.value().content().toLowerCase();
+            assertThat(content).describedAs("Response for " + testCase.description)
+                .containsPattern(testCase.expectedPattern);
+        }
+    }
+    
+    @Test
+    @Order(4)
+    @DisplayName("Test feature toggle runtime configuration")
+    void testFeatureToggleRuntimeConfiguration() {
+        var featureToggle = testEnvironment.getFeatureToggle();
+        
+        // Initially LLM should be enabled
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED)).isTrue();
+        
+        // Disable LLM features
+        var disabledConfig = FeatureToggle.ToggleConfig.builder("llm.local.enabled")
+            .enabled(false)
+            .description("Disabled for testing")
+            .build();
+        
+        featureToggle.updateToggle(disabledConfig);
+        
+        // Verify the change took effect immediately
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED)).isFalse();
+        
+        // Re-enable
+        var enabledConfig = FeatureToggle.ToggleConfig.builder("llm.local.enabled")
+            .enabled(true)
+            .description("Re-enabled for testing")
+            .build();
+        
+        featureToggle.updateToggle(enabledConfig);
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED)).isTrue();
+    }
+    
+    @Test
+    @Order(5)
+    @DisplayName("Test feature toggle with percentage rollout")
+    void testFeatureTogglePercentageRollout() {
+        var featureToggle = testEnvironment.getFeatureToggle();
+        
+        // Configure 50% rollout for a test feature
+        var rolloutConfig = FeatureToggle.ToggleConfig.builder("test.feature.rollout")
+            .enabled(true)
+            .rolloutPercentage(50.0)
+            .description("50% rollout test")
+            .build();
+        
+        featureToggle.updateToggle(rolloutConfig);
+        
+        // Test multiple contexts to verify percentage distribution
+        int enabledCount = 0;
+        int totalTests = 100;
+        
+        for (int i = 0; i < totalTests; i++) {
+            var context = FeatureToggle.EvaluationContext.forNode("node-" + i);
+            if (featureToggle.isEnabled("test.feature.rollout", context)) {
+                enabledCount++;
+            }
+        }
+        
+        // Should be approximately 50% (allow some variance due to hashing)
+        assertThat(enabledCount).isBetween(35, 65);
+    }
+    
+    @Test
+    @Order(6)
+    @DisplayName("Test emergency mode functionality")
+    void testEmergencyMode() throws Exception {
+        var featureToggle = testEnvironment.getFeatureToggle();
+        var llmManager = testEnvironment.getLLMManager();
+        
+        // Initially features should be enabled
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED)).isTrue();
+        assertThat(featureToggle.isEmergencyMode()).isFalse();
+        
+        // Activate emergency mode
+        featureToggle.emergencyDisableAll();
+        
+        // All features should now be disabled
+        assertThat(featureToggle.isEmergencyMode()).isTrue();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED)).isFalse();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.AGENT_ENABLED)).isFalse();
+        
+        // LLM requests should fail
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("Test request"))
+            .build();
+        
+        var response = llmManager.complete(request).get(10, TimeUnit.SECONDS);
+        assertThat(response.isFailure()).isTrue();
+        
+        // Restore from emergency mode
+        featureToggle.restoreFromEmergency();
+        
+        assertThat(featureToggle.isEmergencyMode()).isFalse();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED)).isTrue();
+    }
+    
+    @Test
+    @Order(7)
+    @DisplayName("Test cost tracking and limits")
+    void testCostTrackingAndLimits() throws Exception {
+        var llmManager = testEnvironment.getLLMManager();
+        
+        // Get initial cost summary
+        var initialCost = llmManager.getCostSummary();
+        var initialDailyCost = initialCost.dailyCost();
+        
+        // Make several requests
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("Cost tracking test"))
+            .maxTokens(100)
+            .build();
+        
+        for (int i = 0; i < 3; i++) {
+            var response = llmManager.complete(request).get(10, TimeUnit.SECONDS);
+            assertThat(response.isSuccess()).isTrue();
+            assertThat(response.unwrap().cost()).isGreaterThan(0.0);
+        }
+        
+        // Verify cost was tracked
+        var finalCost = llmManager.getCostSummary();
+        assertThat(finalCost.dailyCost()).isGreaterThan(initialDailyCost);
+        assertThat(finalCost.dailyBudgetUsagePercentage()).isGreaterThan(0.0);
+    }
+    
+    @Test
+    @Order(8)
+    @DisplayName("Test comprehensive scenario execution")
+    void testComprehensiveScenarioExecution() throws Exception {
+        // Run the comprehensive test suite
+        var summaryFuture = scenarioRunner.runComprehensiveTests();
+        var summary = summaryFuture.get(60, TimeUnit.SECONDS);
+        
+        // Verify test execution
+        assertThat(summary.totalTests()).isGreaterThan(0);
+        assertThat(summary.successRate()).isGreaterThan(80.0); // At least 80% success rate
+        
+        // Log results for debugging
+        System.out.println("Test Summary:");
+        System.out.println("  Total Tests: " + summary.totalTests());
+        System.out.println("  Passed: " + summary.passedTests());
+        System.out.println("  Failed: " + summary.failedTests());
+        System.out.println("  Success Rate: " + String.format("%.1f%%", summary.successRate()));
+        System.out.println("  Total Cost: $" + String.format("%.4f", summary.totalCost()));
+        System.out.println("  Execution Time: " + summary.totalExecutionTime().toMillis() + "ms");
+        
+        if (!summary.failures().isEmpty()) {
+            System.out.println("Failures:");
+            summary.failures().forEach(failure -> 
+                System.out.println("  - " + failure.scenarioName() + ": " + failure.errorMessage())
+            );
+        }
+        
+        // All critical scenarios should pass
+        var criticalScenarios = List.of("basic_llm_request", "performance_analysis_scenario");
+        var results = scenarioRunner.getAllResults();
+        
+        for (var scenarioName : criticalScenarios) {
+            var result = results.get(scenarioName);
+            assertThat(result).isNotNull();
+            assertThat(result.passed())
+                .describedAs("Critical scenario '%s' should pass", scenarioName)
+                .isTrue();
+        }
+    }
+    
+    @Test
+    @Order(9)
+    @DisplayName("Test feature toggle integration with LLM manager")
+    void testFeatureToggleLLMIntegration() throws Exception {
+        var featureToggle = testEnvironment.getFeatureToggle();
+        var llmManager = testEnvironment.getLLMManager();
+        
+        // Disable local LLM
+        featureToggle.updateToggle(
+            FeatureToggle.ToggleConfig.builder("llm.local.enabled")
+                .enabled(false)
+                .build()
+        );
+        
+        // Disable cloud LLM (should result in no available providers)
+        featureToggle.updateToggle(
+            FeatureToggle.ToggleConfig.builder("llm.cloud.enabled")
+                .enabled(false)
+                .build()
+        );
+        
+        // Request should fail due to no available providers
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("This should fail"))
+            .build();
+        
+        var response = llmManager.complete(request).get(10, TimeUnit.SECONDS);
+        assertThat(response.isFailure()).isTrue();
+        
+        // Re-enable local LLM
+        featureToggle.updateToggle(
+            FeatureToggle.ToggleConfig.builder("llm.local.enabled")
+                .enabled(true)
+                .build()
+        );
+        
+        // Request should now succeed
+        var response2 = llmManager.complete(request).get(10, TimeUnit.SECONDS);
+        assertThat(response2.isSuccess()).isTrue();
+    }
+    
+    @Test
+    @Order(10)
+    @DisplayName("Test progressive testing capabilities")
+    void testProgressiveTestingCapabilities() throws Exception {
+        // This test demonstrates the progressive testing approach:
+        // mock → local → cloud providers
+        
+        // Phase 1: Mock provider only (current state)
+        var mockOnlyResponse = performTestRequest("Phase 1: Mock provider test");
+        assertThat(mockOnlyResponse.isSuccess()).isTrue();
+        assertThat(mockOnlyResponse.unwrap().modelUsed()).contains("mock");
+        
+        // Phase 2 would involve local providers (not implemented yet)
+        // Phase 3 would involve cloud providers (not implemented yet)
+        
+        // Verify the mock provider provides realistic responses
+        var content = mockOnlyResponse.value().content();
+        assertThat(content).isNotEmpty();
+        assertThat(content.length()).isGreaterThan(10); // Reasonable response length
+        
+        // Verify response metadata contains expected fields
+        var metadata = mockOnlyResponse.value().metadata();
+        assertThat(metadata).containsKeys("scenario", "requestId", "providerId");
+    }
+    
+    private LLMProvider.CompletionResponse performTestRequest(String message) throws Exception {
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user(message))
+            .maxTokens(150)
+            .build();
+        
+        var response = testEnvironment.getLLMManager().complete(request).get(10, TimeUnit.SECONDS);
+        assertThat(response.isSuccess()).isTrue();
+        return response.value();
+    }
+    
+    /**
+     * Helper record for test cases.
+     */
+    private record TestCase(String description, String input, String expectedPattern) {}
+}

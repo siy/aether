@@ -1,0 +1,266 @@
+package org.pragmatica.aether.agent.llm;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.pragmatica.aether.agent.llm.MockLLMProvider.MockConfiguration;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * Unit tests for MockLLMProvider functionality.
+ */
+@DisplayName("MockLLMProvider Tests")
+class MockLLMProviderTest {
+    
+    private MockLLMProvider provider;
+    
+    @BeforeEach
+    void setUp() {
+        var config = MockConfiguration.builder()
+            .modelName("test-mock-model")
+            .baseLatency(Duration.ofMillis(10)) // Fast for testing
+            .baseCostPerToken(0.0001)
+            .build();
+        
+        provider = new MockLLMProvider("test-provider", config);
+    }
+    
+    @Test
+    @DisplayName("Test provider capabilities")
+    void testProviderCapabilities() {
+        var capabilities = provider.getCapabilities();
+        
+        assertThat(capabilities.name()).isEqualTo("test-mock-model");
+        assertThat(capabilities.version()).isEqualTo("1.0.0");
+        assertThat(capabilities.maxTokens()).isGreaterThan(0);
+        assertThat(capabilities.supportedFeatures()).contains("mock", "deterministic");
+        assertThat(capabilities.costPerToken()).isGreaterThan(0);
+        assertThat(capabilities.supportsStreaming()).isFalse();
+        assertThat(capabilities.supportsToolCalls()).isFalse();
+    }
+    
+    @Test
+    @DisplayName("Test basic completion request")
+    void testBasicCompletionRequest() throws Exception {
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("Test message"))
+            .maxTokens(100)
+            .temperature(0.0)
+            .build();
+        
+        var response = provider.complete(request).get(5, TimeUnit.SECONDS);
+        
+        assertThat(response.isSuccess()).isTrue();
+        
+        var completion = response.value();
+        assertThat(completion.content()).isNotEmpty();
+        assertThat(completion.tokensUsed()).isGreaterThan(0);
+        assertThat(completion.responseTime()).isPositive();
+        assertThat(completion.cost()).isGreaterThanOrEqualTo(0);
+        assertThat(completion.modelUsed()).isEqualTo("test-mock-model");
+        assertThat(completion.metadata()).containsKeys("scenario", "requestId", "providerId");
+    }
+    
+    @Test
+    @DisplayName("Test deterministic responses")
+    void testDeterministicResponses() throws Exception {
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("CPU usage analysis"))
+            .maxTokens(100)
+            .temperature(0.0)
+            .build();
+        
+        var response1 = provider.complete(request).get(5, TimeUnit.SECONDS);
+        var response2 = provider.complete(request).get(5, TimeUnit.SECONDS);
+        
+        assertThat(response1.isSuccess()).isTrue();
+        assertThat(response2.isSuccess()).isTrue();
+        
+        // Content should be identical for same input
+        assertThat(response1.value().content()).isEqualTo(response2.value().content());
+        assertThat(response1.value().tokensUsed()).isEqualTo(response2.value().tokensUsed());
+    }
+    
+    @Test
+    @DisplayName("Test scenario pattern matching")
+    void testScenarioPatternMatching() throws Exception {
+        // Test high CPU scenario
+        var cpuRequest = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("High CPU usage detected"))
+            .build();
+        
+        var cpuResponse = provider.complete(cpuRequest).get(5, TimeUnit.SECONDS);
+        assertThat(cpuResponse.isSuccess()).isTrue();
+        assertThat(cpuResponse.value().content().toLowerCase()).contains("cpu");
+        
+        // Test memory scenario
+        var memoryRequest = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("Memory leak investigation"))
+            .build();
+        
+        var memoryResponse = provider.complete(memoryRequest).get(5, TimeUnit.SECONDS);
+        assertThat(memoryResponse.isSuccess()).isTrue();
+        assertThat(memoryResponse.value().content().toLowerCase()).contains("memory");
+        
+        // Test error scenario
+        var errorRequest = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("Exception stack trace analysis"))
+            .build();
+        
+        var errorResponse = provider.complete(errorRequest).get(5, TimeUnit.SECONDS);
+        assertThat(errorResponse.isSuccess()).isTrue();
+        assertThat(errorResponse.value().content().toLowerCase()).containsAnyOf("error", "exception");
+    }
+    
+    @Test
+    @DisplayName("Test cost calculation")
+    void testCostCalculation() throws Exception {
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("Cost test"))
+            .maxTokens(200)
+            .build();
+        
+        var response = provider.complete(request).get(5, TimeUnit.SECONDS);
+        assertThat(response.isSuccess()).isTrue();
+        
+        var cost = response.value().cost();
+        var tokensUsed = response.value().tokensUsed();
+        
+        assertThat(cost).isGreaterThan(0);
+        assertThat(tokensUsed).isGreaterThan(0);
+        
+        // Cost should be proportional to tokens used
+        var expectedMinCost = tokensUsed * 0.00005; // Approximate minimum
+        var expectedMaxCost = tokensUsed * 0.0002;  // Approximate maximum
+        assertThat(cost).isBetween(expectedMinCost, expectedMaxCost);
+    }
+    
+    @Test
+    @DisplayName("Test health check")
+    void testHealthCheck() throws Exception {
+        var health = provider.healthCheck().get(5, TimeUnit.SECONDS);
+        
+        assertThat(health.status()).isIn(
+            LLMProvider.ProviderStatus.HEALTHY, 
+            LLMProvider.ProviderStatus.DEGRADED
+        );
+        assertThat(health.statusMessage()).isNotEmpty();
+        assertThat(health.healthMetrics()).containsKeys("requestCount", "scenarioCount");
+    }
+    
+    @Test
+    @DisplayName("Test failure injection")
+    void testFailureInjection() {
+        // Create provider with failure injection enabled
+        var failureConfig = MockConfiguration.builder()
+            .failureConfig(MockConfiguration.FailureConfig.testingConfig())
+            .build();
+        
+        var failingProvider = new MockLLMProvider("failing-provider", failureConfig);
+        
+        // Make multiple requests - some should fail due to injection
+        int totalRequests = 50;
+        int failures = 0;
+        
+        for (int i = 0; i < totalRequests; i++) {
+            var request = LLMProvider.CompletionRequest.builder()
+                .addMessage(LLMProvider.ChatMessage.user("Test request " + i))
+                .build();
+            
+            try {
+                var response = failingProvider.complete(request).get(5, TimeUnit.SECONDS);
+                if (response.isFailure()) {
+                    failures++;
+                }
+            } catch (Exception e) {
+                failures++;
+            }
+        }
+        
+        // Should have some failures (but not too many due to low failure rate)
+        assertThat(failures).isGreaterThan(0).isLessThan(totalRequests / 2);
+    }
+    
+    @Test
+    @DisplayName("Test latency simulation")
+    void testLatencySimulation() throws Exception {
+        // Create provider with latency simulation
+        var latencyConfig = new MockConfiguration.LatencyConfig(
+            Duration.ofMillis(100),    // Base latency
+            Duration.ofMillis(50),     // Variance
+            0.1,                       // 10% slow requests
+            Duration.ofMillis(500)     // Slow request latency
+        );
+        
+        var config = MockConfiguration.builder()
+            .latencyConfig(latencyConfig)
+            .build();
+        
+        var latencyProvider = new MockLLMProvider("latency-provider", config);
+        
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("Latency test"))
+            .build();
+        
+        // Make multiple requests and measure latencies
+        var latencies = new java.util.ArrayList<Duration>();
+        
+        for (int i = 0; i < 20; i++) {
+            var response = latencyProvider.complete(request).get(10, TimeUnit.SECONDS);
+            assertThat(response.isSuccess()).isTrue();
+            latencies.add(response.value().responseTime());
+        }
+        
+        // Most latencies should be around base latency
+        var averageLatency = latencies.stream()
+            .map(Duration::toMillis)
+            .mapToLong(Long::longValue)
+            .average()
+            .orElse(0);
+        
+        assertThat(averageLatency).isBetween(80.0, 200.0); // Around base + some variance
+        
+        // Some requests should be slower (but not too many)
+        var slowRequests = latencies.stream()
+            .mapToLong(Duration::toMillis)
+            .filter(ms -> ms > 300)
+            .count();
+        
+        assertThat(slowRequests).isBetween(0L, 5L); // 0-25% slow requests is reasonable
+    }
+    
+    @Test
+    @DisplayName("Test cost estimation")
+    void testCostEstimation() {
+        var request = LLMProvider.CompletionRequest.builder()
+            .addMessage(LLMProvider.ChatMessage.user("This is a test message"))
+            .maxTokens(100)
+            .build();
+        
+        var estimatedCost = provider.estimateCost(request);
+        assertThat(estimatedCost).isGreaterThan(0);
+        
+        // Estimate should be reasonable for the input size
+        assertThat(estimatedCost).isBetween(0.001, 0.1);
+    }
+    
+    @Test
+    @DisplayName("Test provider ID")
+    void testProviderId() {
+        assertThat(provider.getProviderId()).isEqualTo("test-provider");
+    }
+    
+    @Test
+    @DisplayName("Test feature support")
+    void testFeatureSupport() {
+        assertThat(provider.supportsFeature("mock")).isTrue();
+        assertThat(provider.supportsFeature("deterministic")).isTrue();
+        assertThat(provider.supportsFeature("streaming")).isFalse();
+        assertThat(provider.supportsFeature("unknown")).isFalse();
+    }
+}

@@ -1,0 +1,593 @@
+package org.pragmatica.aether.agent.llm;
+
+import org.pragmatica.aether.agent.features.FeatureToggle;
+import org.pragmatica.lang.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Hybrid LLM manager that orchestrates multiple LLM providers.
+ * 
+ * This manager implements the hybrid LLM strategy from the design specification:
+ * - Local models (Qwen3) as primary providers for speed and privacy
+ * - Cloud providers for complex escalation scenarios
+ * - Automatic fallback chains with circuit breakers
+ * - Cost tracking and budget enforcement
+ * - Feature toggle integration for gradual rollouts
+ * 
+ * The manager handles provider selection based on task complexity, availability,
+ * and cost constraints while maintaining high availability through fallback chains.
+ */
+public class HybridLLMManager {
+    private static final Logger logger = LoggerFactory.getLogger(HybridLLMManager.class);
+    
+    private final FeatureToggle featureToggle;
+    private final Map<String, LLMProvider> providers;
+    private final ProviderSelector providerSelector;
+    private final CircuitBreakerManager circuitBreakers;
+    private final CostTracker costTracker;
+    private final AtomicReference<ManagerConfig> configuration;
+    
+    public HybridLLMManager(FeatureToggle featureToggle, ManagerConfig configuration) {
+        this.featureToggle = featureToggle;
+        this.configuration = new AtomicReference<>(configuration);
+        this.providers = new ConcurrentHashMap<>();
+        this.providerSelector = new ProviderSelector();
+        this.circuitBreakers = new CircuitBreakerManager();
+        this.costTracker = new CostTracker(configuration.budgetConfig());
+        
+        initializeProviders();
+        
+        logger.info("HybridLLMManager initialized with {} providers", providers.size());
+    }
+    
+    /**
+     * Configuration for the HybridLLMManager.
+     */
+    public record ManagerConfig(
+        List<ProviderConfig> providerConfigs,
+        FallbackChainConfig fallbackConfig,
+        BudgetConfig budgetConfig,
+        Duration defaultTimeout
+    ) {
+        public static ManagerConfig defaultConfig() {
+            return new ManagerConfig(
+                List.of(
+                    // Mock provider for testing
+                    new ProviderConfig("mock-primary", ProviderType.MOCK, 1, Map.of()),
+                    new ProviderConfig("mock-fallback", ProviderType.MOCK, 2, Map.of())
+                ),
+                FallbackChainConfig.defaultConfig(),
+                BudgetConfig.defaultConfig(),
+                Duration.ofSeconds(30)
+            );
+        }
+    }
+    
+    /**
+     * Configuration for individual providers.
+     */
+    public record ProviderConfig(
+        String providerId,
+        ProviderType type,
+        int priority,
+        Map<String, Object> providerSpecificConfig
+    ) {}
+    
+    /**
+     * Types of LLM providers supported.
+     */
+    public enum ProviderType {
+        MOCK,           // MockLLMProvider for testing
+        LOCAL_QWEN3,    // Local Qwen3 models
+        OPENAI,         // OpenAI GPT models
+        ANTHROPIC,      // Anthropic Claude models
+        AZURE_OPENAI    // Azure OpenAI service
+    }
+    
+    /**
+     * Fallback chain configuration.
+     */
+    public record FallbackChainConfig(
+        boolean enableFallback,
+        int maxFallbackAttempts,
+        Duration fallbackDelay,
+        List<String> fallbackOrder
+    ) {
+        public static FallbackChainConfig defaultConfig() {
+            return new FallbackChainConfig(
+                true,
+                3,
+                Duration.ofSeconds(1),
+                List.of("mock-primary", "mock-fallback")
+            );
+        }
+    }
+    
+    /**
+     * Budget tracking and cost control configuration.
+     */
+    public record BudgetConfig(
+        double dailyBudgetLimit,
+        double montlyBudgetLimit,
+        boolean enableCostCircuitBreaker,
+        double costCircuitBreakerThreshold
+    ) {
+        public static BudgetConfig defaultConfig() {
+            return new BudgetConfig(10.0, 300.0, true, 0.8);
+        }
+    }
+    
+    /**
+     * Request classification for provider selection.
+     */
+    public enum RequestComplexity {
+        SIMPLE,     // Basic pattern matching, single metric analysis
+        MODERATE,   // Multi-metric correlation, standard recommendations
+        COMPLEX     // Temporal patterns, unknown scenarios, complex analysis
+    }
+    
+    /**
+     * Provider selection criteria.
+     */
+    public record SelectionCriteria(
+        RequestComplexity complexity,
+        boolean allowCloud,
+        double maxCost,
+        Duration maxLatency,
+        Map<String, Object> customAttributes
+    ) {
+        public static SelectionCriteria simple() {
+            return new SelectionCriteria(
+                RequestComplexity.SIMPLE, false, 0.10, Duration.ofSeconds(5), Map.of()
+            );
+        }
+        
+        public static SelectionCriteria moderate() {
+            return new SelectionCriteria(
+                RequestComplexity.MODERATE, true, 0.50, Duration.ofSeconds(15), Map.of()
+            );
+        }
+        
+        public static SelectionCriteria complex() {
+            return new SelectionCriteria(
+                RequestComplexity.COMPLEX, true, 2.00, Duration.ofSeconds(30), Map.of()
+            );
+        }
+    }
+    
+    /**
+     * Processes a completion request using the optimal provider.
+     * 
+     * @param request The LLM completion request
+     * @param criteria Selection criteria for provider choice
+     * @return Future containing the completion result
+     */
+    public CompletableFuture<Result<LLMProvider.CompletionResponse>> complete(
+            LLMProvider.CompletionRequest request, 
+            SelectionCriteria criteria) {
+        
+        // Check if LLM features are enabled
+        if (!isLLMEnabled(criteria)) {
+            return CompletableFuture.completedFuture(
+                Result.failure(new RuntimeException("LLM features are disabled"))
+            );
+        }
+        
+        // Check cost limits
+        if (!costTracker.canAffordRequest(criteria.maxCost())) {
+            return CompletableFuture.completedFuture(
+                Result.failure(new RuntimeException("Request exceeds cost limits"))
+            );
+        }
+        
+        return selectProvider(criteria)
+            .thenCompose(providerResult -> {
+                if (providerResult.isFailure()) {
+                    return CompletableFuture.completedFuture(
+                        Result.failure(new RuntimeException("No suitable provider available"))
+                    );
+                }
+                
+                var provider = providerResult.value();
+                return executeWithFallback(provider, request, criteria);
+            })
+            .thenApply(result -> {
+                if (result.isSuccess()) {
+                    var response = result.value();
+                    costTracker.recordCost(response.cost());
+                    logger.debug("LLM request completed successfully with cost ${}", response.cost());
+                }
+                return result;
+            });
+    }
+    
+    /**
+     * Convenience method for simple requests.
+     */
+    public CompletableFuture<Result<LLMProvider.CompletionResponse>> complete(
+            LLMProvider.CompletionRequest request) {
+        return complete(request, SelectionCriteria.simple());
+    }
+    
+    /**
+     * Gets health status of all providers.
+     */
+    public CompletableFuture<Map<String, LLMProvider.ProviderHealth>> getProvidersHealth() {
+        var healthFutures = new HashMap<String, CompletableFuture<LLMProvider.ProviderHealth>>();
+        for (var entry : providers.entrySet()) {
+            healthFutures.put(entry.getKey(), entry.getValue().healthCheck());
+        }
+        
+        return CompletableFuture.allOf(healthFutures.values().toArray(new CompletableFuture[0]))
+            .thenApply(v -> {
+                var results = new HashMap<String, LLMProvider.ProviderHealth>();
+                healthFutures.forEach((key, future) -> {
+                    try {
+                        results.put(key, future.get());
+                    } catch (Exception e) {
+                        logger.warn("Health check failed for provider '{}'", key, e);
+                        results.put(key, new LLMProvider.ProviderHealth(
+                            LLMProvider.ProviderStatus.UNAVAILABLE,
+                            "Health check failed: " + e.getMessage(),
+                            Duration.ZERO,
+                            Map.of()
+                        ));
+                    }
+                });
+                return results;
+            });
+    }
+    
+    /**
+     * Gets current cost tracking information.
+     */
+    public CostSummary getCostSummary() {
+        return costTracker.getSummary();
+    }
+    
+    /**
+     * Updates the manager configuration.
+     */
+    public void updateConfiguration(ManagerConfig newConfig) {
+        var oldConfig = configuration.getAndSet(newConfig);
+        logger.info("HybridLLMManager configuration updated");
+        
+        // Reinitialize providers if needed
+        if (!Objects.equals(oldConfig.providerConfigs(), newConfig.providerConfigs())) {
+            reinitializeProviders();
+        }
+        
+        // Update cost tracker
+        costTracker.updateBudgetConfig(newConfig.budgetConfig());
+    }
+    
+    private void initializeProviders() {
+        var config = configuration.get();
+        
+        for (var providerConfig : config.providerConfigs()) {
+            try {
+                var provider = createProvider(providerConfig);
+                providers.put(providerConfig.providerId(), provider);
+                
+                logger.info("Initialized provider '{}' of type {}", 
+                           providerConfig.providerId(), providerConfig.type());
+                
+            } catch (Exception e) {
+                logger.error("Failed to initialize provider '{}'", providerConfig.providerId(), e);
+            }
+        }
+    }
+    
+    private void reinitializeProviders() {
+        providers.clear();
+        initializeProviders();
+    }
+    
+    private LLMProvider createProvider(ProviderConfig config) {
+        return switch (config.type()) {
+            case MOCK -> new MockLLMProvider(
+                config.providerId(),
+                MockLLMProvider.MockConfiguration.defaultConfig()
+            );
+            
+            case LOCAL_QWEN3 -> throw new UnsupportedOperationException(
+                "Local Qwen3 provider not implemented yet"
+            );
+            
+            case OPENAI -> throw new UnsupportedOperationException(
+                "OpenAI provider not implemented yet"
+            );
+            
+            case ANTHROPIC -> throw new UnsupportedOperationException(
+                "Anthropic provider not implemented yet"
+            );
+            
+            case AZURE_OPENAI -> throw new UnsupportedOperationException(
+                "Azure OpenAI provider not implemented yet"
+            );
+        };
+    }
+    
+    private boolean isLLMEnabled(SelectionCriteria criteria) {
+        var context = FeatureToggle.EvaluationContext.empty();
+        
+        // Check global LLM enablement
+        if (criteria.allowCloud()) {
+            return featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_CLOUD_ENABLED, context) ||
+                   featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED, context);
+        } else {
+            return featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED, context);
+        }
+    }
+    
+    private CompletableFuture<Result<LLMProvider>> selectProvider(SelectionCriteria criteria) {
+        return CompletableFuture.supplyAsync(() -> {
+            var availableProviders = getAvailableProviders(criteria);
+            
+            if (availableProviders.isEmpty()) {
+                return Result.failure(new RuntimeException("No available providers match criteria"));
+            }
+            
+            // Select best provider based on criteria
+            var selected = providerSelector.selectBest(availableProviders, criteria);
+            return Result.success(selected);
+        });
+    }
+    
+    private List<LLMProvider> getAvailableProviders(SelectionCriteria criteria) {
+        return providers.values().stream()
+            .filter(provider -> {
+                // Check circuit breaker
+                if (circuitBreakers.isOpen(provider.getProviderId())) {
+                    return false;
+                }
+                
+                // Check feature toggles
+                if (isCloudProvider(provider) && !criteria.allowCloud()) {
+                    var context = FeatureToggle.EvaluationContext.empty();
+                    if (!featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_CLOUD_ENABLED, context)) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            })
+            .toList();
+    }
+    
+    private boolean isCloudProvider(LLMProvider provider) {
+        // For now, only mock providers are considered local
+        return !provider.getProviderId().startsWith("mock");
+    }
+    
+    private CompletableFuture<Result<LLMProvider.CompletionResponse>> executeWithFallback(
+            LLMProvider provider, 
+            LLMProvider.CompletionRequest request, 
+            SelectionCriteria criteria) {
+        
+        return provider.complete(request)
+            .handle((result, throwable) -> {
+                if (throwable != null) {
+                    result = Result.failure(throwable);
+                }
+                
+                if (result.isSuccess()) {
+                    circuitBreakers.recordSuccess(provider.getProviderId());
+                    return result;
+                }
+                
+                // Record failure
+                circuitBreakers.recordFailure(provider.getProviderId());
+                
+                // Try fallback if enabled
+                var fallbackConfig = configuration.get().fallbackConfig();
+                if (fallbackConfig.enableFallback() && 
+                    featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_FALLBACK_ENABLED)) {
+                    
+                    return tryFallback(request, criteria, provider.getProviderId())
+                        .join(); // This is already in a handle, so join is safe
+                }
+                
+                return result;
+            });
+    }
+    
+    private CompletableFuture<Result<LLMProvider.CompletionResponse>> tryFallback(
+            LLMProvider.CompletionRequest request,
+            SelectionCriteria criteria,
+            String failedProviderId) {
+        
+        var fallbackConfig = configuration.get().fallbackConfig();
+        var fallbackProviders = fallbackConfig.fallbackOrder().stream()
+            .filter(id -> !id.equals(failedProviderId))
+            .filter(providers::containsKey)
+            .map(providers::get)
+            .toList();
+        
+        if (fallbackProviders.isEmpty()) {
+            return CompletableFuture.completedFuture(
+                Result.failure(new RuntimeException("No fallback providers available"))
+            );
+        }
+        
+        logger.info("Attempting fallback for failed provider '{}' using {} alternatives", 
+                   failedProviderId, fallbackProviders.size());
+        
+        return tryProvidersSequentially(fallbackProviders, request, 0);
+    }
+    
+    private CompletableFuture<Result<LLMProvider.CompletionResponse>> tryProvidersSequentially(
+            List<LLMProvider> providers, 
+            LLMProvider.CompletionRequest request, 
+            int index) {
+        
+        if (index >= providers.size()) {
+            return CompletableFuture.completedFuture(
+                Result.failure(new RuntimeException("All fallback providers failed"))
+            );
+        }
+        
+        var provider = providers.get(index);
+        return provider.complete(request)
+            .thenCompose(result -> {
+                if (result.isSuccess()) {
+                    logger.info("Fallback succeeded using provider '{}'", provider.getProviderId());
+                    return CompletableFuture.completedFuture(result);
+                }
+                
+                logger.debug("Fallback provider '{}' failed, trying next", provider.getProviderId());
+                return tryProvidersSequentially(providers, request, index + 1);
+            });
+    }
+    
+    /**
+     * Provider selection logic.
+     */
+    private static class ProviderSelector {
+        LLMProvider selectBest(List<LLMProvider> providers, SelectionCriteria criteria) {
+            // For now, simple random selection
+            // In a real implementation, this would consider:
+            // - Provider capabilities vs criteria
+            // - Current load and performance
+            // - Cost optimization
+            // - Latency requirements
+            
+            return providers.get(ThreadLocalRandom.current().nextInt(providers.size()));
+        }
+    }
+    
+    /**
+     * Circuit breaker management for provider reliability.
+     */
+    private static class CircuitBreakerManager {
+        private final Map<String, CircuitBreakerState> states = new ConcurrentHashMap<>();
+        
+        record CircuitBreakerState(
+            boolean isOpen,
+            int failureCount,
+            Instant lastFailure,
+            Duration timeout
+        ) {}
+        
+        boolean isOpen(String providerId) {
+            var state = states.get(providerId);
+            if (state == null || !state.isOpen()) {
+                return false;
+            }
+            
+            // Check if timeout has passed
+            if (Duration.between(state.lastFailure(), Instant.now()).compareTo(state.timeout()) > 0) {
+                states.put(providerId, new CircuitBreakerState(false, 0, Instant.now(), state.timeout()));
+                return false;
+            }
+            
+            return true;
+        }
+        
+        void recordSuccess(String providerId) {
+            states.put(providerId, new CircuitBreakerState(false, 0, Instant.now(), Duration.ofMinutes(5)));
+        }
+        
+        void recordFailure(String providerId) {
+            var now = Instant.now();
+            var currentState = states.getOrDefault(providerId, 
+                new CircuitBreakerState(false, 0, now, Duration.ofMinutes(5)));
+            
+            int newFailureCount = currentState.failureCount() + 1;
+            boolean shouldOpen = newFailureCount >= 3; // Open after 3 failures
+            
+            states.put(providerId, new CircuitBreakerState(shouldOpen, newFailureCount, now, Duration.ofMinutes(5)));
+        }
+    }
+    
+    /**
+     * Cost tracking and budget enforcement.
+     */
+    private static class CostTracker {
+        private volatile BudgetConfig budgetConfig;
+        private volatile double dailyCost = 0.0;
+        private volatile double monthlyCost = 0.0;
+        private volatile Instant lastReset = Instant.now();
+        
+        CostTracker(BudgetConfig budgetConfig) {
+            this.budgetConfig = budgetConfig;
+        }
+        
+        boolean canAffordRequest(double estimatedCost) {
+            resetIfNeeded();
+            
+            if (!budgetConfig.enableCostCircuitBreaker()) {
+                return true;
+            }
+            
+            double dailyThreshold = budgetConfig.dailyBudgetLimit() * budgetConfig.costCircuitBreakerThreshold();
+            double monthlyThreshold = budgetConfig.montlyBudgetLimit() * budgetConfig.costCircuitBreakerThreshold();
+            
+            return (dailyCost + estimatedCost) <= dailyThreshold &&
+                   (monthlyCost + estimatedCost) <= monthlyThreshold;
+        }
+        
+        void recordCost(double cost) {
+            resetIfNeeded();
+            dailyCost += cost;
+            monthlyCost += cost;
+        }
+        
+        CostSummary getSummary() {
+            resetIfNeeded();
+            return new CostSummary(
+                dailyCost,
+                monthlyCost,
+                budgetConfig.dailyBudgetLimit(),
+                budgetConfig.montlyBudgetLimit(),
+                budgetConfig.enableCostCircuitBreaker()
+            );
+        }
+        
+        void updateBudgetConfig(BudgetConfig newConfig) {
+            this.budgetConfig = newConfig;
+        }
+        
+        private void resetIfNeeded() {
+            var now = Instant.now();
+            var daysSinceReset = Duration.between(lastReset, now).toDays();
+            
+            if (daysSinceReset >= 1) {
+                dailyCost = 0.0;
+                lastReset = now;
+            }
+            
+            if (daysSinceReset >= 30) {
+                monthlyCost = 0.0;
+            }
+        }
+    }
+    
+    /**
+     * Cost summary for monitoring.
+     */
+    public record CostSummary(
+        double dailyCost,
+        double monthlyCost,
+        double dailyBudget,
+        double monthlyBudget,
+        boolean circuitBreakerEnabled
+    ) {
+        public double dailyBudgetUsagePercentage() {
+            return dailyBudget > 0 ? (dailyCost / dailyBudget) * 100 : 0;
+        }
+        
+        public double monthlyBudgetUsagePercentage() {
+            return monthlyBudget > 0 ? (monthlyCost / monthlyBudget) * 100 : 0;
+        }
+    }
+}

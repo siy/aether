@@ -1,0 +1,401 @@
+package org.pragmatica.aether.agent.features;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.pragmatica.message.MessageRouter;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for ConsensusFeatureToggle functionality.
+ */
+@DisplayName("ConsensusFeatureToggle Tests")
+class ConsensusFeatureToggleTest {
+    
+    private MessageRouter mockMessageRouter;
+    private ConsensusFeatureToggle featureToggle;
+    
+    @BeforeEach
+    void setUp() {
+        mockMessageRouter = mock(MessageRouter.class);
+        featureToggle = new ConsensusFeatureToggle(mockMessageRouter);
+    }
+    
+    @Test
+    @DisplayName("Test default feature initialization")
+    void testDefaultFeatureInitialization() {
+        // All known features should have default values
+        for (var feature : FeatureToggle.KnownFeature.values()) {
+            var isEnabled = featureToggle.isEnabled(feature);
+            assertThat(isEnabled).isEqualTo(feature.getDefaultValue());
+        }
+        
+        // Verify some specific defaults
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.AGENT_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.AGENT_SHADOW_MODE)).isFalse();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_LOCAL_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.LLM_CLOUD_ENABLED)).isFalse();
+    }
+    
+    @Test
+    @DisplayName("Test feature toggle update")
+    void testFeatureToggleUpdate() {
+        var featureKey = "test.feature";
+        
+        // Initially should be disabled (unknown feature)
+        assertThat(featureToggle.isEnabled(featureKey)).isFalse();
+        
+        // Enable the feature
+        var enableConfig = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .description("Test feature")
+            .build();
+        
+        featureToggle.updateToggle(enableConfig);
+        
+        // Should now be enabled
+        assertThat(featureToggle.isEnabled(featureKey)).isTrue();
+        
+        // Disable the feature
+        var disableConfig = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(false)
+            .description("Test feature disabled")
+            .build();
+        
+        featureToggle.updateToggle(disableConfig);
+        
+        // Should now be disabled
+        assertThat(featureToggle.isEnabled(featureKey)).isFalse();
+    }
+    
+    @Test
+    @DisplayName("Test percentage rollout")
+    void testPercentageRollout() {
+        var featureKey = "test.rollout.feature";
+        
+        // Configure 50% rollout
+        var rolloutConfig = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .rolloutPercentage(50.0)
+            .description("50% rollout test")
+            .build();
+        
+        featureToggle.updateToggle(rolloutConfig);
+        
+        // Test with multiple contexts
+        int enabledCount = 0;
+        int totalTests = 100;
+        
+        for (int i = 0; i < totalTests; i++) {
+            var context = FeatureToggle.EvaluationContext.forNode("node-" + i);
+            if (featureToggle.isEnabled(featureKey, context)) {
+                enabledCount++;
+            }
+        }
+        
+        // Should be approximately 50% (allow variance for hashing)
+        assertThat(enabledCount).isBetween(35, 65);
+    }
+    
+    @Test
+    @DisplayName("Test user segmentation")
+    void testUserSegmentation() {
+        var featureKey = "test.user.feature";
+        
+        // Configure feature for specific users
+        var userConfig = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .enabledUserIds(Set.of("user1", "user3"))
+            .description("User-specific feature")
+            .build();
+        
+        featureToggle.updateToggle(userConfig);
+        
+        // Test with different user contexts
+        var user1Context = new FeatureToggle.EvaluationContext(
+            java.util.Optional.of("user1"), java.util.Optional.empty(), 
+            java.util.Optional.empty(), Map.of()
+        );
+        var user2Context = new FeatureToggle.EvaluationContext(
+            java.util.Optional.of("user2"), java.util.Optional.empty(), 
+            java.util.Optional.empty(), Map.of()
+        );
+        var user3Context = new FeatureToggle.EvaluationContext(
+            java.util.Optional.of("user3"), java.util.Optional.empty(), 
+            java.util.Optional.empty(), Map.of()
+        );
+        
+        assertThat(featureToggle.isEnabled(featureKey, user1Context)).isTrue();
+        assertThat(featureToggle.isEnabled(featureKey, user2Context)).isFalse();
+        assertThat(featureToggle.isEnabled(featureKey, user3Context)).isTrue();
+    }
+    
+    @Test
+    @DisplayName("Test node segmentation")
+    void testNodeSegmentation() {
+        var featureKey = "test.node.feature";
+        
+        // Configure feature for specific nodes
+        var nodeConfig = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .enabledNodeIds(Set.of("node-1", "node-3"))
+            .description("Node-specific feature")
+            .build();
+        
+        featureToggle.updateToggle(nodeConfig);
+        
+        // Test with different node contexts
+        assertThat(featureToggle.isEnabled(featureKey, FeatureToggle.EvaluationContext.forNode("node-1"))).isTrue();
+        assertThat(featureToggle.isEnabled(featureKey, FeatureToggle.EvaluationContext.forNode("node-2"))).isFalse();
+        assertThat(featureToggle.isEnabled(featureKey, FeatureToggle.EvaluationContext.forNode("node-3"))).isTrue();
+    }
+    
+    @Test
+    @DisplayName("Test cluster segmentation")
+    void testClusterSegmentation() {
+        var featureKey = "test.cluster.feature";
+        
+        // Configure feature for specific clusters
+        var clusterConfig = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .enabledClusterIds(Set.of("prod-cluster", "staging-cluster"))
+            .description("Cluster-specific feature")
+            .build();
+        
+        featureToggle.updateToggle(clusterConfig);
+        
+        // Test with different cluster contexts
+        assertThat(featureToggle.isEnabled(featureKey, FeatureToggle.EvaluationContext.forCluster("prod-cluster"))).isTrue();
+        assertThat(featureToggle.isEnabled(featureKey, FeatureToggle.EvaluationContext.forCluster("dev-cluster"))).isFalse();
+        assertThat(featureToggle.isEnabled(featureKey, FeatureToggle.EvaluationContext.forCluster("staging-cluster"))).isTrue();
+    }
+    
+    @Test
+    @DisplayName("Test attribute filters")
+    void testAttributeFilters() {
+        var featureKey = "test.attribute.feature";
+        
+        // Configure feature with attribute filters
+        var attributeConfig = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .attributeFilters(Map.of("environment", "production", "region", "us-east"))
+            .description("Attribute-filtered feature")
+            .build();
+        
+        featureToggle.updateToggle(attributeConfig);
+        
+        // Test with matching attributes
+        var matchingContext = FeatureToggle.EvaluationContext.empty()
+            .withAttribute("environment", "production")
+            .withAttribute("region", "us-east");
+        
+        assertThat(featureToggle.isEnabled(featureKey, matchingContext)).isTrue();
+        
+        // Test with non-matching attributes
+        var nonMatchingContext = FeatureToggle.EvaluationContext.empty()
+            .withAttribute("environment", "development")
+            .withAttribute("region", "us-east");
+        
+        assertThat(featureToggle.isEnabled(featureKey, nonMatchingContext)).isFalse();
+        
+        // Test with partial match
+        var partialContext = FeatureToggle.EvaluationContext.empty()
+            .withAttribute("environment", "production");
+        
+        assertThat(featureToggle.isEnabled(featureKey, partialContext)).isFalse();
+    }
+    
+    @Test
+    @DisplayName("Test emergency mode")
+    void testEmergencyMode() {
+        var featureKey = "test.emergency.feature";
+        
+        // Enable a feature
+        var config = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .description("Test feature")
+            .build();
+        
+        featureToggle.updateToggle(config);
+        
+        // Initially feature should be enabled
+        assertThat(featureToggle.isEnabled(featureKey)).isTrue();
+        assertThat(featureToggle.isEmergencyMode()).isFalse();
+        
+        // Activate emergency mode
+        featureToggle.emergencyDisableAll();
+        
+        // All features should be disabled
+        assertThat(featureToggle.isEnabled(featureKey)).isFalse();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.AGENT_ENABLED)).isFalse();
+        assertThat(featureToggle.isEmergencyMode()).isTrue();
+        
+        // Restore from emergency
+        featureToggle.restoreFromEmergency();
+        
+        // Features should be restored
+        assertThat(featureToggle.isEnabled(featureKey)).isTrue();
+        assertThat(featureToggle.isEnabled(FeatureToggle.KnownFeature.AGENT_ENABLED)).isTrue();
+        assertThat(featureToggle.isEmergencyMode()).isFalse();
+    }
+    
+    @Test
+    @DisplayName("Test toggle listeners")
+    void testToggleListeners() {
+        var featureKey = "test.listener.feature";
+        var listenerCalled = new AtomicReference<String>();
+        
+        // Add listener
+        FeatureToggle.ToggleListener listener = (key, oldConfig, newConfig) -> {
+            listenerCalled.set(key + ":" + (newConfig != null ? newConfig.enabled() : "null"));
+        };
+        
+        featureToggle.addToggleListener(featureKey, listener);
+        
+        // Update toggle
+        var config = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .description("Test feature")
+            .build();
+        
+        featureToggle.updateToggle(config);
+        
+        // Listener should have been called
+        assertThat(listenerCalled.get()).isEqualTo(featureKey + ":true");
+        
+        // Remove toggle
+        listenerCalled.set(null);
+        featureToggle.removeToggle(featureKey);
+        
+        // Listener should have been called with null config
+        assertThat(listenerCalled.get()).isEqualTo(featureKey + ":null");
+        
+        // Remove listener
+        featureToggle.removeToggleListener(featureKey, listener);
+        
+        // Update should not trigger listener anymore
+        listenerCalled.set(null);
+        featureToggle.updateToggle(config);
+        assertThat(listenerCalled.get()).isNull();
+    }
+    
+    @Test
+    @DisplayName("Test wildcard listeners")
+    void testWildcardListeners() {
+        var listenerCalled = new AtomicReference<String>();
+        
+        // Add wildcard listener
+        FeatureToggle.ToggleListener listener = (key, oldConfig, newConfig) -> {
+            listenerCalled.set(key);
+        };
+        
+        featureToggle.addToggleListener("*", listener);
+        
+        // Update any toggle
+        var config = FeatureToggle.ToggleConfig.builder("any.feature")
+            .enabled(true)
+            .build();
+        
+        featureToggle.updateToggle(config);
+        
+        // Wildcard listener should have been called
+        assertThat(listenerCalled.get()).isEqualTo("any.feature");
+    }
+    
+    @Test
+    @DisplayName("Test get toggle configuration")
+    void testGetToggleConfiguration() {
+        var featureKey = "test.config.feature";
+        
+        // Initially no configuration
+        assertThat(featureToggle.getToggleConfig(featureKey)).isEmpty();
+        
+        // Add configuration
+        var config = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .rolloutPercentage(25.0)
+            .description("Test configuration")
+            .build();
+        
+        featureToggle.updateToggle(config);
+        
+        // Should now have configuration
+        var retrievedConfig = featureToggle.getToggleConfig(featureKey);
+        assertThat(retrievedConfig).isPresent();
+        assertThat(retrievedConfig.get().featureKey()).isEqualTo(featureKey);
+        assertThat(retrievedConfig.get().enabled()).isTrue();
+        assertThat(retrievedConfig.get().rolloutPercentage()).contains(25.0);
+        assertThat(retrievedConfig.get().description()).contains("Test configuration");
+    }
+    
+    @Test
+    @DisplayName("Test get all toggles")
+    void testGetAllToggles() {
+        // Should include default known features
+        var allToggles = featureToggle.getAllToggles();
+        assertThat(allToggles).isNotEmpty();
+        assertThat(allToggles).containsKey("agent.enabled");
+        assertThat(allToggles).containsKey("llm.local.enabled");
+        
+        // Add custom toggle
+        var customConfig = FeatureToggle.ToggleConfig.builder("custom.feature")
+            .enabled(true)
+            .build();
+        
+        featureToggle.updateToggle(customConfig);
+        
+        var updatedToggles = featureToggle.getAllToggles();
+        assertThat(updatedToggles).containsKey("custom.feature");
+        assertThat(updatedToggles.size()).isEqualTo(allToggles.size() + 1);
+    }
+    
+    @Test
+    @DisplayName("Test remove toggle")
+    void testRemoveToggle() {
+        var featureKey = "test.remove.feature";
+        
+        // Add toggle
+        var config = FeatureToggle.ToggleConfig.builder(featureKey)
+            .enabled(true)
+            .build();
+        
+        featureToggle.updateToggle(config);
+        assertThat(featureToggle.isEnabled(featureKey)).isTrue();
+        
+        // Remove toggle
+        featureToggle.removeToggle(featureKey);
+        
+        // Should revert to default (disabled for unknown features)
+        assertThat(featureToggle.isEnabled(featureKey)).isFalse();
+        assertThat(featureToggle.getToggleConfig(featureKey)).isEmpty();
+    }
+    
+    @Test
+    @DisplayName("Test summary generation")
+    void testSummaryGeneration() {
+        var summary = featureToggle.getSummary();
+        
+        assertThat(summary.totalFeatures()).isGreaterThan(0);
+        assertThat(summary.enabledFeatures()).isGreaterThanOrEqualTo(0);
+        assertThat(summary.rolloutFeatures()).isGreaterThanOrEqualTo(0);
+        assertThat(summary.emergencyMode()).isFalse();
+        assertThat(summary.listenerCount()).isGreaterThanOrEqualTo(0);
+        
+        // Add rollout feature
+        featureToggle.updateToggle(
+            FeatureToggle.ToggleConfig.builder("rollout.test")
+                .enabled(true)
+                .rolloutPercentage(50.0)
+                .build()
+        );
+        
+        var updatedSummary = featureToggle.getSummary();
+        assertThat(updatedSummary.rolloutFeatures()).isGreaterThan(summary.rolloutFeatures());
+    }
+}

@@ -1,0 +1,520 @@
+package org.pragmatica.aether.agent.llm;
+
+import org.pragmatica.lang.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
+
+/**
+ * Mock implementation of LLMProvider for testing and development.
+ * 
+ * This provider enables development without cloud dependencies by providing
+ * deterministic, configurable responses based on scenario matching. It simulates
+ * realistic behavior including latency, cost calculation, and failure injection
+ * to thoroughly test the agent system under various conditions.
+ * 
+ * Key features:
+ * - Deterministic responses based on input patterns 
+ * - Configurable latency simulation
+ * - Cost tracking and budget simulation
+ * - Failure injection for testing resilience
+ * - Scenario database for comprehensive test coverage
+ */
+public class MockLLMProvider implements LLMProvider {
+    private static final Logger logger = LoggerFactory.getLogger(MockLLMProvider.class);
+    
+    private final String providerId;
+    private final MockConfiguration configuration;
+    private final ScenarioDatabase scenarioDatabase;
+    private final LatencySimulator latencySimulator;
+    private final CostCalculator costCalculator;
+    private final FailureInjector failureInjector;
+    private final AtomicLong requestCounter;
+    private volatile ProviderStatus currentStatus;
+    private volatile Instant lastHealthCheck;
+    
+    public MockLLMProvider(String providerId, MockConfiguration configuration) {
+        this.providerId = providerId;
+        this.configuration = configuration;
+        this.scenarioDatabase = new ScenarioDatabase(configuration.scenarios());
+        this.latencySimulator = new LatencySimulator(configuration.latencyConfig());
+        this.costCalculator = new CostCalculator(configuration.costConfig());
+        this.failureInjector = new FailureInjector(configuration.failureConfig());
+        this.requestCounter = new AtomicLong(0);
+        this.currentStatus = ProviderStatus.HEALTHY;
+        this.lastHealthCheck = Instant.now();
+        
+        logger.info("MockLLMProvider '{}' initialized with {} scenarios", 
+                   providerId, configuration.scenarios().size());
+    }
+    
+    /**
+     * Configuration for the MockLLMProvider.
+     */
+    public record MockConfiguration(
+        String modelName,
+        int maxTokens,
+        Duration baseLatency,
+        double baseCostPerToken,
+        List<TestScenario> scenarios,
+        LatencyConfig latencyConfig,
+        CostConfig costConfig,
+        FailureConfig failureConfig
+    ) {
+        public static MockConfiguration defaultConfig() {
+            return builder().build();
+        }
+        
+        public static Builder builder() {
+            return new Builder();
+        }
+        
+        public static class Builder {
+            private String modelName = "mock-llm-v1";
+            private int maxTokens = 4096;
+            private Duration baseLatency = Duration.ofMillis(200);
+            private double baseCostPerToken = 0.0001;
+            private List<TestScenario> scenarios = createDefaultScenarios();
+            private LatencyConfig latencyConfig = LatencyConfig.defaultConfig();
+            private CostConfig costConfig = CostConfig.defaultConfig();
+            private FailureConfig failureConfig = FailureConfig.defaultConfig();
+            
+            public Builder modelName(String modelName) {
+                this.modelName = modelName;
+                return this;
+            }
+            
+            public Builder maxTokens(int maxTokens) {
+                this.maxTokens = maxTokens;
+                return this;
+            }
+            
+            public Builder baseLatency(Duration baseLatency) {
+                this.baseLatency = baseLatency;
+                return this;
+            }
+            
+            public Builder baseCostPerToken(double baseCostPerToken) {
+                this.baseCostPerToken = baseCostPerToken;
+                return this;
+            }
+            
+            public Builder scenarios(List<TestScenario> scenarios) {
+                this.scenarios = scenarios;
+                return this;
+            }
+            
+            public Builder latencyConfig(LatencyConfig latencyConfig) {
+                this.latencyConfig = latencyConfig;
+                return this;
+            }
+            
+            public Builder costConfig(CostConfig costConfig) {
+                this.costConfig = costConfig;
+                return this;
+            }
+            
+            public Builder failureConfig(FailureConfig failureConfig) {
+                this.failureConfig = failureConfig;
+                return this;
+            }
+            
+            public MockConfiguration build() {
+                return new MockConfiguration(
+                    modelName, maxTokens, baseLatency, baseCostPerToken,
+                    scenarios, latencyConfig, costConfig, failureConfig
+                );
+            }
+            
+            private static List<TestScenario> createDefaultScenarios() {
+                return List.of(
+                    // Performance analysis scenarios
+                    TestScenario.builder()
+                        .name("high_cpu_analysis")
+                        .pattern(".*high CPU.*|.*CPU usage.*|.*processor.*")
+                        .response("The high CPU usage appears to be caused by inefficient algorithms in the payment processing slice. I recommend implementing connection pooling and optimizing the transaction validation logic. Expected improvement: 60-80% CPU reduction.")
+                        .tokensUsed(150)
+                        .build(),
+                    
+                    // Memory analysis scenarios        
+                    TestScenario.builder()
+                        .name("memory_leak_analysis")
+                        .pattern(".*memory leak.*|.*memory usage.*|.*heap.*")
+                        .response("Analysis indicates a potential memory leak in the user session management component. The issue appears to be unclosed database connections. Recommendation: Implement proper connection lifecycle management and increase monitoring of connection pools.")
+                        .tokensUsed(180)
+                        .build(),
+                    
+                    // Scaling recommendations
+                    TestScenario.builder()
+                        .name("scaling_recommendation")
+                        .pattern(".*scale.*|.*scaling.*|.*replicas.*")
+                        .response("Based on current load patterns, I recommend scaling the payment slice from 3 to 5 replicas during peak hours (9 AM - 6 PM). This will improve response times by approximately 40% and provide better fault tolerance.")
+                        .tokensUsed(120)
+                        .build(),
+                    
+                    // Error analysis scenarios
+                    TestScenario.builder()
+                        .name("error_pattern_analysis")
+                        .pattern(".*error.*|.*exception.*|.*failure.*")
+                        .response("The error pattern indicates cascading failures triggered by database connection timeouts. Root cause: Insufficient connection pool size during traffic spikes. Immediate action: Increase connection pool to 50 connections. Long-term: Implement circuit breaker pattern.")
+                        .tokensUsed(200)
+                        .build(),
+                    
+                    // General system health
+                    TestScenario.builder()
+                        .name("system_health_summary")
+                        .pattern(".*health.*|.*status.*|.*overview.*")
+                        .response("System health summary: 94% of slices operating normally. Minor issues detected in logging slice (disk space) and notification slice (message queue backlog). Priority actions: Clear log files and scale message processors.")
+                        .tokensUsed(140)
+                        .build(),
+                    
+                    // Default fallback
+                    TestScenario.builder()
+                        .name("default_response")
+                        .pattern(".*")
+                        .response("I've analyzed the available system metrics and telemetry data. To provide more specific recommendations, could you clarify what aspect of the system you'd like me to focus on? I can help with performance optimization, scaling decisions, error analysis, or general health assessment.")
+                        .tokensUsed(80)
+                        .build()
+                );
+            }
+        }
+    }
+    
+    /**
+     * Test scenario for deterministic responses.
+     */
+    public record TestScenario(
+        String name,
+        Pattern pattern,
+        String response,
+        int tokensUsed,
+        Duration customLatency,
+        Map<String, Object> metadata
+    ) {
+        public static Builder builder() {
+            return new Builder();
+        }
+        
+        public static class Builder {
+            private String name;
+            private Pattern pattern;
+            private String response;
+            private int tokensUsed = 100;
+            private Duration customLatency = null;
+            private Map<String, Object> metadata = Map.of();
+            
+            public Builder name(String name) {
+                this.name = name;
+                return this;
+            }
+            
+            public Builder pattern(String regex) {
+                this.pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+                return this;
+            }
+            
+            public Builder response(String response) {
+                this.response = response;
+                return this;
+            }
+            
+            public Builder tokensUsed(int tokensUsed) {
+                this.tokensUsed = tokensUsed;
+                return this;
+            }
+            
+            public Builder customLatency(Duration customLatency) {
+                this.customLatency = customLatency;
+                return this;
+            }
+            
+            public Builder metadata(Map<String, Object> metadata) {
+                this.metadata = metadata;
+                return this;
+            }
+            
+            public TestScenario build() {
+                return new TestScenario(name, pattern, response, tokensUsed, customLatency, metadata);
+            }
+        }
+    }
+    
+    /**
+     * Latency simulation configuration.
+     */
+    public record LatencyConfig(
+        Duration baseLatency,
+        Duration varianceRange,
+        double slowRequestPercentage,
+        Duration slowRequestLatency
+    ) {
+        public static LatencyConfig defaultConfig() {
+            return new LatencyConfig(
+                Duration.ofMillis(200),
+                Duration.ofMillis(100),
+                0.05, // 5% slow requests
+                Duration.ofSeconds(2)
+            );
+        }
+    }
+    
+    /**
+     * Cost calculation configuration.
+     */
+    public record CostConfig(
+        double baseCostPerToken,
+        double varianceFactor,
+        boolean enableBudgetTracking,
+        double dailyBudgetLimit
+    ) {
+        public static CostConfig defaultConfig() {
+            return new CostConfig(0.0001, 0.1, false, 100.0);
+        }
+    }
+    
+    /**
+     * Failure injection configuration.
+     */
+    public record FailureConfig(
+        double failureRate,
+        List<FailureType> enabledFailures,
+        Duration circuitBreakerTimeout
+    ) {
+        public enum FailureType {
+            TIMEOUT,
+            RATE_LIMIT,
+            SERVICE_UNAVAILABLE,
+            INVALID_RESPONSE,
+            NETWORK_ERROR
+        }
+        
+        public static FailureConfig defaultConfig() {
+            return new FailureConfig(0.0, List.of(), Duration.ofMinutes(5));
+        }
+        
+        public static FailureConfig testingConfig() {
+            return new FailureConfig(
+                0.02, // 2% failure rate
+                List.of(FailureType.TIMEOUT, FailureType.RATE_LIMIT),
+                Duration.ofMinutes(1)
+            );
+        }
+    }
+    
+    @Override
+    public CompletableFuture<Result<CompletionResponse>> complete(CompletionRequest request) {
+        long requestId = requestCounter.incrementAndGet();
+        
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // Check for injected failures first
+                var failureResult = failureInjector.checkFailure(requestId);
+                if (failureResult.isPresent()) {
+                    return Result.failure(failureResult.get());
+                }
+                
+                // Simulate latency
+                Duration latency = latencySimulator.calculateLatency(request);
+                if (!latency.isZero()) {
+                    Thread.sleep(latency.toMillis());
+                }
+                
+                // Find matching scenario
+                var scenario = scenarioDatabase.findMatchingScenario(request);
+                
+                // Calculate cost
+                double cost = costCalculator.calculateCost(scenario.tokensUsed());
+                
+                var response = new CompletionResponse(
+                    scenario.response(),
+                    scenario.tokensUsed(),
+                    latency,
+                    cost,
+                    configuration.modelName(),
+                    Map.of(
+                        "scenario", scenario.name(),
+                        "requestId", requestId,
+                        "providerId", providerId
+                    )
+                );
+                
+                logger.debug("MockLLMProvider completed request {} using scenario '{}' in {}ms", 
+                           requestId, scenario.name(), latency.toMillis());
+                
+                return Result.success(response);
+                
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return Result.failure(new RuntimeException("Request interrupted", e));
+            } catch (Exception e) {
+                logger.warn("MockLLMProvider request {} failed: {}", requestId, e.getMessage());
+                return Result.failure(e);
+            }
+        });
+    }
+    
+    @Override
+    public ProviderCapabilities getCapabilities() {
+        return new ProviderCapabilities(
+            configuration.modelName(),
+            "1.0.0",
+            configuration.maxTokens(),
+            List.of("chat", "completion", "deterministic", "mock"),
+            configuration.baseCostPerToken(),
+            configuration.baseLatency(),
+            false, // No streaming support in mock
+            false  // No tool calls in mock
+        );
+    }
+    
+    @Override
+    public CompletableFuture<ProviderHealth> healthCheck() {
+        return CompletableFuture.supplyAsync(() -> {
+            lastHealthCheck = Instant.now();
+            
+            // Simulate occasional health issues for testing
+            if (ThreadLocalRandom.current().nextDouble() < 0.01) { // 1% chance
+                currentStatus = ProviderStatus.DEGRADED;
+                return new ProviderHealth(
+                    currentStatus,
+                    "Simulated degraded performance",
+                    Duration.ofMillis(System.currentTimeMillis() - lastHealthCheck.toEpochMilli()),
+                    Map.of(
+                        "requestCount", requestCounter.get(),
+                        "scenarioCount", scenarioDatabase.getScenarioCount()
+                    )
+                );
+            }
+            
+            currentStatus = ProviderStatus.HEALTHY;
+            return new ProviderHealth(
+                currentStatus,
+                "Mock provider operating normally",
+                Duration.ofMillis(System.currentTimeMillis() - lastHealthCheck.toEpochMilli()),
+                Map.of(
+                    "requestCount", requestCounter.get(),
+                    "scenarioCount", scenarioDatabase.getScenarioCount(),
+                    "averageLatency", configuration.baseLatency().toMillis() + "ms"
+                )
+            );
+        });
+    }
+    
+    @Override
+    public String getProviderId() {
+        return providerId;
+    }
+    
+    /**
+     * Internal scenario database for pattern matching.
+     */
+    private static class ScenarioDatabase {
+        private final List<TestScenario> scenarios;
+        
+        ScenarioDatabase(List<TestScenario> scenarios) {
+            this.scenarios = new ArrayList<>(scenarios);
+        }
+        
+        TestScenario findMatchingScenario(CompletionRequest request) {
+            String combinedInput = request.messages().stream()
+                .map(ChatMessage::content)
+                .reduce("", (a, b) -> a + " " + b);
+            
+            return scenarios.stream()
+                .filter(scenario -> scenario.pattern().matcher(combinedInput).find())
+                .findFirst()
+                .orElse(scenarios.get(scenarios.size() - 1)); // Use last as default
+        }
+        
+        int getScenarioCount() {
+            return scenarios.size();
+        }
+    }
+    
+    /**
+     * Latency simulation component.
+     */
+    private static class LatencySimulator {
+        private final LatencyConfig config;
+        
+        LatencySimulator(LatencyConfig config) {
+            this.config = config;
+        }
+        
+        Duration calculateLatency(CompletionRequest request) {
+            // Check if this should be a slow request
+            if (ThreadLocalRandom.current().nextDouble() < config.slowRequestPercentage()) {
+                return config.slowRequestLatency();
+            }
+            
+            // Add random variance to base latency
+            long baseMillis = config.baseLatency().toMillis();
+            long variance = config.varianceRange().toMillis();
+            long randomVariance = ThreadLocalRandom.current().nextLong(-variance, variance + 1);
+            
+            return Duration.ofMillis(Math.max(0, baseMillis + randomVariance));
+        }
+    }
+    
+    /**
+     * Cost calculation component.
+     */
+    private static class CostCalculator {
+        private final CostConfig config;
+        
+        CostCalculator(CostConfig config) {
+            this.config = config;
+        }
+        
+        double calculateCost(int tokensUsed) {
+            double baseCost = tokensUsed * config.baseCostPerToken();
+            
+            // Add small random variance
+            double variance = baseCost * config.varianceFactor() * 
+                            (ThreadLocalRandom.current().nextDouble() - 0.5) * 2;
+            
+            return Math.max(0, baseCost + variance);
+        }
+    }
+    
+    /**
+     * Failure injection component for testing resilience.
+     */
+    private static class FailureInjector {
+        private final FailureConfig config;
+        
+        FailureInjector(FailureConfig config) {
+            this.config = config;
+        }
+        
+        Optional<Exception> checkFailure(long requestId) {
+            if (config.enabledFailures().isEmpty() || 
+                ThreadLocalRandom.current().nextDouble() >= config.failureRate()) {
+                return Optional.empty();
+            }
+            
+            var failureType = config.enabledFailures().get(
+                ThreadLocalRandom.current().nextInt(config.enabledFailures().size())
+            );
+            
+            return Optional.of(createFailureException(failureType, requestId));
+        }
+        
+        private Exception createFailureException(FailureConfig.FailureType type, long requestId) {
+            return switch (type) {
+                case TIMEOUT -> new RuntimeException("Request timeout for request " + requestId);
+                case RATE_LIMIT -> new RuntimeException("Rate limit exceeded for request " + requestId);
+                case SERVICE_UNAVAILABLE -> new RuntimeException("Service temporarily unavailable for request " + requestId);
+                case INVALID_RESPONSE -> new RuntimeException("Invalid response format for request " + requestId);
+                case NETWORK_ERROR -> new RuntimeException("Network error for request " + requestId);
+            };
+        }
+    }
+}

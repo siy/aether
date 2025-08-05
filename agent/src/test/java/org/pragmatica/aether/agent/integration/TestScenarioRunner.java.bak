@@ -1,0 +1,516 @@
+package org.pragmatica.aether.agent.integration;
+
+import org.pragmatica.aether.agent.features.FeatureToggle;
+import org.pragmatica.aether.agent.llm.HybridLLMManager;
+import org.pragmatica.aether.agent.llm.LLMProvider;
+import org.pragmatica.result.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * Test scenario runner for comprehensive testing of Track B components.
+ * 
+ * This runner executes various test scenarios to validate:
+ * - MockLLMProvider deterministic responses
+ * - Feature toggle behavior and runtime changes
+ * - HybridLLMManager provider selection and fallback
+ * - Integration between all components
+ * - Performance characteristics and cost tracking
+ */
+public class TestScenarioRunner {
+    private static final Logger logger = LoggerFactory.getLogger(TestScenarioRunner.class);
+    
+    private final HybridLLMManager llmManager;
+    private final FeatureToggle featureToggle;
+    private final Map<String, TestResult> results;
+    private final AtomicInteger testCounter;
+    
+    public TestScenarioRunner(HybridLLMManager llmManager, FeatureToggle featureToggle) {
+        this.llmManager = llmManager;
+        this.featureToggle = featureToggle;
+        this.results = new ConcurrentHashMap<>();
+        this.testCounter = new AtomicInteger(0);
+    }
+    
+    /**
+     * Test scenario definition.
+     */
+    public record TestScenario(
+        String name,
+        String description,
+        List<LLMProvider.ChatMessage> messages,
+        HybridLLMManager.SelectionCriteria criteria,
+        Map<String, Object> expectedMetadata,
+        Duration expectedMaxLatency,
+        double expectedMaxCost,
+        boolean shouldSucceed
+    ) {
+        public static Builder builder(String name) {
+            return new Builder(name);
+        }
+        
+        public static class Builder {
+            private final String name;
+            private String description = "";
+            private List<LLMProvider.ChatMessage> messages = List.of();
+            private HybridLLMManager.SelectionCriteria criteria = HybridLLMManager.SelectionCriteria.simple();
+            private Map<String, Object> expectedMetadata = Map.of();
+            private Duration expectedMaxLatency = Duration.ofSeconds(5);
+            private double expectedMaxCost = 1.0;
+            private boolean shouldSucceed = true;
+            
+            Builder(String name) {
+                this.name = name;
+            }
+            
+            public Builder description(String description) {
+                this.description = description;
+                return this;
+            }
+            
+            public Builder messages(List<LLMProvider.ChatMessage> messages) {
+                this.messages = messages;
+                return this;
+            }
+            
+            public Builder addMessage(String role, String content) {
+                this.messages = new ArrayList<>(this.messages);
+                this.messages.add(new LLMProvider.ChatMessage(role, content));
+                return this;
+            }
+            
+            public Builder userMessage(String content) {
+                return addMessage("user", content);
+            }
+            
+            public Builder systemMessage(String content) {
+                return addMessage("system", content);
+            }
+            
+            public Builder criteria(HybridLLMManager.SelectionCriteria criteria) {
+                this.criteria = criteria;
+                return this;
+            }
+            
+            public Builder expectedMetadata(Map<String, Object> metadata) {
+                this.expectedMetadata = metadata;
+                return this;
+            }
+            
+            public Builder expectedMaxLatency(Duration latency) {
+                this.expectedMaxLatency = latency;
+                return this;
+            }
+            
+            public Builder expectedMaxCost(double cost) {
+                this.expectedMaxCost = cost;
+                return this;
+            }
+            
+            public Builder shouldFail() {
+                this.shouldSucceed = false;
+                return this;
+            }
+            
+            public TestScenario build() {
+                return new TestScenario(
+                    name, description, messages, criteria,
+                    expectedMetadata, expectedMaxLatency, expectedMaxCost, shouldSucceed
+                );
+            }
+        }
+    }
+    
+    /**
+     * Result of running a test scenario.
+     */
+    public record TestResult(
+        String scenarioName,
+        boolean passed,
+        Duration actualLatency,
+        double actualCost,
+        String responseContent,
+        String errorMessage,
+        Map<String, Object> metadata,
+        Instant timestamp
+    ) {
+        public boolean isSuccess() {
+            return passed && errorMessage == null;
+        }
+        
+        public boolean isFailure() {
+            return !passed || errorMessage != null;
+        }
+    }
+    
+    /**
+     * Summary of all test results.
+     */
+    public record TestSummary(
+        int totalTests,
+        int passedTests,
+        int failedTests,
+        Duration totalExecutionTime,
+        double totalCost,
+        List<TestResult> failures,
+        Map<String, Object> statistics
+    ) {
+        public double successRate() {
+            return totalTests > 0 ? (double) passedTests / totalTests * 100 : 0;
+        }
+        
+        public boolean allPassed() {
+            return passedTests == totalTests;
+        }
+    }
+    
+    /**
+     * Runs a comprehensive test suite covering all major functionality.
+     */
+    public CompletableFuture<TestSummary> runComprehensiveTests() {
+        var scenarios = createComprehensiveTestScenarios();
+        
+        logger.info("Starting comprehensive test suite with {} scenarios", scenarios.size());
+        
+        return runScenarios(scenarios)
+            .thenApply(this::generateSummary);
+    }
+    
+    /**
+     * Runs a specific set of test scenarios.
+     */
+    public CompletableFuture<List<TestResult>> runScenarios(List<TestScenario> scenarios) {
+        var startTime = Instant.now();
+        
+        var futures = scenarios.stream()
+            .map(this::runScenario)
+            .toArray(CompletableFuture[]::new);
+        
+        return CompletableFuture.allOf(futures)
+            .thenApply(v -> {
+                var scenarioResults = Arrays.stream(futures)
+                    .map(CompletableFuture::join)
+                    .toList();
+                
+                var duration = Duration.between(startTime, Instant.now());
+                logger.info("Completed {} scenarios in {}ms", 
+                           scenarios.size(), duration.toMillis());
+                
+                return scenarioResults;
+            });
+    }
+    
+    /**
+     * Runs a single test scenario.
+     */
+    public CompletableFuture<TestResult> runScenario(TestScenario scenario) {
+        var testId = testCounter.incrementAndGet();
+        var startTime = Instant.now();
+        
+        logger.debug("Running test scenario '{}' (ID: {})", scenario.name(), testId);
+        
+        // Create LLM request
+        var request = LLMProvider.CompletionRequest.builder()
+            .messages(scenario.messages())
+            .maxTokens(500)
+            .temperature(0.1) // Low temperature for deterministic testing
+            .build();
+        
+        return llmManager.complete(request, scenario.criteria())
+            .handle((result, throwable) -> {
+                var endTime = Instant.now();
+                var actualLatency = Duration.between(startTime, endTime);
+                
+                if (throwable != null) {
+                    return handleTestException(scenario, testId, actualLatency, throwable, endTime);
+                }
+                
+                if (result.isFailure() && scenario.shouldSucceed()) {
+                    return createFailureResult(scenario, testId, actualLatency, 
+                                             "Expected success but got failure: " + result.error().getMessage(), 
+                                             endTime);
+                }
+                
+                if (result.isSuccess() && !scenario.shouldSucceed()) {
+                    return createFailureResult(scenario, testId, actualLatency,
+                                             "Expected failure but got success", endTime);
+                }
+                
+                if (result.isSuccess()) {
+                    return validateSuccessfulResult(scenario, testId, result.value(), actualLatency, endTime);
+                } else {
+                    return createSuccessResult(scenario, testId, actualLatency, 
+                                             "Expected failure occurred: " + result.error().getMessage(),
+                                             endTime);
+                }
+            })
+            .thenApply(testResult -> {
+                results.put(scenario.name(), testResult);
+                
+                if (testResult.passed()) {
+                    logger.debug("Test '{}' (ID: {}) PASSED in {}ms", 
+                               scenario.name(), testId, testResult.actualLatency().toMillis());
+                } else {
+                    logger.warn("Test '{}' (ID: {}) FAILED: {}", 
+                              scenario.name(), testId, testResult.errorMessage());
+                }
+                
+                return testResult;
+            });
+    }
+    
+    /**
+     * Runs feature toggle tests specifically.
+     */
+    public CompletableFuture<List<TestResult>> runFeatureToggleTests() {
+        var scenarios = createFeatureToggleTestScenarios();
+        
+        logger.info("Running feature toggle tests with {} scenarios", scenarios.size());
+        
+        return runScenarios(scenarios);
+    }
+    
+    /**
+     * Runs performance and resilience tests.
+     */
+    public CompletableFuture<List<TestResult>> runPerformanceTests() {
+        var scenarios = createPerformanceTestScenarios();
+        
+        logger.info("Running performance tests with {} scenarios", scenarios.size());
+        
+        return runScenarios(scenarios);
+    }
+    
+    /**
+     * Gets all test results.
+     */
+    public Map<String, TestResult> getAllResults() {
+        return Map.copyOf(results);
+    }
+    
+    /**
+     * Clears all test results.
+     */
+    public void clearResults() {
+        results.clear();
+        testCounter.set(0);
+    }
+    
+    private List<TestScenario> createComprehensiveTestScenarios() {
+        return List.of(
+            // Basic functionality tests
+            TestScenario.builder("basic_llm_request")
+                .description("Test basic LLM request processing")
+                .userMessage("What is the current system performance?")
+                .criteria(HybridLLMManager.SelectionCriteria.simple())
+                .expectedMaxLatency(Duration.ofSeconds(2))
+                .expectedMaxCost(0.10)
+                .build(),
+            
+            // Scenario matching tests
+            TestScenario.builder("performance_analysis_scenario")
+                .description("Test performance analysis scenario matching")
+                .systemMessage("You are analyzing system performance metrics.")
+                .userMessage("The CPU usage is consistently high across multiple nodes.")
+                .criteria(HybridLLMManager.SelectionCriteria.moderate())
+                .expectedMaxLatency(Duration.ofSeconds(3))
+                .build(),
+                
+            TestScenario.builder("error_analysis_scenario")
+                .description("Test error analysis scenario matching")
+                .userMessage("We're seeing cascading failures in the payment service with multiple exceptions.")
+                .criteria(HybridLLMManager.SelectionCriteria.complex())
+                .expectedMaxLatency(Duration.ofSeconds(5))
+                .build(),
+            
+            // Cost tracking tests
+            TestScenario.builder("cost_tracking_validation")
+                .description("Validate cost tracking functionality")
+                .userMessage("Analyze the cost optimization opportunities in our current setup.")
+                .criteria(HybridLLMManager.SelectionCriteria.moderate())
+                .expectedMaxCost(0.50)
+                .build(),
+            
+            // Feature toggle interaction tests
+            TestScenario.builder("feature_toggle_llm_disabled")
+                .description("Test behavior when LLM features are disabled")
+                .userMessage("This should fail when LLM is disabled")
+                .criteria(HybridLLMManager.SelectionCriteria.simple())
+                .shouldFail()
+                .build()
+        );
+    }
+    
+    private List<TestScenario> createFeatureToggleTestScenarios() {
+        return List.of(
+            TestScenario.builder("toggle_llm_local_enabled")
+                .description("Test with local LLM enabled")
+                .userMessage("Test local LLM functionality")
+                .criteria(new HybridLLMManager.SelectionCriteria(
+                    HybridLLMManager.RequestComplexity.SIMPLE,
+                    false, // Local only
+                    0.10,
+                    Duration.ofSeconds(5),
+                    Map.of()
+                ))
+                .build(),
+                
+            TestScenario.builder("toggle_llm_cloud_enabled")
+                .description("Test with cloud LLM enabled")
+                .userMessage("Test cloud LLM functionality")
+                .criteria(new HybridLLMManager.SelectionCriteria(
+                    HybridLLMManager.RequestComplexity.COMPLEX,
+                    true, // Allow cloud
+                    1.00,
+                    Duration.ofSeconds(10),
+                    Map.of()
+                ))
+                .build()
+        );
+    }
+    
+    private List<TestScenario> createPerformanceTestScenarios() {
+        return List.of(
+            TestScenario.builder("latency_performance")
+                .description("Test response time performance")
+                .userMessage("Quick performance check")
+                .criteria(HybridLLMManager.SelectionCriteria.simple())
+                .expectedMaxLatency(Duration.ofMillis(500))
+                .build(),
+                
+            TestScenario.builder("concurrent_requests")
+                .description("Test concurrent request handling")
+                .userMessage("Concurrent test request")
+                .criteria(HybridLLMManager.SelectionCriteria.moderate())
+                .expectedMaxLatency(Duration.ofSeconds(3))
+                .build()
+        );
+    }
+    
+    private TestResult handleTestException(TestScenario scenario, int testId, 
+                                         Duration actualLatency, Throwable throwable, 
+                                         Instant timestamp) {
+        if (scenario.shouldSucceed()) {
+            return createFailureResult(scenario, testId, actualLatency,
+                                     "Unexpected exception: " + throwable.getMessage(), timestamp);
+        } else {
+            return createSuccessResult(scenario, testId, actualLatency,
+                                     "Expected exception occurred: " + throwable.getMessage(), timestamp);
+        }
+    }
+    
+    private TestResult validateSuccessfulResult(TestScenario scenario, int testId,
+                                               LLMProvider.CompletionResponse response,
+                                               Duration actualLatency, Instant timestamp) {
+        var validationErrors = new ArrayList<String>();
+        
+        // Validate latency
+        if (actualLatency.compareTo(scenario.expectedMaxLatency()) > 0) {
+            validationErrors.add(String.format(
+                "Latency exceeded expected maximum: %dms > %dms",
+                actualLatency.toMillis(), scenario.expectedMaxLatency().toMillis()
+            ));
+        }
+        
+        // Validate cost
+        if (response.cost() > scenario.expectedMaxCost()) {
+            validationErrors.add(String.format(
+                "Cost exceeded expected maximum: $%.4f > $%.4f",
+                response.cost(), scenario.expectedMaxCost()
+            ));
+        }
+        
+        // Validate response content is not empty
+        if (response.content() == null || response.content().trim().isEmpty()) {
+            validationErrors.add("Response content is empty");
+        }
+        
+        // Validate expected metadata
+        for (var entry : scenario.expectedMetadata().entrySet()) {
+            var actualValue = response.metadata().get(entry.getKey());
+            if (!Objects.equals(entry.getValue(), actualValue)) {
+                validationErrors.add(String.format(
+                    "Metadata mismatch for '%s': expected '%s', got '%s'",
+                    entry.getKey(), entry.getValue(), actualValue
+                ));
+            }
+        }
+        
+        if (validationErrors.isEmpty()) {
+            return createSuccessResult(scenario, testId, actualLatency, response.content(), timestamp);
+        } else {
+            return createFailureResult(scenario, testId, actualLatency,
+                                     "Validation failed: " + String.join("; ", validationErrors), 
+                                     timestamp);
+        }
+    }
+    
+    private TestResult createSuccessResult(TestScenario scenario, int testId, 
+                                         Duration actualLatency, String content, 
+                                         Instant timestamp) {
+        return new TestResult(
+            scenario.name(),
+            true,
+            actualLatency,
+            0.0, // Cost not available for failure cases
+            content,
+            null,
+            Map.of("testId", testId, "scenario", scenario.description()),
+            timestamp
+        );
+    }
+    
+    private TestResult createFailureResult(TestScenario scenario, int testId,
+                                         Duration actualLatency, String errorMessage,
+                                         Instant timestamp) {
+        return new TestResult(
+            scenario.name(),
+            false,
+            actualLatency,
+            0.0,
+            null,
+            errorMessage,
+            Map.of("testId", testId, "scenario", scenario.description()),
+            timestamp
+        );
+    }
+    
+    private TestSummary generateSummary(List<TestResult> results) {
+        var totalTests = results.size();
+        var passedTests = (int) results.stream().mapToLong(r -> r.passed() ? 1 : 0).sum();
+        var failedTests = totalTests - passedTests;
+        
+        var totalLatency = results.stream()
+            .map(TestResult::actualLatency)
+            .reduce(Duration.ZERO, Duration::plus);
+            
+        var totalCost = results.stream()
+            .mapToDouble(TestResult::actualCost)
+            .sum();
+        
+        var failures = results.stream()
+            .filter(TestResult::isFailure)
+            .toList();
+        
+        var statistics = Map.<String, Object>of(
+            "averageLatency", totalTests > 0 ? totalLatency.dividedBy(totalTests) : Duration.ZERO,
+            "maxLatency", results.stream().map(TestResult::actualLatency).max(Duration::compareTo).orElse(Duration.ZERO),
+            "minLatency", results.stream().map(TestResult::actualLatency).min(Duration::compareTo).orElse(Duration.ZERO),
+            "averageCost", totalTests > 0 ? totalCost / totalTests : 0.0,
+            "testsPerSecond", totalLatency.isZero() ? 0.0 : totalTests / totalLatency.toMillis() * 1000.0
+        );
+        
+        return new TestSummary(
+            totalTests, passedTests, failedTests, totalLatency, 
+            totalCost, failures, statistics
+        );
+    }
+}

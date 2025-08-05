@@ -1,0 +1,470 @@
+package org.pragmatica.aether.agent.integration;
+
+import org.pragmatica.aether.agent.features.ConsensusFeatureToggle;
+import org.pragmatica.aether.agent.features.FeatureToggle;
+import org.pragmatica.aether.agent.llm.HybridLLMManager;
+import org.pragmatica.aether.agent.llm.MockLLMProvider;
+import org.pragmatica.message.MessageRouter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Integration test environment for Track B components.
+ * 
+ * This environment provides a complete setup for testing the Mock LLM Provider
+ * system and Feature Toggle framework in isolation and integration. It supports
+ * progressive testing from mock providers to eventual cloud provider integration.
+ * 
+ * The environment includes:
+ * - Configured MockLLMProvider with comprehensive scenarios
+ * - FeatureToggle system with consensus integration
+ * - HybridLLMManager with fallback chains
+ * - Test utilities for validation and monitoring
+ */
+public class TestEnvironment {
+    private static final Logger logger = LoggerFactory.getLogger(TestEnvironment.class);
+    
+    private final MockMessageRouter messageRouter;
+    private final ConsensusFeatureToggle featureToggle;
+    private final HybridLLMManager llmManager;
+    private final TestScenarioRunner scenarioRunner;
+    
+    private TestEnvironment(Builder builder) {
+        this.messageRouter = new MockMessageRouter();
+        this.featureToggle = new ConsensusFeatureToggle(messageRouter);
+        
+        // Configure feature toggles based on test requirements
+        configureFeatureToggles(builder.featureConfig);
+        
+        // Set up LLM manager with mock providers
+        var managerConfig = createLLMManagerConfig(builder.llmConfig);
+        this.llmManager = new HybridLLMManager(featureToggle, managerConfig);
+        
+        // Initialize scenario runner for testing
+        this.scenarioRunner = new TestScenarioRunner(llmManager, featureToggle);
+        
+        logger.info("Test environment initialized with {} features and {} scenarios", 
+                   featureToggle.getAllToggles().size(), 
+                   builder.llmConfig.testScenarios().size());
+    }
+    
+    /**
+     * Configuration for the test environment.
+     */
+    public record TestConfig(
+        FeatureConfig featureConfig,
+        LLMConfig llmConfig,
+        TestRunnerConfig runnerConfig
+    ) {
+        public static TestConfig defaultConfig() {
+            return new TestConfig(
+                FeatureConfig.defaultConfig(),
+                LLMConfig.defaultConfig(),
+                TestRunnerConfig.defaultConfig()
+            );
+        }
+    }
+    
+    /**
+     * Feature toggle configuration for testing.
+     */
+    public record FeatureConfig(
+        Map<String, Boolean> initialToggles,
+        boolean enableGradualRollout,
+        boolean enableEmergencyMode
+    ) {
+        public static FeatureConfig defaultConfig() {
+            return new FeatureConfig(
+                Map.of(
+                    "agent.enabled", true,
+                    "agent.shadow_mode", false,
+                    "llm.local.enabled", true,
+                    "llm.cloud.enabled", false,
+                    "llm.fallback.enabled", true
+                ),
+                true,
+                false
+            );
+        }
+        
+        public static FeatureConfig allEnabled() {
+            return new FeatureConfig(
+                Map.of(
+                    "agent.enabled", true,
+                    "agent.shadow_mode", false,
+                    "agent.recommendations.enabled", true,
+                    "llm.local.enabled", true,
+                    "llm.cloud.enabled", true,
+                    "llm.fallback.enabled", true,
+                    "llm.cost_limits.enabled", true
+                ),
+                false,
+                false
+            );
+        }
+        
+        public static FeatureConfig shadowMode() {
+            return new FeatureConfig(
+                Map.of(
+                    "agent.enabled", true,
+                    "agent.shadow_mode", true,
+                    "llm.local.enabled", true,
+                    "llm.cloud.enabled", false
+                ),
+                false,
+                false
+            );
+        }
+    }
+    
+    /**
+     * LLM configuration for testing.
+     */
+    public record LLMConfig(
+        List<MockLLMProvider.TestScenario> testScenarios,
+        boolean enableLatencySimulation,
+        boolean enableCostTracking,
+        boolean enableFailureInjection,
+        Duration baseLatency
+    ) {
+        public static LLMConfig defaultConfig() {
+            return new LLMConfig(
+                createComprehensiveScenarios(),
+                true,
+                true,
+                false,
+                Duration.ofMillis(100)
+            );
+        }
+        
+        public static LLMConfig fastTesting() {
+            return new LLMConfig(
+                createBasicScenarios(),
+                false, // No latency simulation for fast tests
+                true,
+                false,
+                Duration.ofMillis(1)
+            );
+        }
+        
+        public static LLMConfig resilienceTesting() {
+            return new LLMConfig(
+                createComprehensiveScenarios(),
+                true,
+                true,
+                true, // Enable failure injection
+                Duration.ofMillis(200)
+            );
+        }
+        
+        private static List<MockLLMProvider.TestScenario> createBasicScenarios() {
+            return List.of(
+                MockLLMProvider.TestScenario.builder()
+                    .name("basic_test")
+                    .pattern(".*test.*")
+                    .response("This is a test response from the mock LLM provider.")
+                    .tokensUsed(50)
+                    .build(),
+                    
+                MockLLMProvider.TestScenario.builder()
+                    .name("default_fallback")
+                    .pattern(".*")
+                    .response("Default response for integration testing.")
+                    .tokensUsed(30)
+                    .build()
+            );
+        }
+        
+        private static List<MockLLMProvider.TestScenario> createComprehensiveScenarios() {
+            return List.of(
+                // Performance analysis scenarios
+                MockLLMProvider.TestScenario.builder()
+                    .name("performance_analysis")
+                    .pattern(".*performance.*|.*cpu.*|.*memory.*|.*latency.*")
+                    .response("Performance analysis indicates CPU usage spike in payment slice. Recommend scaling to 5 replicas and optimizing database queries. Expected improvement: 70% latency reduction.")
+                    .tokensUsed(120)
+                    .customLatency(Duration.ofMillis(300))
+                    .build(),
+                
+                // Scaling recommendations
+                MockLLMProvider.TestScenario.builder()
+                    .name("scaling_recommendation")
+                    .pattern(".*scale.*|.*replica.*|.*capacity.*")
+                    .response("Based on traffic patterns, recommend horizontal scaling: increase user-service from 3 to 7 replicas, implement auto-scaling policy with 70% CPU threshold.")
+                    .tokensUsed(95)
+                    .build(),
+                
+                // Error analysis
+                MockLLMProvider.TestScenario.builder()
+                    .name("error_analysis")
+                    .pattern(".*error.*|.*exception.*|.*failure.*|.*bug.*")
+                    .response("Error pattern analysis reveals cascading failures in authentication service. Root cause: database connection pool exhaustion. Immediate fix: increase pool size to 50. Long-term: implement circuit breaker pattern.")
+                    .tokensUsed(150)
+                    .customLatency(Duration.ofMillis(500))
+                    .build(),
+                
+                // Security analysis
+                MockLLMProvider.TestScenario.builder()
+                    .name("security_analysis")
+                    .pattern(".*security.*|.*attack.*|.*vulnerability.*|.*breach.*")
+                    .response("Security alert: Detected potential DDoS attack pattern. Recommendation: Enable rate limiting (100 req/min per IP), activate geo-blocking for suspicious regions, scale security slice to 10 replicas.")
+                    .tokensUsed(180)
+                    .build(),
+                
+                // Cost optimization
+                MockLLMProvider.TestScenario.builder()
+                    .name("cost_optimization")
+                    .pattern(".*cost.*|.*budget.*|.*optimize.*|.*expensive.*")
+                    .response("Cost optimization analysis: Current monthly spend $2,847. Identified savings: right-size dev environment (-40%), implement spot instances (-25%), optimize data transfer (-15%). Potential savings: $1,139/month.")
+                    .tokensUsed(110)
+                    .build(),
+                
+                // Health check scenarios
+                MockLLMProvider.TestScenario.builder()
+                    .name("health_summary")
+                    .pattern(".*health.*|.*status.*|.*overview.*|.*summary.*")
+                    .response("System health: 96% services healthy. Issues: logging-slice (disk space 89%), notification-slice (queue backlog 2.3K). Actions: clean logs, scale message processors to 4 replicas.")
+                    .tokensUsed(85)
+                    .build(),
+                
+                // Complex temporal analysis
+                MockLLMProvider.TestScenario.builder()
+                    .name("temporal_analysis")
+                    .pattern(".*trend.*|.*pattern.*|.*forecast.*|.*predict.*")
+                    .response("Temporal analysis reveals cyclical pattern: traffic peaks 9-11 AM and 2-4 PM (GMT). Predicted 23% growth next month. Recommend: pre-emptive scaling schedule, capacity buffer during peak hours.")
+                    .tokensUsed(200)
+                    .customLatency(Duration.ofMillis(800))
+                    .build(),
+                
+                // Integration and dependency analysis
+                MockLLMProvider.TestScenario.builder()
+                    .name("dependency_analysis")
+                    .pattern(".*dependency.*|.*integration.*|.*service.*|.*communication.*")
+                    .response("Service dependency analysis: payment-service has critical dependency on auth-service (99.9% uptime required). Recommend: implement fallback authentication, add circuit breaker, increase auth-service SLA to 99.95%.")
+                    .tokensUsed(160)
+                    .build(),
+                
+                // Default fallback
+                MockLLMProvider.TestScenario.builder()
+                    .name("default_response")
+                    .pattern(".*")
+                    .response("I've analyzed the available system metrics. To provide more targeted recommendations, please specify the area of concern: performance, scaling, errors, security, or costs. I can help with detailed analysis and actionable recommendations.")
+                    .tokensUsed(70)
+                    .build()
+            );
+        }
+    }
+    
+    /**
+     * Test runner configuration.
+     */
+    public record TestRunnerConfig(
+        int maxConcurrentTests,
+        Duration testTimeout,
+        boolean enableProgressReporting,
+        boolean enableDetailedLogging
+    ) {
+        public static TestRunnerConfig defaultConfig() {
+            return new TestRunnerConfig(5, Duration.ofSeconds(30), true, false);
+        }
+    }
+    
+    /**
+     * Builder for creating test environments with different configurations.
+     */
+    public static class Builder {
+        private FeatureConfig featureConfig = FeatureConfig.defaultConfig();
+        private LLMConfig llmConfig = LLMConfig.defaultConfig();
+        private TestRunnerConfig runnerConfig = TestRunnerConfig.defaultConfig();
+        
+        public Builder withFeatureConfig(FeatureConfig config) {
+            this.featureConfig = config;
+            return this;
+        }
+        
+        public Builder withLLMConfig(LLMConfig config) {
+            this.llmConfig = config;
+            return this;
+        }
+        
+        public Builder withRunnerConfig(TestRunnerConfig config) {
+            this.runnerConfig = config;
+            return this;
+        }
+        
+        public Builder enableAllFeatures() {
+            this.featureConfig = FeatureConfig.allEnabled();
+            return this;
+        }
+        
+        public Builder shadowModeOnly() {
+            this.featureConfig = FeatureConfig.shadowMode();
+            return this;
+        }
+        
+        public Builder fastTesting() {
+            this.llmConfig = LLMConfig.fastTesting();
+            return this;
+        }
+        
+        public Builder resilienceTesting() {
+            this.llmConfig = LLMConfig.resilienceTesting();
+            return this;
+        }
+        
+        public TestEnvironment build() {
+            return new TestEnvironment(this);
+        }
+    }
+    
+    /**
+     * Factory methods for common test environment configurations.
+     */
+    public static TestEnvironment createDefault() {
+        return new Builder().build();
+    }
+    
+    public static TestEnvironment createForUnitTesting() {
+        return new Builder()
+            .fastTesting()
+            .withRunnerConfig(new TestRunnerConfig(10, Duration.ofSeconds(5), false, false))
+            .build();
+    }
+    
+    public static TestEnvironment createForIntegrationTesting() {
+        return new Builder()
+            .enableAllFeatures()
+            .withRunnerConfig(new TestRunnerConfig(3, Duration.ofSeconds(60), true, true))
+            .build();
+    }
+    
+    public static TestEnvironment createForResilienceTesting() {
+        return new Builder()
+            .resilienceTesting()
+            .enableAllFeatures()
+            .withRunnerConfig(new TestRunnerConfig(2, Duration.ofMinutes(2), true, true))
+            .build();
+    }
+    
+    /**
+     * Gets the feature toggle system for testing.
+     */
+    public FeatureToggle getFeatureToggle() {
+        return featureToggle;
+    }
+    
+    /**
+     * Gets the LLM manager for testing.
+     */
+    public HybridLLMManager getLLMManager() {
+        return llmManager;
+    }
+    
+    /**
+     * Gets the scenario runner for executing test scenarios.
+     */
+    public TestScenarioRunner getScenarioRunner() {
+        return scenarioRunner;
+    }
+    
+    /**
+     * Gets the mock message router for inspection.
+     */
+    public MockMessageRouter getMessageRouter() {
+        return messageRouter;
+    }
+    
+    /**
+     * Shuts down the test environment and cleans up resources.
+     */
+    public CompletableFuture<Void> shutdown() {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                logger.info("Shutting down test environment");
+                // Cleanup resources
+                messageRouter.shutdown();
+            } catch (Exception e) {
+                logger.error("Error during test environment shutdown", e);
+            }
+        });
+    }
+    
+    private void configureFeatureToggles(FeatureConfig config) {
+        for (var entry : config.initialToggles().entrySet()) {
+            var toggleConfig = FeatureToggle.ToggleConfig.builder(entry.getKey())
+                .enabled(entry.getValue())
+                .description("Test configuration for " + entry.getKey())
+                .build();
+            
+            featureToggle.updateToggle(toggleConfig);
+        }
+    }
+    
+    private HybridLLMManager.ManagerConfig createLLMManagerConfig(LLMConfig llmConfig) {
+        var mockConfig = MockLLMProvider.MockConfiguration.builder()
+            .scenarios(llmConfig.testScenarios())
+            .baseLatency(llmConfig.baseLatency())
+            .latencyConfig(llmConfig.enableLatencySimulation() ? 
+                MockLLMProvider.LatencyConfig.defaultConfig() :
+                new MockLLMProvider.LatencyConfig(Duration.ZERO, Duration.ZERO, 0.0, Duration.ZERO))
+            .costConfig(llmConfig.enableCostTracking() ?
+                MockLLMProvider.CostConfig.defaultConfig() :
+                new MockLLMProvider.CostConfig(0.0, 0.0, false, 0.0))
+            .failureConfig(llmConfig.enableFailureInjection() ?
+                MockLLMProvider.FailureConfig.testingConfig() :
+                MockLLMProvider.FailureConfig.defaultConfig())
+            .build();
+        
+        return new HybridLLMManager.ManagerConfig(
+            List.of(
+                new HybridLLMManager.ProviderConfig(
+                    "test-primary", 
+                    HybridLLMManager.ProviderType.MOCK, 
+                    1, 
+                    Map.of("mockConfig", mockConfig)
+                ),
+                new HybridLLMManager.ProviderConfig(
+                    "test-fallback", 
+                    HybridLLMManager.ProviderType.MOCK, 
+                    2, 
+                    Map.of("mockConfig", mockConfig)
+                )
+            ),
+            HybridLLMManager.FallbackChainConfig.defaultConfig(),
+            HybridLLMManager.BudgetConfig.defaultConfig(),
+            Duration.ofSeconds(10)
+        );
+    }
+    
+    /**
+     * Mock MessageRouter for testing without real consensus.
+     */
+    private static class MockMessageRouter implements MessageRouter {
+        private volatile boolean shutdown = false;
+        
+        @Override
+        public <T> void addRoute(Class<T> messageType, java.util.function.Consumer<T> handler) {
+            // Mock implementation - store handlers if needed for testing
+        }
+        
+        @Override
+        public void sendMessage(Object message) {
+            // Mock implementation - log or store messages for verification
+            logger.debug("Mock message sent: {}", message.getClass().getSimpleName());
+        }
+        
+        public void shutdown() {
+            shutdown = true;
+            logger.debug("Mock MessageRouter shut down");
+        }
+        
+        public boolean isShutdown() {
+            return shutdown;
+        }
+    }
+}

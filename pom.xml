@@ -13,6 +13,7 @@
         <module>slice-api</module>
         <module>slice</module>
         <module>agent</module>
+        <module>cli</module>
     </modules>
 
     <properties>

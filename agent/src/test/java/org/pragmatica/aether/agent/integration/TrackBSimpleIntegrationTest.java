@@ -1,14 +1,18 @@
 package org.pragmatica.aether.agent.integration;
 
 import org.junit.jupiter.api.*;
+import org.pragmatica.aether.agent.features.FeatureToggle;
 import org.pragmatica.aether.agent.features.SimpleFeatureToggle;
 import org.pragmatica.aether.agent.llm.SimpleLLMProvider;
 import org.pragmatica.aether.agent.llm.SimpleMockLLMProvider;
+import org.pragmatica.lang.Result.Success;
+import org.pragmatica.lang.Result.Failure;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.pragmatica.aether.agent.features.FeatureToggle.KnownFeature.*;
 
 /**
  * Comprehensive integration tests for Track B implementation.
@@ -38,12 +42,12 @@ class TrackBSimpleIntegrationTest {
     @DisplayName("Verify basic system initialization")
     void testSystemInitialization() {
         // Verify LLM provider is initialized
-        assertThat(llmProvider.getProviderId()).isEqualTo("integration-test-provider");
+        assertThat(llmProvider.providerId()).isEqualTo("integration-test-provider");
         
         // Verify feature toggles have correct defaults
-        assertThat(featureToggle.isEnabled("agent.enabled")).isTrue();
-        assertThat(featureToggle.isEnabled("llm.local.enabled")).isTrue();
-        assertThat(featureToggle.isEnabled("llm.cloud.enabled")).isFalse();
+        assertThat(((FeatureToggle) featureToggle).isEnabled(AGENT_ENABLED)).isTrue();
+        assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isTrue();
+        assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_CLOUD_ENABLED)).isFalse();
         assertThat(featureToggle.isEmergencyMode()).isFalse();
     }
     
@@ -58,8 +62,18 @@ class TrackBSimpleIntegrationTest {
             0.0
         );
         
-        var response1 = llmProvider.complete(performanceRequest).get(10, TimeUnit.SECONDS);
-        var response2 = llmProvider.complete(performanceRequest).get(10, TimeUnit.SECONDS);
+        var response1 = switch(llmProvider.complete(performanceRequest).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
+        var response2 = switch(llmProvider.complete(performanceRequest).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         
         // Responses should be identical (deterministic)
         assertThat(response1.content()).isEqualTo(response2.content());
@@ -95,7 +109,12 @@ class TrackBSimpleIntegrationTest {
                 0.0
             );
             
-            var response = llmProvider.complete(request).get(10, TimeUnit.SECONDS);
+            var response = switch(llmProvider.complete(request).await()) {
+                case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+                case Failure f -> {
+                    throw new RuntimeException(f.cause().message());
+                }
+            };
             
             var content = response.content().toLowerCase();
             assertThat(content).describedAs("Response for " + testCase.description)
@@ -108,15 +127,15 @@ class TrackBSimpleIntegrationTest {
     @DisplayName("Test feature toggle runtime configuration")
     void testFeatureToggleRuntimeConfiguration() {
         // Initially LLM should be enabled
-        assertThat(featureToggle.isEnabled("llm.local.enabled")).isTrue();
+        assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isTrue();
         
         // Disable LLM features
-        featureToggle.setEnabled("llm.local.enabled", false);
-        assertThat(featureToggle.isEnabled("llm.local.enabled")).isFalse();
+        ((FeatureToggle) featureToggle).updateToggle(LLM_LOCAL_ENABLED, false);
+        assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isFalse();
         
         // Re-enable
-        featureToggle.setEnabled("llm.local.enabled", true);
-        assertThat(featureToggle.isEnabled("llm.local.enabled")).isTrue();
+        ((FeatureToggle) featureToggle).updateToggle(LLM_LOCAL_ENABLED, true);
+        assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isTrue();
     }
     
     @Test
@@ -124,7 +143,7 @@ class TrackBSimpleIntegrationTest {
     @DisplayName("Test emergency mode functionality")
     void testEmergencyMode() throws Exception {
         // Initially features should be enabled
-        assertThat(featureToggle.isEnabled("llm.local.enabled")).isTrue();
+        assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isTrue();
         assertThat(featureToggle.isEmergencyMode()).isFalse();
         
         // Test that LLM works normally
@@ -134,7 +153,12 @@ class TrackBSimpleIntegrationTest {
             0.0
         );
         
-        var normalResponse = llmProvider.complete(request).get(10, TimeUnit.SECONDS);
+        var normalResponse = switch(llmProvider.complete(request).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         assertThat(normalResponse.content()).isNotEmpty();
         
         // Activate emergency mode
@@ -142,8 +166,8 @@ class TrackBSimpleIntegrationTest {
         
         // All features should now be disabled
         assertThat(featureToggle.isEmergencyMode()).isTrue();
-        assertThat(featureToggle.isEnabled("llm.local.enabled")).isFalse();
-        assertThat(featureToggle.isEnabled("agent.enabled")).isFalse();
+        assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isFalse();
+        assertThat(((FeatureToggle) featureToggle).isEnabled(AGENT_ENABLED)).isFalse();
         
         // In a real system, this would prevent LLM requests
         // For this test, we just verify the toggle state
@@ -152,7 +176,7 @@ class TrackBSimpleIntegrationTest {
         featureToggle.restoreFromEmergency();
         
         assertThat(featureToggle.isEmergencyMode()).isFalse();
-        assertThat(featureToggle.isEnabled("llm.local.enabled")).isTrue();
+        assertThat(((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)).isTrue();
     }
     
     @Test
@@ -167,14 +191,14 @@ class TrackBSimpleIntegrationTest {
         assertThat(response1).contains("performance");
         
         // Disable local LLM
-        featureToggle.setEnabled("llm.local.enabled", false);
+        ((FeatureToggle) featureToggle).updateToggle(LLM_LOCAL_ENABLED, false);
         
         // Should return fallback response
         var response2 = llmIntegratedSystem.processRequest("Analyze system performance");
         assertThat(response2).contains("LLM features are disabled");
         
         // Re-enable local LLM
-        featureToggle.setEnabled("llm.local.enabled", true);
+        ((FeatureToggle) featureToggle).updateToggle(LLM_LOCAL_ENABLED, true);
         
         // Should work again
         var response3 = llmIntegratedSystem.processRequest("Analyze system performance");
@@ -195,7 +219,12 @@ class TrackBSimpleIntegrationTest {
                 0.0
             );
             
-            var response = llmProvider.complete(request).get(10, TimeUnit.SECONDS);
+            var response = switch(llmProvider.complete(request).await()) {
+                case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+                case Failure f -> {
+                    throw new RuntimeException(f.cause().message());
+                }
+            };
             costTracker.recordCost(response.cost());
         }
         
@@ -241,7 +270,12 @@ class TrackBSimpleIntegrationTest {
             0.0
         );
         
-        return llmProvider.complete(request).get(10, TimeUnit.SECONDS);
+        return switch(llmProvider.complete(request).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
     }
     
     /**
@@ -262,7 +296,7 @@ class TrackBSimpleIntegrationTest {
         }
         
         String processRequest(String input) throws Exception {
-            if (!featureToggle.isEnabled("llm.local.enabled")) {
+            if (!((FeatureToggle) featureToggle).isEnabled(LLM_LOCAL_ENABLED)) {
                 return "LLM features are disabled - using fallback response";
             }
             
@@ -272,7 +306,12 @@ class TrackBSimpleIntegrationTest {
                 0.0
             );
             
-            var response = llmProvider.complete(request).get(10, TimeUnit.SECONDS);
+            var response = switch(llmProvider.complete(request).await()) {
+                case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+                case Failure f -> {
+                    throw new RuntimeException(f.cause().message());
+                }
+            };
             return response.content();
         }
     }

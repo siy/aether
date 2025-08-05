@@ -210,7 +210,7 @@ class AgentMessageTest {
                 "Increased load detected"
             );
             
-            String summary = transition.getTransitionSummary();
+            String summary = transition.transitionSummary();
             assertThat(summary).isEqualTo("payment-service: 3-replicas -> 5-replicas (Increased load detected)");
             assertThat(transition.isScalingTransition()).isTrue();
         }
@@ -228,7 +228,7 @@ class AgentMessageTest {
             );
             
             Thread.sleep(10); // Small delay to ensure age > 0
-            assertThat(transition.getAgeMillis()).isGreaterThan(0);
+            assertThat(transition.ageMillis()).isGreaterThan(0);
         }
     }
     
@@ -356,7 +356,7 @@ class AgentMessageTest {
                 AgentRecommendation.RiskLevel.MEDIUM
             );
             
-            assertThat(recommendation.getTotalEstimatedDuration()).isEqualTo(Duration.ofMinutes(5));
+            assertThat(recommendation.expectedImpactTime()).isEqualTo(Duration.ofMinutes(5));
         }
         
         @Test
@@ -375,7 +375,7 @@ class AgentMessageTest {
                 AgentRecommendation.RiskLevel.LOW
             );
             
-            String displaySummary = recommendation.getDisplaySummary();
+            String displaySummary = recommendation.summary();
             assertThat(displaySummary).isEqualTo("[SCALING_RECOMMENDATION] Scale payment service (Confidence: 87.0%, Risk: LOW)");
         }
         

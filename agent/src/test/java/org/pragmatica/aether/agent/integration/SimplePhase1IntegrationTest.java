@@ -20,7 +20,11 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.pragmatica.aether.agent.features.FeatureToggle.KnownFeature.*;
 import static org.mockito.Mockito.*;
+
+import org.pragmatica.lang.Result.Success;
+import org.pragmatica.lang.Result.Failure;
 
 /**
  * Simplified Phase 1 integration test demonstrating the working agent system.
@@ -96,22 +100,27 @@ class SimplePhase1IntegrationTest {
             0.1
         );
         
-        var response = llmProvider.complete(request).get(5, TimeUnit.SECONDS);
+        var response = switch(llmProvider.complete(request).await()) {
+            case Success s -> (SimpleMockLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException("LLM request failed: " + f.cause().message());
+            }
+        };
         assertThat(response).isNotNull();
         assertThat(response.content()).isNotEmpty();
         assertThat(response.tokensUsed()).isGreaterThan(0);
         
         // Test feature toggles
-        assertThat(featureToggle.isEnabled("agent.enabled")).isTrue();
-        assertThat(featureToggle.isEnabled("agent.shadow_mode")).isFalse();
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(AGENT_SHADOW_MODE)).isFalse();
         
         featureToggle.emergencyDisableAll();
         assertThat(featureToggle.isEmergencyMode()).isTrue();
-        assertThat(featureToggle.isEnabled("agent.enabled")).isFalse();
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isFalse();
         
         featureToggle.restoreFromEmergency();
         assertThat(featureToggle.isEmergencyMode()).isFalse();
-        assertThat(featureToggle.isEnabled("agent.enabled")).isTrue();
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
         
         logger.info("✅ Track B mock LLM and feature toggles working");
     }
@@ -124,7 +133,12 @@ class SimplePhase1IntegrationTest {
         
         // Test telemetry processing through the integration service
         var telemetryBatch = telemetrySimulator.generatePerformanceIssueTelemetry();
-        var recommendation = agentLLMService.processTelemetry(telemetryBatch).get(10, TimeUnit.SECONDS);
+        var recommendation = switch(agentLLMService.processTelemetry(telemetryBatch).await()) {
+            case Success s -> (AgentRecommendation) s.value();
+            case Failure f -> {
+                throw new RuntimeException("Telemetry processing failed: " + f.cause().message());
+            }
+        };
         
         assertThat(recommendation).isNotNull();
         assertThat(recommendation.messageId()).isNotNull();
@@ -137,7 +151,7 @@ class SimplePhase1IntegrationTest {
         assertThat(summary).containsAnyOf("performance", "cpu", "memory", "scale");
         
         logger.info("✅ Agent-LLM integration working");
-        logger.info("   Generated recommendation: {}", recommendation.getDisplaySummary());
+        logger.info("   Generated recommendation: {}", recommendation.summary());
     }
     
     @Test
@@ -148,18 +162,18 @@ class SimplePhase1IntegrationTest {
         
         // Test normal operation
         var telemetryBatch = telemetrySimulator.generateNormalTelemetry();
-        var normalRecommendation = agentLLMService.processTelemetry(telemetryBatch).get(10, TimeUnit.SECONDS);
+        var normalRecommendation = agentLLMService.processTelemetry(telemetryBatch).await();
         assertThat(normalRecommendation).isNotNull();
         
         // Test with recommendations disabled
-        featureToggle.setEnabled("agent.recommendations.enabled", false);
-        var disabledRecommendation = agentLLMService.processTelemetry(telemetryBatch).get(10, TimeUnit.SECONDS);
+        ((FeatureToggle) featureToggle).updateToggle(AGENT_RECOMMENDATIONS_ENABLED, false);
+        var disabledRecommendation = agentLLMService.processTelemetry(telemetryBatch).await();
         assertThat(disabledRecommendation).isNull(); // Should be null when disabled
         
         // Test emergency mode
-        featureToggle.setEnabled("agent.recommendations.enabled", true);
+        ((FeatureToggle) featureToggle).updateToggle(AGENT_RECOMMENDATIONS_ENABLED, true);
         featureToggle.emergencyDisableAll();
-        var emergencyRecommendation = agentLLMService.processTelemetry(telemetryBatch).get(10, TimeUnit.SECONDS);
+        var emergencyRecommendation = agentLLMService.processTelemetry(telemetryBatch).await();
         assertThat(emergencyRecommendation).isNull(); // Should be null in emergency mode
         
         featureToggle.restoreFromEmergency();
@@ -175,11 +189,16 @@ class SimplePhase1IntegrationTest {
         
         // Simulate realistic scenario: performance issues detected
         var telemetryBatch = telemetrySimulator.generatePerformanceIssueTelemetry();
-        var recommendation = agentLLMService.processTelemetry(telemetryBatch).get(15, TimeUnit.SECONDS);
+        var recommendation = switch(agentLLMService.processTelemetry(telemetryBatch).await()) {
+            case Success s -> (AgentRecommendation) s.value();
+            case Failure f -> {
+                throw new RuntimeException("Telemetry processing failed: " + f.cause().message());
+            }
+        };
         
         assertThat(recommendation).isNotNull();
-        assertThat(recommendation.requiresImmediateAction()).isIn(true, false); // Could be either depending on scenario
-        assertThat(recommendation.totalEstimatedDuration()).isNotNull();
+        assertThat(recommendation.riskLevel()).isNotNull();
+        assertThat(recommendation.expectedImpactTime()).isNotNull();
         
         // Test that the recommendation is appropriate for the scenario
         var summary = recommendation.summary().toLowerCase();

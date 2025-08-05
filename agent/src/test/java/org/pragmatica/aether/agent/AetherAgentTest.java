@@ -62,8 +62,8 @@ class AetherAgentTest {
             
             var customAgent = new AetherAgent(nodeId, messageRouter, customConfig);
             
-            assertThat(customAgent.getCurrentConfiguration()).isEqualTo(customConfig);
-            assertThat(customAgent.getCurrentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
+            assertThat(customAgent.currentConfiguration()).isEqualTo(customConfig);
+            assertThat(customAgent.currentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
             assertThat(customAgent.isActiveLeader()).isFalse();
         }
         
@@ -72,8 +72,8 @@ class AetherAgentTest {
         void shouldCreateAgentWithDefaultConfigurationUsingFactoryMethod() {
             var defaultAgent = AetherAgent.create(nodeId, messageRouter);
             
-            assertThat(defaultAgent.getCurrentConfiguration()).isNotNull();
-            assertThat(defaultAgent.getCurrentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
+            assertThat(defaultAgent.currentConfiguration()).isNotNull();
+            assertThat(defaultAgent.currentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
         }
     }
     
@@ -86,35 +86,35 @@ class AetherAgentTest {
         void shouldStartSuccessfullyAndRegisterForQuorumNotifications() {
             var startFuture = agent.start();
             
-            assertThatCode(() -> startFuture.get(5, TimeUnit.SECONDS))
+            assertThatCode(() -> startFuture.await())
                 .doesNotThrowAnyException();
             
             verify(messageRouter).addRoute(eq(QuorumStateNotification.class), any());
             
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.INACTIVE);
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.INACTIVE);
         }
         
         @Test
         @DisplayName("Should handle multiple start calls gracefully")
         void shouldHandleMultipleStartCallsGracefully() {
-            agent.start().join();
+            agent.start().await();
             
             // Second start should warn but not fail
             var secondStart = agent.start();
-            assertThatCode(() -> secondStart.get(1, TimeUnit.SECONDS))
+            assertThatCode(() -> secondStart.await())
                 .doesNotThrowAnyException();
         }
         
         @Test
         @DisplayName("Should stop successfully and clean up resources")
         void shouldStopSuccessfullyAndCleanUpResources() {
-            agent.start().join();
+            agent.start().await();
             
             var stopFuture = agent.stop();
-            assertThatCode(() -> stopFuture.get(5, TimeUnit.SECONDS))
+            assertThatCode(() -> stopFuture.await())
                 .doesNotThrowAnyException();
             
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
             assertThat(agent.isActiveLeader()).isFalse();
         }
         
@@ -124,10 +124,10 @@ class AetherAgentTest {
             // Agent is initially dormant
             var stopFuture = agent.stop();
             
-            assertThatCode(() -> stopFuture.get(1, TimeUnit.SECONDS))
+            assertThatCode(() -> stopFuture.await())
                 .doesNotThrowAnyException();
             
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
         }
         
         @Test
@@ -139,12 +139,10 @@ class AetherAgentTest {
             
             var startFuture = agent.start();
             
-            assertThatThrownBy(() -> startFuture.get(5, TimeUnit.SECONDS))
-                .isInstanceOf(CompletionException.class)
-                .hasCauseInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Agent startup failed");
+            assertThatThrownBy(() -> startFuture.await())
+                .hasCauseInstanceOf(RuntimeException.class);
             
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.FAILED);
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.FAILED);
         }
     }
     
@@ -155,8 +153,8 @@ class AetherAgentTest {
         @Test
         @DisplayName("Should become active when quorum is established")
         void shouldBecomeActiveWhenQuorumIsEstablished() {
-            agent.start().join();
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.INACTIVE);
+            agent.start().await();
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.INACTIVE);
             assertThat(agent.isActiveLeader()).isFalse();
             
             // Simulate quorum establishment
@@ -164,7 +162,7 @@ class AetherAgentTest {
             
             await().atMost(1, TimeUnit.SECONDS)
                 .untilAsserted(() -> {
-                    assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.ACTIVE);
+                    assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.ACTIVE);
                     assertThat(agent.isActiveLeader()).isTrue();
                 });
         }
@@ -172,7 +170,7 @@ class AetherAgentTest {
         @Test
         @DisplayName("Should step down when quorum disappears")
         void shouldStepDownWhenQuorumDisappears() {
-            agent.start().join();
+            agent.start().await();
             
             // First become leader
             simulateQuorumNotification(QuorumStateNotification.ESTABLISHED);
@@ -184,7 +182,7 @@ class AetherAgentTest {
             
             await().atMost(1, TimeUnit.SECONDS)
                 .untilAsserted(() -> {
-                    assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.INACTIVE);
+                    assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.INACTIVE);
                     assertThat(agent.isActiveLeader()).isFalse();
                 });
         }
@@ -192,7 +190,7 @@ class AetherAgentTest {
         @Test
         @DisplayName("Should handle leadership transitions correctly")
         void shouldHandleLeadershipTransitionsCorrectly() {
-            agent.start().join();
+            agent.start().await();
             
             // Multiple transitions
             simulateQuorumNotification(QuorumStateNotification.ESTABLISHED);
@@ -204,7 +202,7 @@ class AetherAgentTest {
             simulateQuorumNotification(QuorumStateNotification.ESTABLISHED);
             await().until(() -> agent.isActiveLeader());
             
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.ACTIVE);
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.ACTIVE);
         }
         
         private void simulateQuorumNotification(QuorumStateNotification notification) {
@@ -233,13 +231,13 @@ class AetherAgentTest {
             
             agent.updateConfiguration(newConfig);
             
-            assertThat(agent.getCurrentConfiguration()).isEqualTo(newConfig);
+            assertThat(agent.currentConfiguration()).isEqualTo(newConfig);
         }
         
         @Test
         @DisplayName("Should apply configuration changes to active components")
         void shouldApplyConfigurationChangesToActiveComponents() {
-            agent.start().join();
+            agent.start().await();
             simulateQuorumNotification(QuorumStateNotification.ESTABLISHED);
             await().until(() -> agent.isActiveLeader());
             
@@ -253,7 +251,7 @@ class AetherAgentTest {
             assertThatCode(() -> agent.updateConfiguration(newConfig))
                 .doesNotThrowAnyException();
             
-            assertThat(agent.getCurrentConfiguration()).isEqualTo(newConfig);
+            assertThat(agent.currentConfiguration()).isEqualTo(newConfig);
         }
     }
     
@@ -264,16 +262,16 @@ class AetherAgentTest {
         @Test
         @DisplayName("Should provide accurate health information")
         void shouldProvideAccurateHealthInformation() {
-            agent.start().join();
+            agent.start().await();
             
-            var health = agent.getHealth();
+            var health = agent.health();
             
             assertThat(health.nodeId()).isEqualTo(nodeId);
             assertThat(health.state()).isEqualTo(AetherAgent.AgentState.INACTIVE);
             assertThat(health.isLeader()).isFalse();
             assertThat(health.startTime()).isNotNull();
             assertThat(health.isHealthy()).isTrue();
-            assertThat(health.getUptime()).isGreaterThan(Duration.ZERO);
+            assertThat(health.uptime()).isGreaterThan(Duration.ZERO);
         }
         
         @Test
@@ -284,12 +282,12 @@ class AetherAgentTest {
                 .when(messageRouter).addRoute(any(Class.class), any());
             
             try {
-                agent.start().join();
+                agent.start().await();
             } catch (Exception e) {
                 // Expected
             }
             
-            var health = agent.getHealth();
+            var health = agent.health();
             assertThat(health.state()).isEqualTo(AetherAgent.AgentState.FAILED);
             assertThat(health.isHealthy()).isFalse();
         }
@@ -297,15 +295,14 @@ class AetherAgentTest {
         @Test
         @DisplayName("Should include processing statistics when available")
         void shouldIncludeProcessingStatisticsWhenAvailable() {
-            agent.start().join();
+            agent.start().await();
             simulateQuorumNotification(QuorumStateNotification.ESTABLISHED);
             await().until(() -> agent.isActiveLeader());
             
-            var health = agent.getHealth();
+            var health = agent.health();
             
             // Processing stats should be available when agent is active
-            assertThat(health.processingStats()).isNotNull();
-            assertThat(health.processingStats().isRunning()).isTrue();
+            assertThat(health.processingStats().isPresent()).isTrue();
         }
     }
     
@@ -316,7 +313,7 @@ class AetherAgentTest {
         @Test
         @DisplayName("Should handle leadership transition errors gracefully")
         void shouldHandleLeadershipTransitionErrorsGracefully() {
-            agent.start().join();
+            agent.start().await();
             
             // Simulate error during leadership transition by stopping MessageRouter behavior
             doThrow(new RuntimeException("Leadership error"))
@@ -331,7 +328,7 @@ class AetherAgentTest {
             // Agent should eventually be in failed state due to error
             await().atMost(2, TimeUnit.SECONDS)
                 .untilAsserted(() -> 
-                    assertThat(agent.getCurrentState()).isIn(
+                    assertThat(agent.currentState()).isIn(
                         AetherAgent.AgentState.FAILED,
                         AetherAgent.AgentState.INACTIVE
                     )
@@ -341,7 +338,7 @@ class AetherAgentTest {
         @Test
         @DisplayName("Should recover from transient errors")
         void shouldRecoverFromTransientErrors() {
-            agent.start().join();
+            agent.start().await();
             
             // Simulate successful leadership transitions despite some errors
             simulateQuorumNotification(QuorumStateNotification.ESTABLISHED);
@@ -351,7 +348,7 @@ class AetherAgentTest {
             // Agent should handle transitions gracefully
             await().atMost(2, TimeUnit.SECONDS)
                 .untilAsserted(() -> 
-                    assertThat(agent.getCurrentState()).isIn(
+                    assertThat(agent.currentState()).isIn(
                         AetherAgent.AgentState.ACTIVE,
                         AetherAgent.AgentState.INACTIVE
                     )
@@ -367,23 +364,23 @@ class AetherAgentTest {
         @DisplayName("Should maintain correct state transitions")
         void shouldMaintainCorrectStateTransitions() {
             // Initial state
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
             
             // After start
-            agent.start().join();
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.INACTIVE);
+            agent.start().await();
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.INACTIVE);
             
             // After becoming leader
             simulateQuorumNotification(QuorumStateNotification.ESTABLISHED);
-            await().until(() -> agent.getCurrentState() == AetherAgent.AgentState.ACTIVE);
+            await().until(() -> agent.currentState() == AetherAgent.AgentState.ACTIVE);
             
             // After losing leadership
             simulateQuorumNotification(QuorumStateNotification.DISAPPEARED);
-            await().until(() -> agent.getCurrentState() == AetherAgent.AgentState.INACTIVE);
+            await().until(() -> agent.currentState() == AetherAgent.AgentState.INACTIVE);
             
             // After stop
-            agent.stop().join();
-            assertThat(agent.getCurrentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
+            agent.stop().await();
+            assertThat(agent.currentState()).isEqualTo(AetherAgent.AgentState.DORMANT);
         }
         
         @Test

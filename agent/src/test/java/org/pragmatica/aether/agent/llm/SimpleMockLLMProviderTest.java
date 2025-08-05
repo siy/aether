@@ -3,6 +3,8 @@ package org.pragmatica.aether.agent.llm;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.pragmatica.lang.Result.Success;
+import org.pragmatica.lang.Result.Failure;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -31,7 +33,12 @@ class SimpleMockLLMProviderTest {
             0.0
         );
         
-        var response = provider.complete(request).get(5, TimeUnit.SECONDS);
+        var response = switch(provider.complete(request).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         
         assertThat(response.content()).isNotEmpty();
         assertThat(response.tokensUsed()).isGreaterThan(0);
@@ -50,8 +57,18 @@ class SimpleMockLLMProviderTest {
             0.0
         );
         
-        var response1 = provider.complete(request).get(5, TimeUnit.SECONDS);
-        var response2 = provider.complete(request).get(5, TimeUnit.SECONDS);
+        var response1 = switch(provider.complete(request).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
+        var response2 = switch(provider.complete(request).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         
         // Content should be identical for same input
         assertThat(response1.content()).isEqualTo(response2.content());
@@ -68,7 +85,12 @@ class SimpleMockLLMProviderTest {
             0.0
         );
         
-        var cpuResponse = provider.complete(cpuRequest).get(5, TimeUnit.SECONDS);
+        var cpuResponse = switch(provider.complete(cpuRequest).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         assertThat(cpuResponse.content().toLowerCase()).contains("cpu");
         
         // Test memory scenario
@@ -78,7 +100,12 @@ class SimpleMockLLMProviderTest {
             0.0
         );
         
-        var memoryResponse = provider.complete(memoryRequest).get(5, TimeUnit.SECONDS);
+        var memoryResponse = switch(provider.complete(memoryRequest).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         assertThat(memoryResponse.content().toLowerCase()).contains("memory");
         
         // Test error scenario
@@ -88,7 +115,12 @@ class SimpleMockLLMProviderTest {
             0.0
         );
         
-        var errorResponse = provider.complete(errorRequest).get(5, TimeUnit.SECONDS);
+        var errorResponse = switch(provider.complete(errorRequest).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         assertThat(errorResponse.content().toLowerCase()).containsAnyOf("error", "exception");
     }
     
@@ -101,7 +133,12 @@ class SimpleMockLLMProviderTest {
             0.0
         );
         
-        var response = provider.complete(request).get(5, TimeUnit.SECONDS);
+        var response = switch(provider.complete(request).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         
         var cost = response.cost();
         var tokensUsed = response.tokensUsed();
@@ -117,7 +154,12 @@ class SimpleMockLLMProviderTest {
     @Test
     @DisplayName("Test health check")
     void testHealthCheck() throws Exception {
-        var health = provider.healthCheck().get(5, TimeUnit.SECONDS);
+        var health = switch(provider.healthCheck().await()) {
+            case Success s -> (SimpleLLMProvider.Health) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         
         assertThat(health.status()).isIn(
             SimpleLLMProvider.Status.HEALTHY, 
@@ -130,7 +172,7 @@ class SimpleMockLLMProviderTest {
     @Test
     @DisplayName("Test provider ID")
     void testProviderId() {
-        assertThat(provider.getProviderId()).isEqualTo("test-provider");
+        assertThat(provider.providerId()).isEqualTo("test-provider");
     }
     
     @Test
@@ -142,7 +184,12 @@ class SimpleMockLLMProviderTest {
             0.0
         );
         
-        var response = provider.complete(request).get(5, TimeUnit.SECONDS);
+        var response = switch(provider.complete(request).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         assertThat(response.content().toLowerCase()).contains("test");
         assertThat(response.metadata().get("scenario")).isEqualTo("test_scenario");
     }
@@ -156,7 +203,12 @@ class SimpleMockLLMProviderTest {
             0.0
         );
         
-        var response = provider.complete(request).get(5, TimeUnit.SECONDS);
+        var response = switch(provider.complete(request).await()) {
+            case Success s -> (SimpleLLMProvider.CompletionResponse) s.value();
+            case Failure f -> {
+                throw new RuntimeException(f.cause().message());
+            }
+        };
         assertThat(response.content()).isNotEmpty();
         assertThat(response.metadata().get("scenario")).isEqualTo("default_response");
     }

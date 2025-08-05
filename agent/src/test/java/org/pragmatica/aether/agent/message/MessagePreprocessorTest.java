@@ -54,7 +54,7 @@ class MessagePreprocessorTest {
         void shouldStartSuccessfully() {
             preprocessor.start();
             
-            var stats = preprocessor.getStats();
+            var stats = preprocessor.stats();
             assertThat(stats.isRunning()).isTrue();
         }
         
@@ -64,7 +64,7 @@ class MessagePreprocessorTest {
             preprocessor.start();
             preprocessor.start(); // Second start should be ignored
             
-            var stats = preprocessor.getStats();
+            var stats = preprocessor.stats();
             assertThat(stats.isRunning()).isTrue();
         }
         
@@ -79,7 +79,7 @@ class MessagePreprocessorTest {
             
             preprocessor.stop();
             
-            var stats = preprocessor.getStats();
+            var stats = preprocessor.stats();
             assertThat(stats.isRunning()).isFalse();
         }
     }
@@ -172,7 +172,7 @@ class MessagePreprocessorTest {
             
             preprocessor.processMessage(message);
             
-            var stats = preprocessor.getStats();
+            var stats = preprocessor.stats();
             assertThat(stats.droppedMessages()).isEqualTo(1);
             assertThat(stats.processedMessages()).isEqualTo(0);
         }
@@ -199,7 +199,7 @@ class MessagePreprocessorTest {
             assertThatCode(() -> preprocessor.processMessage(event))
                 .doesNotThrowAnyException();
             
-            var stats = preprocessor.getStats();
+            var stats = preprocessor.stats();
             assertThat(stats.droppedMessages()).isEqualTo(1);
         }
     }
@@ -270,7 +270,7 @@ class MessagePreprocessorTest {
         void shouldTrackProcessingStatisticsCorrectly() {
             preprocessor.start();
             
-            var initialStats = preprocessor.getStats();
+            var initialStats = preprocessor.stats();
             assertThat(initialStats.processedMessages()).isEqualTo(0);
             assertThat(initialStats.droppedMessages()).isEqualTo(0);
             assertThat(initialStats.currentBatchSize()).isEqualTo(0);
@@ -287,7 +287,7 @@ class MessagePreprocessorTest {
             
             preprocessor.processMessage(event);
             
-            var updatedStats = preprocessor.getStats();
+            var updatedStats = preprocessor.stats();
             assertThat(updatedStats.processedMessages()).isEqualTo(1);
             assertThat(updatedStats.droppedMessages()).isEqualTo(0);
         }
@@ -303,7 +303,7 @@ class MessagePreprocessorTest {
                 preprocessor.processMessage(telemetryMessage);
             }
             
-            var stats = preprocessor.getStats();
+            var stats = preprocessor.stats();
             assertThat(stats.currentBatchSize()).isLessThanOrEqualTo(3);
         }
     }

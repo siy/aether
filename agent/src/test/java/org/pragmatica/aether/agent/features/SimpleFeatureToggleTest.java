@@ -5,10 +5,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.pragmatica.aether.agent.features.FeatureToggle.KnownFeature.*;
 
 /**
  * Simple feature toggle tests to demonstrate the core functionality.
@@ -26,122 +26,142 @@ class SimpleFeatureToggleTest {
     @Test
     @DisplayName("Test basic feature toggle functionality")
     void testBasicFeatureToggle() {
-        var testToggle = new SimpleFeatureToggle();
-        var featureKey = "test.feature";
+        // Test with enum-based API
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
         
-        // Initially should be disabled
-        assertThat(testToggle.isEnabled(featureKey)).isFalse();
+        // Enable/disable the feature
+        featureToggle.updateToggle(AGENT_ENABLED, false);
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isFalse();
         
-        // Enable the feature
-        testToggle.setEnabled(featureKey, true);
-        assertThat(testToggle.isEnabled(featureKey)).isTrue();
-        
-        // Disable the feature
-        testToggle.setEnabled(featureKey, false);
-        assertThat(testToggle.isEnabled(featureKey)).isFalse();
+        // Re-enable the feature
+        featureToggle.updateToggle(AGENT_ENABLED, true);
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
     }
     
     @Test
     @DisplayName("Test known features with defaults")
     void testKnownFeatures() {
         // Test some default values
-        assertThat(featureToggle.isEnabled("agent.enabled")).isTrue();
-        assertThat(featureToggle.isEnabled("agent.shadow_mode")).isFalse();
-        assertThat(featureToggle.isEnabled("llm.local.enabled")).isTrue();
-        assertThat(featureToggle.isEnabled("llm.cloud.enabled")).isFalse();
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(AGENT_SHADOW_MODE)).isFalse();
+        assertThat(featureToggle.isEnabled(LLM_LOCAL_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(LLM_CLOUD_ENABLED)).isFalse();
     }
     
     @Test
     @DisplayName("Test emergency mode")
     void testEmergencyMode() {
-        var featureKey = "test.feature";
-        
-        // Enable a feature
-        featureToggle.setEnabled(featureKey, true);
-        assertThat(featureToggle.isEnabled(featureKey)).isTrue();
+        // Enable a feature and verify normal state
+        featureToggle.updateToggle(AGENT_RECOMMENDATIONS_ENABLED, true);
+        assertThat(featureToggle.isEnabled(AGENT_RECOMMENDATIONS_ENABLED)).isTrue();
         assertThat(featureToggle.isEmergencyMode()).isFalse();
         
         // Activate emergency mode
         featureToggle.emergencyDisableAll();
         
         // All features should be disabled
-        assertThat(featureToggle.isEnabled(featureKey)).isFalse();
-        assertThat(featureToggle.isEnabled("agent.enabled")).isFalse();
+        assertThat(featureToggle.isEnabled(AGENT_RECOMMENDATIONS_ENABLED)).isFalse();
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isFalse();
         assertThat(featureToggle.isEmergencyMode()).isTrue();
         
         // Restore from emergency
         featureToggle.restoreFromEmergency();
         
         // Features should be restored
-        assertThat(featureToggle.isEnabled(featureKey)).isTrue();
-        assertThat(featureToggle.isEnabled("agent.enabled")).isTrue();
+        assertThat(featureToggle.isEnabled(AGENT_RECOMMENDATIONS_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
         assertThat(featureToggle.isEmergencyMode()).isFalse();
     }
     
     @Test
     @DisplayName("Test multiple features")
     void testMultipleFeatures() {
-        featureToggle.setEnabled("feature1", true);
-        featureToggle.setEnabled("feature2", false);
-        featureToggle.setEnabled("feature3", true);
+        featureToggle.updateToggle(AGENT_ENABLED, true);
+        featureToggle.updateToggle(AGENT_SHADOW_MODE, false);
+        featureToggle.updateToggle(LLM_LOCAL_ENABLED, true);
         
-        assertThat(featureToggle.isEnabled("feature1")).isTrue();
-        assertThat(featureToggle.isEnabled("feature2")).isFalse();
-        assertThat(featureToggle.isEnabled("feature3")).isTrue();
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(AGENT_SHADOW_MODE)).isFalse();
+        assertThat(featureToggle.isEnabled(LLM_LOCAL_ENABLED)).isTrue();
     }
     
-    /**
-     * Simple feature toggle implementation for testing.
-     */
-    public static class SimpleFeatureToggle {
-        private final Map<String, Boolean> features = new ConcurrentHashMap<>();
-        private volatile boolean emergencyMode = false;
+    @Test
+    @DisplayName("Test natural syntax with in() and notIn() methods")
+    void testNaturalSyntax() {
+        // Test the natural FEATURE.in(toggle) syntax
+        assertThat(AGENT_ENABLED.in(featureToggle)).isTrue();
+        assertThat(AGENT_SHADOW_MODE.in(featureToggle)).isFalse();
         
-        public SimpleFeatureToggle() {
-            // Initialize with default values
-            initializeDefaults();
-        }
+        // Test the natural FEATURE.notIn(toggle) syntax
+        assertThat(AGENT_ENABLED.notIn(featureToggle)).isFalse();
+        assertThat(AGENT_SHADOW_MODE.notIn(featureToggle)).isTrue();
         
-        public boolean isEnabled(String featureKey) {
-            if (emergencyMode) {
-                return false;
-            }
-            
-            return features.getOrDefault(featureKey, false);
-        }
+        // Change feature state and test again
+        featureToggle.updateToggle(AGENT_SHADOW_MODE, true);
+        assertThat(AGENT_SHADOW_MODE.in(featureToggle)).isTrue();
+        assertThat(AGENT_SHADOW_MODE.notIn(featureToggle)).isFalse();
+    }
+    
+    @Test
+    @DisplayName("Test config loading and exporting")
+    void testConfigLoadingExporting() {
+        // Modify some features
+        featureToggle.updateToggle(AGENT_SHADOW_MODE, true);
+        featureToggle.updateToggle(LLM_CLOUD_ENABLED, true);
         
-        public void setEnabled(String featureKey, boolean enabled) {
-            features.put(featureKey, enabled);
-        }
+        // Export config
+        var config = featureToggle.exportConfig();
+        assertThat(config).containsEntry(AGENT_SHADOW_MODE.key(), true);
+        assertThat(config).containsEntry(LLM_CLOUD_ENABLED.key(), true);
         
-        public void emergencyDisableAll() {
-            emergencyMode = true;
-        }
+        // Create new toggle and load config
+        var newToggle = new SimpleFeatureToggle();
+        newToggle.loadFromConfig(config);
         
-        public void restoreFromEmergency() {
-            emergencyMode = false;
-        }
+        // Verify the state was loaded
+        assertThat(newToggle.isEnabled(AGENT_SHADOW_MODE)).isTrue();
+        assertThat(newToggle.isEnabled(LLM_CLOUD_ENABLED)).isTrue();
+    }
+    
+    @Test
+    @DisplayName("Test unknown feature key handling")
+    void testUnknownFeatureKeys() {
+        // Create config with unknown key
+        var config = Map.of(
+            "agent.enabled", true,
+            "unknown.feature", true,
+            "llm.local.enabled", false
+        );
         
-        public boolean isEmergencyMode() {
-            return emergencyMode;
-        }
+        // Should load known features and ignore unknown ones
+        featureToggle.loadFromConfig(config);
         
-        private void initializeDefaults() {
-            // Set defaults for known features
-            features.put("agent.enabled", true);
-            features.put("agent.shadow_mode", false);
-            features.put("agent.recommendations.enabled", true);
-            features.put("agent.cli.natural_language", true);
-            
-            features.put("llm.local.enabled", true);
-            features.put("llm.cloud.enabled", false);
-            features.put("llm.fallback.enabled", true);
-            features.put("llm.cost_limits.enabled", true);
-            
-            features.put("agent.learning.enabled", false);
-            features.put("agent.autonomy.enabled", false);
-            features.put("agent.predictive.enabled", false);
-            features.put("agent.cross_cluster.enabled", false);
-        }
+        assertThat(featureToggle.isEnabled(AGENT_ENABLED)).isTrue();
+        assertThat(featureToggle.isEnabled(LLM_LOCAL_ENABLED)).isFalse();
+    }
+    
+    @Test
+    @DisplayName("Test Option-based fromKey method")
+    void testFromKeyReturnsOption() {
+        // Test with valid key - no extraction needed
+        FeatureToggle.KnownFeature.fromKey("agent.enabled")
+            .onEmpty(() -> fail("Expected feature to be found"))
+            .onPresent(feature -> assertThat(feature).isEqualTo(AGENT_ENABLED));
+        
+        // Test with invalid key - should not call onPresent
+        FeatureToggle.KnownFeature.fromKey("non.existent.feature")
+            .onPresentRun(() -> fail("Should not find non-existent feature"));
+        
+        // Test Option chaining with valid key
+        FeatureToggle.KnownFeature.fromKey("llm.local.enabled")
+            .map(FeatureToggle.KnownFeature::key)
+            .onEmpty(() -> fail("Expected to find llm.local.enabled"))
+            .onPresent(key -> assertThat(key).isEqualTo("llm.local.enabled"));
+        
+        // Test Option chaining with invalid key - using or() for fallback
+        var defaultResult = FeatureToggle.KnownFeature.fromKey("unknown")
+            .map(FeatureToggle.KnownFeature::key)
+            .or(() -> "default");
+        assertThat(defaultResult).isEqualTo("default");
     }
 }

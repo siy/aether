@@ -17,7 +17,6 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.release>24</java.release>
-        <java.enable-preview>--enable-preview</java.enable-preview>
 
         <!-- Dependencies -->
         <slf4j.version>2.0.12</slf4j.version>
@@ -151,7 +150,6 @@
                         <source>${java.release}</source>
                         <target>${java.release}</target>
                         <compilerArgs>
-                            <arg>${java.enable-preview}</arg>
                             <arg>-proc:full</arg>
                         </compilerArgs>
                     </configuration>
@@ -161,7 +159,6 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.1</version>
                     <configuration>
-                        <argLine>${java.enable-preview}</argLine>
                     </configuration>
                 </plugin>
                 <plugin>

@@ -127,51 +127,10 @@ public final class SliceKVSchema {
         }
     }
 
-    public static final class EndpointValue {
-        private final NodeId nodeId;
-        private final int instanceNumber;
-        private final SliceState state;
-        private final long timestamp;
-
-        public EndpointValue(NodeId nodeId, int instanceNumber, SliceState state, long timestamp) {
-            this.nodeId = nodeId;
-            this.instanceNumber = instanceNumber;
-            this.state = state;
-            this.timestamp = timestamp;
-        }
-
-        public NodeId nodeId() {
-            return nodeId;
-        }
-
-        public int instanceNumber() {
-            return instanceNumber;
-        }
-
-        public SliceState state() {
-            return state;
-        }
-
-        public long timestamp() {
-            return timestamp;
-        }
-
+    public record EndpointValue(NodeId nodeId, int instanceNumber, SliceState state, long timestamp) {
+        
         public String asString() {
             return nodeId.id() + ":" + instanceNumber + ":" + state.name() + ":" + timestamp;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            return obj instanceof EndpointValue other &&
-                    nodeId.equals(other.nodeId) &&
-                    instanceNumber == other.instanceNumber &&
-                    state.equals(other.state) &&
-                    timestamp == other.timestamp;
-        }
-
-        @Override
-        public int hashCode() {
-            return nodeId.hashCode() * 31 + instanceNumber * 17 + state.hashCode() * 13 + Long.hashCode(timestamp);
         }
 
         @Override

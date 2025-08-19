@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.pragmatica.lang.Option;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class ArtifactTest {
 
@@ -49,19 +50,19 @@ class ArtifactTest {
     @Test
     void artifact_parsing_rejects_invalid_format() {
         Artifact.artifact("invalid-format")
-            .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
+            .onSuccessRun(() -> fail("Should have failed"))
             .onFailure(cause -> assertThat(cause.message()).isNotEmpty());
 
         Artifact.artifact("group:artifact")
-            .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
+            .onSuccessRun(() -> fail("Should have failed"))
             .onFailure(cause -> assertThat(cause.message()).isNotEmpty());
 
         Artifact.artifact("group:artifact:version:extra")
-            .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
+            .onSuccessRun(() -> fail("Should have failed"))
             .onFailure(cause -> assertThat(cause.message()).isNotEmpty());
 
         Artifact.artifact("")
-            .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
+            .onSuccessRun(() -> fail("Should have failed"))
             .onFailure(cause -> assertThat(cause.message()).isNotEmpty());
     }
 

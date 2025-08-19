@@ -11,8 +11,6 @@ import org.pragmatica.cluster.topology.QuorumStateNotification;
 import org.pragmatica.lang.io.TimeSpan;
 import org.pragmatica.lang.Promise;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import org.pragmatica.message.MessageRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +21,7 @@ import java.util.regex.Pattern;
 
 public interface NodeDeploymentManager {
     
-    record SliceDeployment(SliceNodeKey key, SliceState state, long timestamp, ScheduledFuture<?> timeoutFuture) {}
+    record SliceDeployment(SliceNodeKey key, SliceState state, long timestamp) {}
     
     record NodeDeploymentConfiguration(
         TimeSpan loadingTimeout,
@@ -89,44 +87,21 @@ public interface NodeDeploymentManager {
             private void handleSliceStateUpdate(SliceNodeKey sliceKey, SliceStateValue stateValue) {
                 var currentDeployment = deployments.get(sliceKey);
                 
-                // Cancel existing timeout if any
-                if (currentDeployment != null && currentDeployment.timeoutFuture() != null) {
-                    currentDeployment.timeoutFuture().cancel(false);
-                }
+                // Timeouts are now handled by Promise.timeout() in individual handlers
                 
                 var state = stateValue.state();
-                ScheduledFuture<?> timeoutFuture = null;
+                // Timeout handling moved to individual Promise chains
                 
-                // Set up timeout for transitional states
-                if (state.isTransitional()) {
-                    var timeout = configuration.timeoutFor(state);
-                    // TODO: Replace with Promise.timeout() once available in Promise API
-                    timeoutFuture = scheduler.schedule(
-                        () -> handleStateTimeout(sliceKey, state),
-                        timeout.duration().toMillis(),
-                        TimeUnit.MILLISECONDS
-                    );
-                }
+                // Note: Timeout handling is now done via Promise.timeout() in individual handlers
+                // No need for manual timeout scheduling here
                 
-                var newDeployment = new SliceDeployment(sliceKey, state, stateValue.timestamp(), timeoutFuture);
+                var newDeployment = new SliceDeployment(sliceKey, state, stateValue.timestamp());
                 deployments.put(sliceKey, newDeployment);
                 
                 // Process state transition
                 processStateTransition(sliceKey, state);
             }
             
-            private void handleStateTimeout(SliceNodeKey sliceKey, SliceState state) {
-                log.warn("Slice state timeout for {} in state {}", sliceKey, state);
-                
-                // Transition to FAILED state on timeout
-                var failedState = new SliceStateValue(SliceState.FAILED, System.currentTimeMillis(), 
-                    deployments.get(sliceKey).timestamp() + 1);
-                
-                // Update KV store with FAILED state
-                // This would typically use the cluster KV store API
-                // For now, we'll just remove the deployment
-                deployments.remove(sliceKey);
-            }
             
             private void processStateTransition(SliceNodeKey sliceKey, SliceState state) {
                 switch (state) {
@@ -144,6 +119,7 @@ public interface NodeDeploymentManager {
             private void handleLoading(SliceNodeKey sliceKey) {
                 // Delegate to SliceStore for actual slice loading
                 sliceStore.loadSlice(sliceKey.artifact())
+                    .timeout(configuration.timeoutFor(SliceState.LOADING))
                     .onSuccess(slice -> {
                         // Transition to LOADED state
                         updateSliceState(sliceKey, SliceState.LOADED);
@@ -162,6 +138,7 @@ public interface NodeDeploymentManager {
             private void handleActivating(SliceNodeKey sliceKey) {
                 // Delegate to SliceStore for slice activation
                 sliceStore.activateSlice(sliceKey.artifact())
+                    .timeout(configuration.timeoutFor(SliceState.ACTIVATING))
                     .onSuccess(slice -> {
                         // Transition to ACTIVE state
                         updateSliceState(sliceKey, SliceState.ACTIVE);
@@ -175,12 +152,13 @@ public interface NodeDeploymentManager {
             private void handleActive(SliceNodeKey sliceKey) {
                 // Slice is now active and serving requests
                 // Register endpoints in EndpointRegistry (future implementation)
-                // TODO: Generate slice activation notification for monitoring/observability
+                // TODO: We may want to generate a notification for slice activation. No need to implement this now, just leave todo.
             }
             
             private void handleDeactivating(SliceNodeKey sliceKey) {
                 // Delegate to SliceStore for slice deactivation
                 sliceStore.deactivateSlice(sliceKey.artifact())
+                    .timeout(configuration.timeoutFor(SliceState.DEACTIVATING))
                     .onSuccess(slice -> {
                         // Transition back to LOADED state
                         updateSliceState(sliceKey, SliceState.LOADED);
@@ -199,6 +177,7 @@ public interface NodeDeploymentManager {
             private void handleUnloading(SliceNodeKey sliceKey) {
                 // Delegate to SliceStore for slice unloading
                 sliceStore.unloadSlice(sliceKey.artifact())
+                    .timeout(configuration.timeoutFor(SliceState.UNLOADING))
                     .onSuccess(result -> {
                         // Remove from deployments map
                         deployments.remove(sliceKey);
@@ -253,15 +232,8 @@ public interface NodeDeploymentManager {
                         new ConcurrentHashMap<>()
                     ));
                     case DISAPPEARED -> {
-                        // Cancel all ongoing timeouts before going dormant
-                        var currentState = state().get();
-                        if (currentState instanceof NodeDeploymentState.ActiveNodeDeploymentState active) {
-                            active.deployments().values().forEach(deployment -> {
-                                if (deployment.timeoutFuture() != null) {
-                                    deployment.timeoutFuture().cancel(false);
-                                }
-                            });
-                        }
+                        // Clean up any pending operations before going dormant
+                        // Individual Promise timeouts will handle their own cleanup
                         state().set(new NodeDeploymentState.DormantNodeDeploymentState());
                     }
                 }

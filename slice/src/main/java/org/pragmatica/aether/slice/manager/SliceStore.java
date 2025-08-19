@@ -64,6 +64,14 @@ public interface SliceStore {
 
     static SliceStore sliceManager() {
         record loadedSlice(Artifact artifact, Result<ActiveSlice> slice) implements LoadedSlice {}
+        
+        record LoadedSliceWithUnstartedSlice(Artifact artifact, Slice unstartedSlice) implements LoadedSlice {
+            @Override
+            public Result<ActiveSlice> slice() {
+                // Return a result that will start the slice when accessed
+                return unstartedSlice.start().await();
+            }
+        }
 
         record store(Map<Artifact, Promise<ActiveSlice>> instances,
                      Map<Artifact, SliceClassLoader> classLoaders,
@@ -152,13 +160,22 @@ public interface SliceStore {
                 }
                 
                 return activePromise.flatMap(activeSlice -> 
-                    activeSlice.stop().map(_ -> {
-                        // Move from active back to loaded
-                        instances.remove(artifact);
-                        var loadedSlice = new loadedSlice(artifact, Result.success(activeSlice));
-                        loadedInstances.put(artifact, loadedSlice);
-                        return loadedSlice;
-                    })
+                    activeSlice.stop()
+                        .onSuccess(_ -> {
+                            // Move from active back to loaded only on successful stop
+                            instances.remove(artifact);
+                            var loadedSlice = new loadedSlice(artifact, Result.success(activeSlice));
+                            loadedInstances.put(artifact, loadedSlice);
+                        })
+                        .onFailure(cause -> {
+                            // Log stop failure but keep slice in active state
+                            log.error("Failed to stop slice {} during deactivation: {}", artifact, cause.message());
+                        })
+                        .map(_ -> {
+                            // Return loaded slice even if stop failed (slice remains tracked as active)
+                            var loadedSlice = new loadedSlice(artifact, Result.success(activeSlice));
+                            return loadedSlice;
+                        })
                 );
             }
 
@@ -168,14 +185,12 @@ public interface SliceStore {
                 
                 var output = Promise.<Unit>promise();
                 
-                // Handle if slice is currently active
-                var activePromise = instances.remove(artifact);
+                // Check if slice is currently active - this should be an error
+                var activePromise = instances.get(artifact);
                 if (activePromise != null) {
-                    activePromise.flatMap(ActiveSlice::stop)
-                        .withResult(_ -> {
-                            cleanupSlice(artifact);
-                            output.succeed(Unit.unit());
-                        });
+                    var errorMessage = "Attempt to unload active slice: " + artifact + " - this is a bug in logic";
+                    log.error(errorMessage);
+                    output.fail(Causes.cause(errorMessage));
                     return output;
                 }
                 
@@ -251,9 +266,10 @@ public interface SliceStore {
                 if (it.hasNext()) {
                     var slice = it.next();
                     // Create a LoadedSlice with the slice loaded but not started
-                    // For now, we'll start it immediately - in a full implementation we'd have separate loading
-                    return slice.start()
-                        .map(activeSlice -> new loadedSlice(artifact, Result.success(activeSlice)));
+                    // Slice should not be automatically activated - activation is a separate step
+                    // Store the unstarted slice so activation can call start() later
+                    var loadedSlice = new LoadedSliceWithUnstartedSlice(artifact, slice);
+                    return Promise.success(loadedSlice);
                 } else {
                     return NO_SERVICE.apply(location.url().toString()).promise();
                 }

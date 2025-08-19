@@ -9,18 +9,47 @@ import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValuePut;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValueRemove;
 import org.pragmatica.cluster.topology.QuorumStateNotification;
 import org.pragmatica.lang.io.TimeSpan;
-import org.pragmatica.message.MessageRouter;
-
-import java.util.concurrent.ConcurrentHashMap;
+import org.pragmatica.lang.Promise;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import org.pragmatica.message.MessageRouter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 public interface NodeDeploymentManager {
     
     record SliceDeployment(SliceNodeKey key, SliceState state, long timestamp, ScheduledFuture<?> timeoutFuture) {}
+    
+    record NodeDeploymentConfiguration(
+        TimeSpan loadingTimeout,
+        TimeSpan activatingTimeout,
+        TimeSpan deactivatingTimeout,
+        TimeSpan unloadingTimeout
+    ) {
+        public static NodeDeploymentConfiguration defaultConfiguration() {
+            return new NodeDeploymentConfiguration(
+                TimeSpan.timeSpan(2).minutes(),
+                TimeSpan.timeSpan(1).minutes(),
+                TimeSpan.timeSpan(30).seconds(),
+                TimeSpan.timeSpan(2).minutes()
+            );
+        }
+        
+        public TimeSpan timeoutFor(SliceState state) {
+            return switch (state) {
+                case LOADING -> loadingTimeout;
+                case ACTIVATING -> activatingTimeout;
+                case DEACTIVATING -> deactivatingTimeout;
+                case UNLOADING -> unloadingTimeout;
+                default -> throw new IllegalArgumentException("No timeout configured for state: " + state);
+            };
+        }
+    }
     
     sealed interface NodeDeploymentState {
         default void onValuePut(ValuePut<?,?> valuePut) {}
@@ -32,8 +61,11 @@ public interface NodeDeploymentManager {
             NodeId self, 
             SliceStore sliceStore,
             ScheduledExecutorService scheduler,
+            NodeDeploymentConfiguration configuration,
             ConcurrentHashMap<SliceNodeKey, SliceDeployment> deployments
         ) implements NodeDeploymentState {
+            
+            private static final Logger log = LoggerFactory.getLogger(ActiveNodeDeploymentState.class);
 
             @Override
             public void onValuePut(ValuePut<?,?> valuePut) {
@@ -44,14 +76,14 @@ public interface NodeDeploymentManager {
                 }
                 
                 // TODO: Fix API access once actual ValuePut interface is available
-                System.out.println("ValuePut received for key: " + key);
+                log.debug("ValuePut received for key: {}", key);
             }
 
             @Override
             public void onValueRemove(ValueRemove<?,?> valueRemove) {
                 // Simplified implementation - assume key is accessible as toString  
                 var key = valueRemove.toString(); // Will need to fix based on actual API
-                System.out.println("ValueRemove received for key: " + key);
+                log.debug("ValueRemove received for key: {}", key);
             }
             
             private void handleSliceStateUpdate(SliceNodeKey sliceKey, SliceStateValue stateValue) {
@@ -65,13 +97,13 @@ public interface NodeDeploymentManager {
                 var state = stateValue.state();
                 ScheduledFuture<?> timeoutFuture = null;
                 
-                // Set up timeout for transitional states (simplified implementation)
+                // Set up timeout for transitional states
                 if (state.isTransitional()) {
-                    // TODO: Fix TimeSpan API usage - for now use default timeout
-                    long timeoutMillis = 60000; // 1 minute default
+                    var timeout = configuration.timeoutFor(state);
+                    // TODO: Replace with Promise.timeout() once available in Promise API
                     timeoutFuture = scheduler.schedule(
                         () -> handleStateTimeout(sliceKey, state),
-                        timeoutMillis,
+                        timeout.duration().toMillis(),
                         TimeUnit.MILLISECONDS
                     );
                 }
@@ -84,7 +116,7 @@ public interface NodeDeploymentManager {
             }
             
             private void handleStateTimeout(SliceNodeKey sliceKey, SliceState state) {
-                System.err.println("Slice state timeout for " + sliceKey + " in state " + state);
+                log.warn("Slice state timeout for {} in state {}", sliceKey, state);
                 
                 // Transition to FAILED state on timeout
                 var failedState = new SliceStateValue(SliceState.FAILED, System.currentTimeMillis(), 
@@ -143,6 +175,7 @@ public interface NodeDeploymentManager {
             private void handleActive(SliceNodeKey sliceKey) {
                 // Slice is now active and serving requests
                 // Register endpoints in EndpointRegistry (future implementation)
+                // TODO: Generate slice activation notification for monitoring/observability
             }
             
             private void handleDeactivating(SliceNodeKey sliceKey) {
@@ -172,7 +205,7 @@ public interface NodeDeploymentManager {
                     })
                     .onFailure(cause -> {
                         // Log error but still remove from tracking
-                        System.err.println("Failed to unload slice " + sliceKey + ": " + cause.message());
+                        log.error("Failed to unload slice {}: {}", sliceKey, cause.message());
                         deployments.remove(sliceKey);
                     });
             }
@@ -189,10 +222,15 @@ public interface NodeDeploymentManager {
     }
 
     static NodeDeploymentManager nodeDeploymentManager(NodeId self, MessageRouter router, SliceStore sliceStore, ScheduledExecutorService scheduler) {
+        return nodeDeploymentManager(self, router, sliceStore, scheduler, NodeDeploymentConfiguration.defaultConfiguration());
+    }
+    
+    static NodeDeploymentManager nodeDeploymentManager(NodeId self, MessageRouter router, SliceStore sliceStore, ScheduledExecutorService scheduler, NodeDeploymentConfiguration configuration) {
         record deploymentManager(
             NodeId self, 
             SliceStore sliceManager, 
             ScheduledExecutorService scheduler,
+            NodeDeploymentConfiguration configuration,
             AtomicReference<NodeDeploymentState> state
         ) implements NodeDeploymentManager {
 
@@ -211,6 +249,7 @@ public interface NodeDeploymentManager {
                         self(), 
                         sliceManager(),
                         scheduler(),
+                        configuration(),
                         new ConcurrentHashMap<>()
                     ));
                     case DISAPPEARED -> {
@@ -238,6 +277,7 @@ public interface NodeDeploymentManager {
             self, 
             sliceStore, 
             scheduler,
+            configuration,
             new AtomicReference<>(new NodeDeploymentState.DormantNodeDeploymentState())
         );
 

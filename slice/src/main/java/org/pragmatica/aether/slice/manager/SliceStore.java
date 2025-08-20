@@ -36,26 +36,25 @@ public interface SliceStore {
 
     List<LoadedSlice> loadedSlices();
 
-    // New lifecycle methods for consensus-backed slice management
-    
+
     /**
      * Load a slice into memory but do not activate it.
      * This corresponds to the LOADING → LOADED state transition.
      */
     Promise<LoadedSlice> loadSlice(Artifact artifact);
-    
+
     /**
      * Activate a previously loaded slice, making it ready to serve requests.
      * This corresponds to the ACTIVATING → ACTIVE state transition.
      */
     Promise<ActiveSlice> activateSlice(Artifact artifact);
-    
+
     /**
      * Deactivate an active slice, but keep it loaded in memory.
      * This corresponds to the DEACTIVATING → LOADED state transition.
      */
     Promise<LoadedSlice> deactivateSlice(Artifact artifact);
-    
+
     /**
      * Unload a slice from memory completely.
      * This corresponds to the UNLOADING → (removed) state transition.
@@ -64,7 +63,7 @@ public interface SliceStore {
 
     static SliceStore sliceManager() {
         record loadedSlice(Artifact artifact, Result<ActiveSlice> slice) implements LoadedSlice {}
-        
+
         record LoadedSliceWithUnstartedSlice(Artifact artifact, Slice unstartedSlice) implements LoadedSlice {
             @Override
             public Result<ActiveSlice> slice() {
@@ -115,76 +114,83 @@ public interface SliceStore {
             @Override
             public Promise<LoadedSlice> loadSlice(Artifact artifact) {
                 log.debug("Loading slice {} (new lifecycle)", artifact);
-                
+
                 // If already loaded, return existing
                 var existing = loadedInstances.get(artifact);
                 if (existing != null) {
                     return Promise.success(existing);
                 }
-                
+
                 // Find a repository to load from (simplified - would use repository registry in full implementation)
                 var repository = findRepository(artifact);
-                
+
                 return repository.locate(artifact)
-                    .withSuccess(location -> log.debug("Repository provided: {}", location))
-                    .withFailure(cause -> log.warn("Unable to load {}, cause: {}", artifact, cause))
-                    .flatMap(location -> loadSliceFromLocation(location, artifact))
-                    .onSuccess(loadedSlice -> loadedInstances.put(artifact, loadedSlice));
+                                 .withSuccess(location -> log.debug("Repository provided: {}", location))
+                                 .withFailure(cause -> log.warn("Unable to load {}, cause: {}", artifact, cause))
+                                 .flatMap(location -> loadSliceFromLocation(location, artifact))
+                                 .onSuccess(loadedSlice -> loadedInstances.put(artifact, loadedSlice));
             }
 
             @Override
             public Promise<ActiveSlice> activateSlice(Artifact artifact) {
                 log.debug("Activating slice {}", artifact);
-                
+
                 var loadedSlice = loadedInstances.get(artifact);
                 if (loadedSlice == null) {
                     return Causes.cause("Slice not loaded: " + artifact).promise();
                 }
-                
+
                 return loadedSlice.slice()
-                    .map(activeSlice -> {
-                        // Move from loaded to active tracking
-                        instances.put(artifact, Promise.success(activeSlice));
-                        return activeSlice;
-                    })
-                    .fold(cause -> cause.promise(), Promise::success);
+                                  .map(activeSlice -> {
+                                      // Move from loaded to active tracking
+                                      instances.put(artifact, Promise.success(activeSlice));
+                                      return activeSlice;
+                                  })
+                                  .fold(cause -> cause.promise(), Promise::success);
             }
 
             @Override
             public Promise<LoadedSlice> deactivateSlice(Artifact artifact) {
                 log.debug("Deactivating slice {}", artifact);
-                
+
                 var activePromise = instances.get(artifact);
                 if (activePromise == null) {
                     return Causes.cause("Slice not active: " + artifact).promise();
                 }
-                
-                return activePromise.flatMap(activeSlice -> 
-                    activeSlice.stop()
-                        .onSuccess(_ -> {
-                            // Move from active back to loaded only on successful stop
-                            instances.remove(artifact);
-                            var loadedSlice = new loadedSlice(artifact, Result.success(activeSlice));
-                            loadedInstances.put(artifact, loadedSlice);
-                        })
-                        .onFailure(cause -> {
-                            // Log stop failure but keep slice in active state
-                            log.error("Failed to stop slice {} during deactivation: {}", artifact, cause.message());
-                        })
-                        .map(_ -> {
-                            // Return loaded slice even if stop failed (slice remains tracked as active)
-                            var loadedSlice = new loadedSlice(artifact, Result.success(activeSlice));
-                            return loadedSlice;
-                        })
+
+                return activePromise.flatMap(activeSlice ->
+                                                     activeSlice.stop()
+                                                                .onSuccess(_ -> {
+                                                                    // Move from active back to loaded only on successful stop
+                                                                    instances.remove(artifact);
+                                                                    var loadedSlice = new loadedSlice(artifact,
+                                                                                                      Result.success(
+                                                                                                              activeSlice));
+                                                                    loadedInstances.put(artifact, loadedSlice);
+                                                                })
+                                                                .onFailure(cause -> {
+                                                                    // Log stop failure but keep slice in active state
+                                                                    log.error(
+                                                                            "Failed to stop slice {} during deactivation: {}",
+                                                                            artifact,
+                                                                            cause.message());
+                                                                })
+                                                                .map(_ -> {
+                                                                    // Return loaded slice even if stop failed (slice remains tracked as active)
+                                                                    var loadedSlice = new loadedSlice(artifact,
+                                                                                                      Result.success(
+                                                                                                              activeSlice));
+                                                                    return loadedSlice;
+                                                                })
                 );
             }
 
             @Override
             public Promise<Unit> unloadSlice(Artifact artifact) {
                 log.debug("Unloading slice {}", artifact);
-                
+
                 var output = Promise.<Unit>promise();
-                
+
                 // Check if slice is currently active - this should be an error
                 var activePromise = instances.get(artifact);
                 if (activePromise != null) {
@@ -193,7 +199,7 @@ public interface SliceStore {
                     output.fail(Causes.cause(errorMessage));
                     return output;
                 }
-                
+
                 // Handle if slice is loaded but not active
                 var loaded = loadedInstances.remove(artifact);
                 if (loaded != null) {
@@ -201,7 +207,7 @@ public interface SliceStore {
                     output.succeed(Unit.unit());
                     return output;
                 }
-                
+
                 // Slice not found
                 output.fail(Causes.cause("Slice not found: " + artifact));
                 return output;
@@ -249,7 +255,7 @@ public interface SliceStore {
                         ? Promise.success(it.next()).flatMap(Slice::start)
                         : NO_SERVICE.apply(location.url().toString()).promise();
             }
-            
+
             private Promise<LoadedSlice> loadSliceFromLocation(Location location, Artifact artifact) {
                 var loader = new SliceClassLoader(new URL[]{location.url()}, Slice.class.getClassLoader());
 
@@ -259,8 +265,10 @@ public interface SliceStore {
                               .onSuccessRun(() -> classLoaders.put(location.artifact(), loader))
                               .onFailureRun(() -> cleanupClassLoader(loader));
             }
-            
-            private Promise<LoadedSlice> loadSliceService(ServiceLoader<Slice> serviceLoader, Location location, Artifact artifact) {
+
+            private Promise<LoadedSlice> loadSliceService(ServiceLoader<Slice> serviceLoader,
+                                                          Location location,
+                                                          Artifact artifact) {
                 var it = serviceLoader.iterator();
 
                 if (it.hasNext()) {
@@ -274,13 +282,13 @@ public interface SliceStore {
                     return NO_SERVICE.apply(location.url().toString()).promise();
                 }
             }
-            
+
             private Repository findRepository(Artifact artifact) {
                 // Simplified implementation - in reality this would query a repository registry
                 // For now, return a local repository
                 return LocalRepository.localRepository();
             }
-            
+
             private void cleanupSlice(Artifact artifact) {
                 var classLoader = classLoaders.remove(artifact);
                 if (classLoader != null) {

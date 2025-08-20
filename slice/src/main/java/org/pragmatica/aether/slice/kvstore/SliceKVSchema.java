@@ -13,7 +13,7 @@ import org.pragmatica.lang.Result;
 import org.pragmatica.lang.parse.Number;
 import org.pragmatica.lang.utils.Causes;
 
-
+// TODO: rework as StructuredKey and provide StructuredPattern
 public final class SliceKVSchema {
 
     private SliceKVSchema() {
@@ -49,7 +49,7 @@ public final class SliceKVSchema {
             }
 
             return Artifact.artifact(parts[2])
-                    .map(artifact -> new SliceNodeKey(artifact, NodeId.nodeId(parts[1])));
+                           .map(artifact -> new SliceNodeKey(artifact, NodeId.nodeId(parts[1])));
         }
     }
 
@@ -80,7 +80,7 @@ public final class SliceKVSchema {
     /// Endpoint-key format (for slice instance endpoints):
     /// ```
     /// endpoints/{groupId}:{artifactId}:{version}/{endpointName}:{instanceNumber}
-    /// ```
+    ///```
     public record EndpointKey(Artifact artifact, EntryPointId entryPointId, int instanceNumber) {
 
         public String asString() {
@@ -110,12 +110,12 @@ public final class SliceKVSchema {
 
             var artifactPart = content.substring(0, slashIndex);
             var endpointPart = content.substring(slashIndex + 1);
-            
+
             var colonIndex = endpointPart.lastIndexOf(':');
             if (colonIndex == -1) {
                 return Result.failure(Causes.cause("Invalid endpoint key format: " + key));
             }
-            
+
             var entryPointPart = endpointPart.substring(0, colonIndex);
             var instancePart = endpointPart.substring(colonIndex + 1);
 
@@ -128,7 +128,7 @@ public final class SliceKVSchema {
     }
 
     public record EndpointValue(NodeId nodeId, int instanceNumber, SliceState state, long timestamp) {
-        
+
         public String asString() {
             return nodeId.id() + ":" + instanceNumber + ":" + state.name() + ":" + timestamp;
         }
@@ -166,6 +166,8 @@ public final class SliceKVSchema {
         ).map(Artifact::artifact);
     }
 
-    private static final Fn1<Cause, String> SLICE_KEY_FORMAT_ERROR = Causes.forValue("Invalid slice key format: {0}, expected slices/{{nodeId}}/{{groupId}}:{{artifactId}}:{{version}}");
-    private static final Fn1<Cause, String> ARTIFACT_FORMAT_ERROR = Causes.forValue("Invalid artifact format: {0}, expected {{groupId}}:{{artifactId}}:{{version}}");
+    private static final Fn1<Cause, String> SLICE_KEY_FORMAT_ERROR = Causes.forValue(
+            "Invalid slice key format: {0}, expected slices/{{nodeId}}/{{groupId}}:{{artifactId}}:{{version}}");
+    private static final Fn1<Cause, String> ARTIFACT_FORMAT_ERROR = Causes.forValue(
+            "Invalid artifact format: {0}, expected {{groupId}}:{{artifactId}}:{{version}}");
 }

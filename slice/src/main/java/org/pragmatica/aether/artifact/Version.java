@@ -30,22 +30,21 @@ public record Version(int major, int minor, int patch, String qualifier) {
             parts[2] = parts[2].substring(0, dashIndex);
         }
 
-        return Result.all(
-                        Number.parseInt(parts[0]),
-                        Number.parseInt(parts[1]),
-                        Number.parseInt(parts[2]),
-                        Result.success(qualifier))
-                .flatMap(Version::version);
+        return Result.all(Number.parseInt(parts[0]),
+                          Number.parseInt(parts[1]),
+                          Number.parseInt(parts[2]),
+                          Result.success(qualifier))
+                     .flatMap(Version::version);
     }
 
     public static Result<Version> version(int major, int minor, int patch, Option<String> qualifier) {
         var innerQualifier = qualifier.map(text -> "-" + text).or("");
 
         return Result.all(ensure(major, Is::greaterThanOrEqualTo, 0),
-                        ensure(minor, Is::greaterThanOrEqualTo, 0),
-                        ensure(patch, Is::greaterThanOrEqualTo, 0),
-                        ensure(innerQualifier, Is::matches, QUALIFIER_PATTERN))
-                .map(Version::new);
+                          ensure(minor, Is::greaterThanOrEqualTo, 0),
+                          ensure(patch, Is::greaterThanOrEqualTo, 0),
+                          ensure(innerQualifier, Is::matches, QUALIFIER_PATTERN))
+                     .map(Version::new);
     }
 
     public String bareVersion() {
@@ -57,5 +56,6 @@ public record Version(int major, int minor, int patch, String qualifier) {
     }
 
     private static final Pattern QUALIFIER_PATTERN = Pattern.compile("^[\\-a-zA-Z0-9-_.]*$");
-    private static final Fn1<Cause, String> FORMAT_ERROR = Causes.forValue("Invalid version format: {0}, expected {major}.{minor}.{patch}[-{suffix}]");
+    private static final Fn1<Cause, String> FORMAT_ERROR = Causes.forValue(
+            "Invalid version format: {0}, expected {major}.{minor}.{patch}[-{suffix}]");
 }

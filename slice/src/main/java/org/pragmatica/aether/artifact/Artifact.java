@@ -16,7 +16,7 @@ public record Artifact(GroupId groupId, ArtifactId artifactId, Version version) 
         }
 
         return Result.all(GroupId.groupId(parts[0]), ArtifactId.artifactId(parts[1]), Version.version(parts[2]))
-                .map(Artifact::artifact);
+                     .map(Artifact::artifact);
     }
 
     public static Artifact artifact(GroupId groupId, ArtifactId artifactId, Version version) {

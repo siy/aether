@@ -1,7 +1,6 @@
 package org.pragmatica.aether.slice;
 
 import org.junit.jupiter.api.Test;
-import org.pragmatica.lang.io.TimeSpan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,13 +12,13 @@ class SliceStateTest {
     void transitional_states_have_timeouts() {
         assertThat(SliceState.LOADING.hasTimeout()).isTrue();
         assertThat(SliceState.LOADING.timeout()).isEqualTo(timeSpan(2).minutes());
-        
+
         assertThat(SliceState.ACTIVATING.hasTimeout()).isTrue();
         assertThat(SliceState.ACTIVATING.timeout()).isEqualTo(timeSpan(1).minutes());
-        
+
         assertThat(SliceState.DEACTIVATING.hasTimeout()).isTrue();
         assertThat(SliceState.DEACTIVATING.timeout()).isEqualTo(timeSpan(30).seconds());
-        
+
         assertThat(SliceState.UNLOADING.hasTimeout()).isTrue();
         assertThat(SliceState.UNLOADING.timeout()).isEqualTo(timeSpan(2).minutes());
     }
@@ -41,7 +40,7 @@ class SliceStateTest {
         assertThat(SliceState.ACTIVATING.isTransitional()).isTrue();
         assertThat(SliceState.DEACTIVATING.isTransitional()).isTrue();
         assertThat(SliceState.UNLOADING.isTransitional()).isTrue();
-        
+
         assertThat(SliceState.LOAD.isTransitional()).isFalse();
         assertThat(SliceState.LOADED.isTransitional()).isFalse();
         assertThat(SliceState.ACTIVATE.isTransitional()).isFalse();
@@ -90,7 +89,7 @@ class SliceStateTest {
     @Test
     void unloading_is_terminal_state() {
         assertThat(SliceState.UNLOADING.validTransitions()).isEmpty();
-        
+
         assertThatThrownBy(() -> SliceState.UNLOADING.nextState())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("UNLOADING is terminal state");
@@ -107,11 +106,11 @@ class SliceStateTest {
     @Test
     void slice_state_parsing_rejects_invalid_values() {
         SliceState.sliceState("INVALID")
-                .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
-                .onFailure(cause -> assertThat(cause.message()).contains("Unknown slice state"));
-        
+                  .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
+                  .onFailure(cause -> assertThat(cause.message()).contains("Unknown slice state"));
+
         SliceState.sliceState("")
-                .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
-                .onFailure(cause -> assertThat(cause.message()).contains("Unknown slice state"));
+                  .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
+                  .onFailure(cause -> assertThat(cause.message()).contains("Unknown slice state"));
     }
 }

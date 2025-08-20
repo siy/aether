@@ -7,13 +7,14 @@ import org.pragmatica.aether.artifact.GroupId;
 import org.pragmatica.aether.artifact.Version;
 import org.pragmatica.aether.slice.EntryPointId;
 import org.pragmatica.aether.slice.SliceState;
+import org.pragmatica.aether.slice.kvstore.SliceKVSchema.EndpointKey;
+import org.pragmatica.aether.slice.kvstore.SliceKVSchema.EndpointValue;
+import org.pragmatica.aether.slice.kvstore.SliceKVSchema.SliceNodeKey;
+import org.pragmatica.aether.slice.kvstore.SliceKVSchema.SliceStateValue;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.lang.Option;
-import org.pragmatica.lang.Result;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import org.pragmatica.aether.slice.kvstore.SliceKVSchema.*;
 
 class SliceKVSchemaTest {
 
@@ -40,7 +41,7 @@ class SliceKVSchemaTest {
     void slice_node_key_invalid_format_returns_failure() {
         var result1 = SliceNodeKey.sliceNodeKey("invalid-key");
         assertThat(result1.isFailure()).isTrue();
-        
+
         var result2 = SliceNodeKey.sliceNodeKey("slice-invalid");
         assertThat(result2.isFailure()).isTrue();
 

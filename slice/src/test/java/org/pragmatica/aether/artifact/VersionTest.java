@@ -27,7 +27,7 @@ class VersionTest {
                    assertThat(version.major()).isEqualTo(1);
                    assertThat(version.minor()).isEqualTo(0);
                    assertThat(version.patch()).isEqualTo(0);
-                   assertThat(version.qualifier()).isEqualTo("-SNAPSHOT");
+                   assertThat(version.qualifier()).isEqualTo("SNAPSHOT");
                })
                .onFailureRun(Assertions::fail);
     }
@@ -39,7 +39,7 @@ class VersionTest {
                    assertThat(version.major()).isEqualTo(2);
                    assertThat(version.minor()).isEqualTo(1);
                    assertThat(version.patch()).isEqualTo(5);
-                   assertThat(version.qualifier()).isEqualTo("-beta1");
+                   assertThat(version.qualifier()).isEqualTo("beta1");
                })
                .onFailureRun(Assertions::fail);
     }
@@ -91,36 +91,29 @@ class VersionTest {
 
     @Test
     void version_bare_version_excludes_qualifier() {
-        var version = Version.version(2, 3, 4, Option.option("rc1")).unwrap();
-        assertThat(version.bareVersion()).isEqualTo("2.3.4");
+        Version.version(2, 3, 4, Option.option("rc1"))
+               .onFailureRun(Assertions::fail)
+               .onSuccess(version -> assertThat(version.bareVersion()).isEqualTo("2.3.4"));
     }
 
     @Test
     void version_with_qualifier_includes_qualifier() {
-        var version = Version.version(1, 0, 0, Option.option("SNAPSHOT")).unwrap();
-        assertThat(version.withQualifier()).isEqualTo("1.0.0-SNAPSHOT");
+        Version.version(1, 0, 0, Option.option("SNAPSHOT"))
+               .onFailureRun(Assertions::fail)
+               .onSuccess(version -> assertThat(version.withQualifier()).isEqualTo("1.0.0-SNAPSHOT"));
     }
 
     @Test
     void version_with_no_qualifier_shows_bare_version() {
-        var version = Version.version(1, 2, 3, Option.none()).unwrap();
-        assertThat(version.withQualifier()).isEqualTo("1.2.3");
+        Version.version(1, 2, 3, Option.none())
+               .onFailureRun(Assertions::fail)
+               .onSuccess(version -> assertThat(version.withQualifier()).isEqualTo("1.2.3"));
     }
 
     @Test
-    void version_parsing_handles_edge_cases() {
+    void version_with_incomplete_qualifier_is_broken() {
         // Version with dash but no qualifier
         Version.version("1.2.3-")
-               .onSuccess(version -> assertThat(version.qualifier()).isEqualTo("-"))
-               .onFailureRun(Assertions::fail);
-
-        // Version with zero components
-        Version.version("0.0.0")
-               .onSuccess(version -> {
-                   assertThat(version.major()).isEqualTo(0);
-                   assertThat(version.minor()).isEqualTo(0);
-                   assertThat(version.patch()).isEqualTo(0);
-               })
-               .onFailureRun(Assertions::fail);
+               .onSuccessRun(Assertions::fail);
     }
 }

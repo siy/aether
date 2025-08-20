@@ -11,41 +11,39 @@ class ArtifactTest {
 
     @Test
     void artifact_parsing_with_valid_coordinates() {
-        var result = Artifact.artifact("com.example:test-lib:1.0.0");
-
-        assertThat(result.isSuccess()).isTrue();
-        var artifact = result.unwrap();
-        assertThat(artifact.groupId().id()).isEqualTo("com.example");
-        assertThat(artifact.artifactId().id()).isEqualTo("test-lib");
-        assertThat(artifact.version().major()).isEqualTo(1);
-        assertThat(artifact.version().minor()).isEqualTo(0);
-        assertThat(artifact.version().patch()).isEqualTo(0);
-        assertThat(artifact.version().qualifier()).isEmpty();
+        Artifact.artifact("com.example:test-lib:1.0.0")
+                .onFailureRun(Assertions::fail)
+                .onSuccess(artifact -> {
+                    assertThat(artifact.groupId().id()).isEqualTo("com.example");
+                    assertThat(artifact.artifactId().id()).isEqualTo("test-lib");
+                    assertThat(artifact.version().major()).isEqualTo(1);
+                    assertThat(artifact.version().minor()).isEqualTo(0);
+                    assertThat(artifact.version().patch()).isEqualTo(0);
+                    assertThat(artifact.version().qualifier()).isEmpty();
+                });
     }
 
     @Test
     void artifact_parsing_with_version_qualifier() {
-        var result = Artifact.artifact("org.springframework:spring-core:5.3.21-RELEASE");
-
-        assertThat(result.isSuccess()).isTrue();
-        var artifact = result.unwrap();
-        assertThat(artifact.groupId().id()).isEqualTo("org.springframework");
-        assertThat(artifact.artifactId().id()).isEqualTo("spring-core");
-        assertThat(artifact.version().major()).isEqualTo(5);
-        assertThat(artifact.version().minor()).isEqualTo(3);
-        assertThat(artifact.version().patch()).isEqualTo(21);
-        assertThat(artifact.version().qualifier()).isEqualTo("-RELEASE");
+        Artifact.artifact("org.springframework:spring-core:5.3.21-RELEASE")
+                .onFailureRun(Assertions::fail).onSuccess(artifact -> {
+                    assertThat(artifact.groupId().id()).isEqualTo("org.springframework");
+                    assertThat(artifact.artifactId().id()).isEqualTo("spring-core");
+                    assertThat(artifact.version().major()).isEqualTo(5);
+                    assertThat(artifact.version().minor()).isEqualTo(3);
+                    assertThat(artifact.version().patch()).isEqualTo(21);
+                    assertThat(artifact.version().qualifier()).isEqualTo("-RELEASE");
+                });
     }
 
     @Test
     void artifact_parsing_with_complex_group_id() {
-        var result = Artifact.artifact("com.fasterxml.jackson.core:jackson-databind:2.13.0");
-
-        assertThat(result.isSuccess()).isTrue();
-        var artifact = result.unwrap();
-        assertThat(artifact.groupId().id()).isEqualTo("com.fasterxml.jackson.core");
-        assertThat(artifact.artifactId().id()).isEqualTo("jackson-databind");
-        assertThat(artifact.version().bareVersion()).isEqualTo("2.13.0");
+        Artifact.artifact("com.fasterxml.jackson.core:jackson-databind:2.13.0")
+                .onFailureRun(Assertions::fail).onSuccess(artifact -> {
+                    assertThat(artifact.groupId().id()).isEqualTo("com.fasterxml.jackson.core");
+                    assertThat(artifact.artifactId().id()).isEqualTo("jackson-databind");
+                    assertThat(artifact.version().bareVersion()).isEqualTo("2.13.0");
+                });
     }
 
     @Test

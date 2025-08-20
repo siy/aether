@@ -22,6 +22,10 @@ public record Version(int major, int minor, int patch, String qualifier) {
 
         int dashIndex = parts[2].indexOf('-');
 
+        if (dashIndex > 0 && (dashIndex + 1) == parts[2].length()) { // Only dash at the end of the string
+            return FORMAT_ERROR.apply(versionString).result();
+        }
+
         var qualifier = (dashIndex > 0)
                 ? Option.option(parts[2].substring(dashIndex + 1))
                 : Option.<String>none();
@@ -38,7 +42,7 @@ public record Version(int major, int minor, int patch, String qualifier) {
     }
 
     public static Result<Version> version(int major, int minor, int patch, Option<String> qualifier) {
-        var innerQualifier = qualifier.map(text -> "-" + text).or("");
+        var innerQualifier = qualifier.or("");
 
         return Result.all(ensure(major, Is::greaterThanOrEqualTo, 0),
                           ensure(minor, Is::greaterThanOrEqualTo, 0),
@@ -52,7 +56,9 @@ public record Version(int major, int minor, int patch, String qualifier) {
     }
 
     public String withQualifier() {
-        return bareVersion() + qualifier;
+        return qualifier.isEmpty()
+                ? bareVersion() + qualifier
+                : bareVersion() + "-" + qualifier;
     }
 
     private static final Pattern QUALIFIER_PATTERN = Pattern.compile("^[\\-a-zA-Z0-9-_.]*$");

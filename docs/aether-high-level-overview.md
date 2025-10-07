@@ -1,7 +1,7 @@
 # Aether - Intelligent Distributed Runtime Environment
 
 ## Project Overview
-Aether (v0.1.0) is a clusterized runtime environment built on Pragmatica Lite that transforms monolithic applications into distributed systems transparently. The runtime absorbs complexity instead of adding weight to applications.
+Aether (v0.2.0) is a clusterized runtime environment built on Pragmatica Lite that transforms monolithic applications into distributed systems transparently. The runtime absorbs complexity instead of adding weight to applications.
 
 ## Core Concept
 **Runtime Intelligence**: Unlike traditional frameworks that force applications to add weight, Aether's runtime handles as much complexity as applications are ready to offload. This enables business teams to work with high-level APIs while the runtime manages distributed concerns.
@@ -23,10 +23,13 @@ Aether (v0.1.0) is a clusterized runtime environment built on Pragmatica Lite th
 ## Module Structure
 
 ### Core Modules
-- **slice-api/** - Slice interface definitions (@TeamAPI annotations)
+- **slice-api/** - Slice interface definitions
 - **slice/** - Slice management implementation, ClassLoader handling
 - **node/** - Main runtime node implementation
-- **cli/** - Command-line interface for deployment management
+- **cluster/** - Consensus protocol implementation (Rabia)
+- **common/** - Shared utilities (MessageRouter, etc.)
+- **example-slice/** - Reference slice implementation
+- **mcp/** - Model Context Protocol server integration
 
 ### Slice API Components
 - **Slice.java** - Core lifecycle interface (start/stop)
@@ -88,10 +91,11 @@ List<LoadedSlice> loadedSlices()
 ## Integration with Pragmatica Lite
 
 ### Dependencies
-- **core/** - Promise/Result monads, error handling
-- **net-core/** - HTTP client, serialization
-- **common/** - MessageRouter, utilities  
-- **cluster/** - Distributed consensus (future integration)
+- **org.pragmatica-lite:core** - Promise/Result monads, error handling (external dependency)
+
+### Internal Modules
+- **common/** - MessageRouter, utilities
+- **cluster/** - Distributed consensus (Rabia protocol, KV-Store, LeaderManager)
 
 ### API Consistency
 - All async operations return Promise<T>

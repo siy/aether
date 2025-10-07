@@ -1,42 +1,132 @@
 # Aether Architecture Overview
 
-This document provides a comprehensive overview of the Aether distributed slice management system architecture, based on planning and design decisions made during development.
+This document provides a comprehensive technical overview of the Aether AI-driven distributed runtime architecture.
+
+**See [vision-and-goals.md](vision-and-goals.md) for the complete vision and design principles.**
 
 ## Core Concepts
 
 ### Slice
-A deployable unit of functionality that can be loaded, activated, and managed by the Aether cluster. Slices are packaged as Maven artifacts and implement the `Slice` interface.
+A deployable unit of functionality packaged as Maven artifact implementing the `Slice` interface.
+
+**Two Types (unified management)**:
+- **Service Slices**: Multiple entry points (traditional microservice style)
+- **Lean Slices**: Single entry point (use case or event handler)
+
+From runtime perspective, both types are identical - same lifecycle, same communication mechanism, same management.
 
 ### Blueprint
-A desired configuration document that specifies which slices should be deployed and how many instances of each slice should be running in the cluster.
+Desired configuration specifying which slices to deploy and how many instances. Created by:
+- Human operators via CLI/API
+- AI based on observed metrics and learned patterns
 
 ### Consensus KV-Store
-The central source of truth for all cluster state, including slice deployments, endpoint registrations, and blueprints. Provided by pragmatica-lite cluster module.
+Single source of truth for all **persistent** cluster state: slice deployments, endpoint registrations, blueprints.
+**Note**: Metrics do NOT flow through KV-Store (zero consensus I/O for metrics).
+Provided by local cluster module (Rabia consensus implementation).
+
+### Cluster Controller
+Pluggable component making topology decisions. Can be Decision Tree, Small LLM, or Large LLM (or layered combination).
+Observes metrics + events, produces blueprint changes and node actions:
+- Predictive scaling (before load increases)
+- Second-level scaling (start/stop nodes)
+- Complex deployments (rolling, canary, blue/green, multi-cloud migration)
+
+**See [metrics-and-control.md](metrics-and-control.md) for complete specification.**
 
 ## Component Architecture
 
 ```
-┌─ Node A ──────────────────┐  ┌─ Node B ──────────────────┐  ┌─ Node C ──────────────────┐
-│ ClusterDeploymentManager  │  │ ClusterDeploymentManager  │  │ ClusterDeploymentManager  │
-│ (LEADER - Active)         │  │ (Follower - Dormant)      │  │ (Follower - Dormant)      │
-│ NodeDeploymentManager     │  │ NodeDeploymentManager     │  │ NodeDeploymentManager     │
-│ EndpointRegistry          │  │ EndpointRegistry          │  │ EndpointRegistry          │
-│ MCP Server                │  │ MCP Server                │  │ MCP Server                │
-│ SliceStore                │  │ SliceStore                │  │ SliceStore                │
-└───────────────────────────┘  └───────────────────────────┘  └───────────────────────────┘
-            │                              │                              │
-            └──────────────── Consensus KV-Store ─────────────────────────┘
-                                     │
-                              ┌─────────────┐
-                              │ MCP Agent   │
-                              │ (External)  │  
-                              └─────────────┘
+                    ┌────────────────────────────────┐
+                    │   External Controller (Optional)│
+                    │   - Small LLM (local/cloud)    │
+                    │   - Large LLM (cloud)          │
+                    └───────────▲────────────────────┘
+                                │ Metrics + Events
+                                │ Decisions
+                 ┌──────────────┴─────────────────────┐
+                 │                                     │
+┌─ Node A (LEADER)┴────────────┐  ┌─ Node B ─────────┐  ┌─ Node C ─────────┐
+│ Cluster Controller           │  │                   │  │                   │
+│ Metrics Aggregator           │  │                   │  │                   │
+│ ClusterEventBus              │  │                   │  │                   │
+│ ClusterDeploymentManager     │  │ ClusterDeployMgr  │  │ ClusterDeployMgr  │
+│ (Active)                     │  │ (Dormant)         │  │ (Dormant)         │
+│ NodeDeploymentManager        │  │ NodeDeploymentMgr │  │ NodeDeploymentMgr │
+│ EndpointRegistry             │  │ EndpointRegistry  │  │ EndpointRegistry  │
+│ SliceStore                   │  │ SliceStore        │  │ SliceStore        │
+│ MetricsCollector             │  │ MetricsCollector  │  │ MetricsCollector  │
+└──────────────────────────────┘  └───────────────────┘  └───────────────────┘
+            │                              │                       │
+            │  ┌───────────────────────────┴───────────────────────┘
+            │  │  Every 1 sec: MetricsUpdate (push to leader)
+            │  │  Every 1 sec: ClusterMetricsSnapshot (broadcast from leader)
+            │  │
+            └──┴──────────── Consensus KV-Store ──────────────────
+                     (State, Blueprints, Endpoints - NO metrics)
 ```
 
 ## Core Components
 
+**See [metrics-and-control.md](metrics-and-control.md) for detailed specifications of metrics and controller components.**
+
+### Cluster Controller
+**Status**: ❌ Not Implemented
+**Location**: TBD (likely in `node/` module)
+**Runs On**: Leader node only
+
+Pluggable component making topology decisions:
+- Evaluates at configured frequency (1 sec for decision tree, 2-60 sec for LLMs)
+- Receives: Current metrics, historical window, cluster events, topology, blueprints
+- Produces: Blueprint changes, node actions, reasoning
+
+**Implementations**:
+- DecisionTreeController - Deterministic rules
+- SmallLLMController - Local pattern learning
+- LargeLLMController - Cloud-based strategic planning
+- LayeredController - Combines multiple controllers
+
+### MetricsAggregator
+**Status**: ❌ Not Implemented
+**Location**: TBD (likely in `node/` module)
+**Runs On**: Leader node only
+
+Aggregates metrics from all nodes and broadcasts cluster-wide snapshot:
+- Receives MetricsUpdate from all nodes (via MessageRouter)
+- Aggregates into ClusterMetricsSnapshot every second
+- Broadcasts snapshot to all nodes
+- Maintains 2-hour sliding window for pattern detection
+
+**Key Design**: Zero consensus I/O, all via MessageRouter.
+
+### MetricsCollector
+**Status**: ❌ Not Implemented
+**Location**: TBD (likely in `node/` module)
+**Runs On**: All nodes
+
+Collects local metrics and pushes to leader:
+- **Node CPU Usage**: Per-node CPU utilization (0.0-1.0)
+- **Calls Per Entry Point**: Request count per entry point per cycle
+- **Total Call Duration**: Aggregate processing time per cycle
+
+Pushes MetricsUpdate to leader every 1 second via MessageRouter.
+
+### ClusterEventBus
+**Status**: ❌ Not Implemented
+**Location**: TBD (likely in `common/` or `node/` module)
+**Runs On**: All nodes
+
+Distributes cluster events to interested components:
+- Node lifecycle events (joined, left, failed)
+- Leadership changes
+- Slice lifecycle events
+- Blueprint changes
+- KV-Store commits
+
+Events delivered via MessageRouter, buffered in memory for recent history.
+
 ### SliceStore
-**Status**: ✅ Implemented  
+**Status**: ❌ Not Implemented  
 **Location**: `slice/src/main/java/org/pragmatica/aether/slice/manager/SliceStore.java`
 
 Manages the complete slice lifecycle on individual nodes:
@@ -48,8 +138,8 @@ Manages the complete slice lifecycle on individual nodes:
 Supports both legacy single-step loading and new multi-step lifecycle.
 
 ### NodeDeploymentManager  
-**Status**: ✅ Implemented  
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java`
+**Status**: ❌ Not Implemented
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java`
 
 Handles slice lifecycle transitions on individual nodes by:
 - Watching KV-Store for slice state changes specific to this node
@@ -73,7 +163,7 @@ Cluster-wide orchestration component that:
 - Handles automatic rebalancing when nodes join/leave
 - Performs reconciliation to ensure desired state matches actual state
 
-**Integration**: Uses `LeaderNotification.LeaderChange` messages from pragmatica-lite's LeaderManager.
+**Integration**: Uses `LeaderNotification.LeaderChange` messages from the local cluster module's LeaderManager.
 
 ### EndpointRegistry
 **Status**: ❌ Not Implemented  
@@ -89,12 +179,23 @@ Pure event-driven component that:
 
 ## Deployment Flow
 
-### Blueprint Publication
-1. **CLI/MCP** publishes blueprint to `blueprints/{name}` in KV-Store
-2. **ClusterDeploymentManager** (leader) detects blueprint changes  
-3. **Allocation Engine** decides instance distribution across nodes
-4. **Instance assignments** published to `allocations/{artifact}/{node-id}` 
-5. **NodeDeploymentManager** on each node handles local slice lifecycle
+### Controller-Driven Blueprint Updates
+1. **MetricsCollector** (all nodes) pushes metrics to leader every 1 second
+2. **MetricsAggregator** (leader) aggregates and broadcasts ClusterMetricsSnapshot
+3. **ClusterEventBus** delivers events to controller
+4. **Cluster Controller** (leader) evaluates metrics + events at configured frequency
+5. **Cluster Controller** produces blueprint changes and node actions
+6. **Leader** applies blueprint changes to KV-Store
+7. **ClusterDeploymentManager** (leader) detects blueprint changes
+8. **Allocation Engine** decides instance distribution across nodes
+9. **Slice state commands** written directly to `slices/{node-id}/{artifact}` with LOAD state
+10. **NodeDeploymentManager** (each node) watches its slice-node-keys and executes local lifecycle
+
+### Human-Initiated Blueprint Publication
+1. **Operator** publishes blueprint via CLI/API to `blueprints/{name}` in KV-Store
+2. Flow continues from step 7 above (ClusterDeploymentManager detects change)
+
+**Note**: ClusterDeploymentManager translates blueprint instance counts directly into slice state commands on specific nodes. No separate allocation storage layer needed.
 
 ### Slice Lifecycle States
 ```
@@ -108,7 +209,7 @@ Pure event-driven component that:
 ```
 
 ### Leadership and Reconciliation
-- **Leadership**: Determined by pragmatica-lite LeaderManager (first node in topology)
+- **Leadership**: Determined by local cluster module's LeaderManager (first node in topology)
 - **Reconciliation**: Leader performs state reconciliation on activation
 - **Failover**: Automatic when leader node fails or leaves cluster
 
@@ -119,7 +220,7 @@ Pure event-driven component that:
 blueprints/{blueprint-name} → {
   "slices": [
     {
-      "artifact": "org.example:slice:1.0.0", 
+      "artifact": "org.example:slice:1.0.0",
       "instances": 3
     }
   ],
@@ -127,7 +228,7 @@ blueprints/{blueprint-name} → {
 }
 ```
 
-### Slice State Schema  
+### Slice State Schema
 ```
 slices/{node-id}/{group-id}:{artifact-id}:{version} → {
   "state": "ACTIVE",
@@ -136,25 +237,29 @@ slices/{node-id}/{group-id}:{artifact-id}:{version} → {
 }
 ```
 
+**Note**: ClusterDeploymentManager writes directly to slice state keys when allocating instances to nodes. No intermediate allocation layer needed.
+
 ### Endpoint Schema
 ```
 endpoints/{group-id}:{artifact-id}:{version}/{entry-point-id}:{instance} → {
   "node-id": "node-1",
   "instance": 1,
-  "state": "ACTIVE", 
+  "state": "ACTIVE",
   "timestamp": 1234567890
 }
 ```
 
-### Allocation Schema
-```
-allocations/{artifact}/{node-id} → {
-  "assigned": 2,
-  "timestamp": 1234567890
-}
-```
+### Metrics (NOT in KV-Store)
 
-## MCP Integration Architecture
+**Metrics flow via MessageRouter only, never touch KV-Store.**
+
+See [metrics-and-control.md](metrics-and-control.md) for message definitions:
+- `MetricsUpdate` (node → leader, every 1 sec)
+- `ClusterMetricsSnapshot` (leader → all nodes, every 1 sec)
+
+## MCP Integration Architecture (Optional)
+
+**Note**: MCP server is optional for human operator oversight. AI management is handled through dedicated AI Agent Interface on leader node, not MCP.
 
 ### Three-Layer Design
 ```
@@ -201,9 +306,9 @@ allocations/{artifact}/{node-id} → {
 ## Development Roadmap
 
 ### Phase 1: Foundation (MVP)
-1. Extended SliceKVSchema for blueprints and allocations
+1. Extended SliceKVSchema for blueprints (no allocations needed)
 2. ClusterDeploymentManager skeleton with LeaderNotification integration
-3. Basic blueprint CLI commands (publish, get, list)  
+3. Basic blueprint CLI commands (publish, get, list)
 4. EndpointRegistry as passive KV-Store watcher
 
 ### Phase 2: Core Functionality  
@@ -222,7 +327,7 @@ allocations/{artifact}/{node-id} → {
 ## Implementation Notes
 
 ### Consensus Integration
-- Uses existing pragmatica-lite cluster infrastructure
+- Uses local cluster module (Rabia consensus protocol)
 - MessageRouter pattern for component communication
 - KV-Store operations for all persistent state
 - LeaderManager for deterministic leadership

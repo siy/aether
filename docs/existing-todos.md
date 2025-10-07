@@ -27,7 +27,7 @@ This document catalogs all existing TODO comments found in the codebase that sho
 ## NodeDeploymentManager.java
 
 ### TODO 1: Structured Keys
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java:69-71`
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java:69-71`
 ```java
 // TODO: We're should use KVStore with dedicated structured keys. This, in turn, should
 //       simplify matching patterns and destructuring keys into elements. Take further look into
@@ -39,7 +39,7 @@ This document catalogs all existing TODO comments found in the codebase that sho
 **Impact**: Code clarity, performance, type safety
 
 ### TODO 2: Abrupt Stop Handling
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java:109-112`
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java:109-112`
 ```java
 // TODO: WARNING: unlike other notifications, removal may happen
 //  not during normal operation but also during abrupt stop due to
@@ -52,7 +52,7 @@ This document catalogs all existing TODO comments found in the codebase that sho
 **Impact**: System stability, error recovery
 
 ### TODO 3: State Transition Rework
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java:124`
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java:124`
 ```java
 // TODO: we may need to rework it
 ```
@@ -62,7 +62,7 @@ This document catalogs all existing TODO comments found in the codebase that sho
 **Impact**: Code organization
 
 ### TODO 4: Move Timeouts to SliceStore
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java:152-156`
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java:152-156`
 ```java
 // TODO: move timeouts to SliceStore.
 //  Timeouts should be inserted as close to actual operations as possible.
@@ -76,7 +76,7 @@ This document catalogs all existing TODO comments found in the codebase that sho
 **Impact**: System reliability, proper resource cleanup
 
 ### TODO 5: Slice Readiness Notification
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java:171`
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java:171`
 ```java
 // TODO: we may need to send notification about slice readiness.
 ```
@@ -86,7 +86,7 @@ This document catalogs all existing TODO comments found in the codebase that sho
 **Impact**: Monitoring, observability
 
 ### TODO 6: Slice Activation Notification
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java:191`
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java:191`
 ```java
 // TODO: We may want to generate a notification for slice activation.
 ```
@@ -96,7 +96,7 @@ This document catalogs all existing TODO comments found in the codebase that sho
 **Impact**: Monitoring, observability
 
 ### TODO 7: Link with Consensus (CRITICAL)
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java:234`
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java:234`
 ```java
 // TODO: link with consensus
 ```
@@ -106,7 +106,7 @@ This document catalogs all existing TODO comments found in the codebase that sho
 **Impact**: Core functionality - cluster won't work without this
 
 ### TODO 8: Immutable MessageRouter API
-**Location**: `slice/src/main/java/org/pragmatica/aether/cluster/NodeDeploymentManager.java:293`
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java:293`
 ```java
 // TODO: rework for immutable MessageRouter builder API
 ```

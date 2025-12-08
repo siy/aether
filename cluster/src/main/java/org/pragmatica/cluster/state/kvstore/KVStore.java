@@ -110,6 +110,10 @@ public class KVStore<K extends StructuredKey, V> implements StateMachine<KVComma
         return new HashMap<>(storage);
     }
 
+    public Option<V> get(K key) {
+        return Option.option(storage.get(key));
+    }
+
     @MessageReceiver
     public void find(Find find) {
         router.routeAsync(() -> new FoundEntries<>(storage.entrySet()

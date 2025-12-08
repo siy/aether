@@ -2,6 +2,7 @@ package org.pragmatica.aether.slice.kvstore;
 
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.slice.MethodName;
+import org.pragmatica.aether.slice.blueprint.BlueprintId;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.state.kvstore.StructuredKey;
 import org.pragmatica.cluster.state.kvstore.StructuredPattern;
@@ -17,10 +18,11 @@ public sealed interface AetherKey extends StructuredKey {
     /// String representation of the key
     String asString();
 
-    /// Blueprint-key format:
+    /// Blueprint-key format (deprecated - use AppBlueprintKey):
     /// ```
     /// blueprint/{groupId}:{artifactId}:{version}
     ///```
+    @Deprecated
     record BlueprintKey(Artifact artifact) implements AetherKey {
         @Override
         public boolean matches(StructuredPattern pattern) {
@@ -49,6 +51,45 @@ public sealed interface AetherKey extends StructuredKey {
             var artifactPart = key.substring(10); // Remove "blueprint/"
             return Artifact.artifact(artifactPart)
                            .map(BlueprintKey::new);
+        }
+    }
+
+    /// Application blueprint key format:
+    /// ```
+    /// app-blueprint/{name}:{version}
+    ///```
+    record AppBlueprintKey(BlueprintId blueprintId) implements AetherKey {
+        @Override
+        public boolean matches(StructuredPattern pattern) {
+            return switch (pattern) {
+                case AetherKeyPattern.AppBlueprintPattern appBlueprintPattern ->
+                    appBlueprintPattern.matches(this);
+                default -> false;
+            };
+        }
+
+        @Override
+        public String asString() {
+            return "app-blueprint/" + blueprintId.asString();
+        }
+
+        @Override
+        public String toString() {
+            return asString();
+        }
+
+        public static Result<AppBlueprintKey> appBlueprintKey(String key) {
+            if (!key.startsWith("app-blueprint/")) {
+                return APP_BLUEPRINT_KEY_FORMAT_ERROR.apply(key).result();
+            }
+
+            var blueprintIdPart = key.substring(14); // Remove "app-blueprint/"
+            return BlueprintId.blueprintId(blueprintIdPart)
+                              .map(AppBlueprintKey::new);
+        }
+
+        public static AppBlueprintKey appBlueprintKey(BlueprintId blueprintId) {
+            return new AppBlueprintKey(blueprintId);
         }
     }
 
@@ -159,6 +200,7 @@ public sealed interface AetherKey extends StructuredKey {
     }
 
     Fn1<Cause, String> BLUEPRINT_KEY_FORMAT_ERROR = Causes.forValue("Invalid blueprint key format: %s");
+    Fn1<Cause, String> APP_BLUEPRINT_KEY_FORMAT_ERROR = Causes.forValue("Invalid app-blueprint key format: %s");
     Fn1<Cause, String> SLICE_KEY_FORMAT_ERROR = Causes.forValue("Invalid slice key format: %s");
     Fn1<Cause, String> ENDPOINT_KEY_FORMAT_ERROR = Causes.forValue("Invalid endpoint key format: %s");
 
@@ -167,6 +209,13 @@ public sealed interface AetherKey extends StructuredKey {
         /// Pattern for blueprint keys: blueprint/*
         record BlueprintPattern() implements AetherKeyPattern {
             public boolean matches(BlueprintKey key) {
+                return false;
+            }
+        }
+
+        /// Pattern for app-blueprint keys: app-blueprint/*
+        record AppBlueprintPattern() implements AetherKeyPattern {
+            public boolean matches(AppBlueprintKey key) {
                 return false;
             }
         }

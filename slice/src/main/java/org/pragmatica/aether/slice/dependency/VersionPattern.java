@@ -6,8 +6,6 @@ import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.utils.Causes;
 
-import java.util.regex.Pattern;
-
 /**
  * Version pattern for dependency matching using semantic versioning.
  * <p>
@@ -39,10 +37,10 @@ public sealed interface VersionPattern {
 
     /// Version range with inclusive/exclusive bounds
     record Range(
-        Version from,
-        boolean fromInclusive,
-        Version to,
-        boolean toInclusive
+            Version from,
+            boolean fromInclusive,
+            Version to,
+            boolean toInclusive
     ) implements VersionPattern {
         @Override
         public boolean matches(Version version) {
@@ -105,7 +103,7 @@ public sealed interface VersionPattern {
             }
 
             private static final Fn1<Cause, String> INVALID_OPERATOR =
-                Causes.forValue("Invalid comparison operator: %s");
+                    Causes.forValue("Invalid comparison operator: %s");
         }
     }
 
@@ -119,7 +117,7 @@ public sealed interface VersionPattern {
 
             // Must have same major and minor
             return other.major() == version.major() &&
-                   other.minor() == version.minor();
+                    other.minor() == version.minor();
         }
 
         @Override
@@ -195,12 +193,12 @@ public sealed interface VersionPattern {
 
     private static boolean isRangePattern(String pattern) {
         return (pattern.startsWith("[") || pattern.startsWith("(")) &&
-               (pattern.endsWith("]") || pattern.endsWith(")"));
+                (pattern.endsWith("]") || pattern.endsWith(")"));
     }
 
     private static boolean isComparisonPattern(String pattern) {
         return pattern.startsWith(">=") || pattern.startsWith(">") ||
-               pattern.startsWith("<=") || pattern.startsWith("<");
+                pattern.startsWith("<=") || pattern.startsWith("<");
     }
 
     private static Result<VersionPattern> parseRange(String pattern) {
@@ -215,20 +213,20 @@ public sealed interface VersionPattern {
         }
 
         return Version.version(parts[0].trim())
-            .flatMap(from -> Version.version(parts[1].trim())
-                .map(to -> new Range(from, fromInclusive, to, toInclusive)));
+                      .flatMap(from -> Version.version(parts[1].trim())
+                                              .map(to -> new Range(from, fromInclusive, to, toInclusive)));
     }
 
     private static Result<VersionPattern> parseTilde(String pattern) {
         var versionStr = pattern.substring(1).trim();
         return Version.version(versionStr)
-            .map(Tilde::new);
+                      .map(Tilde::new);
     }
 
     private static Result<VersionPattern> parseCaret(String pattern) {
         var versionStr = pattern.substring(1).trim();
         return Version.version(versionStr)
-            .map(Caret::new);
+                      .map(Caret::new);
     }
 
     private static Result<VersionPattern> parseComparison(String pattern) {
@@ -253,13 +251,13 @@ public sealed interface VersionPattern {
         }
 
         return Comparison.Operator.fromSymbol(opStr)
-            .flatMap(operator -> Version.version(versionStr)
-                .map(version -> new Comparison(operator, version)));
+                                  .flatMap(operator -> Version.version(versionStr)
+                                                              .map(version -> new Comparison(operator, version)));
     }
 
     private static Result<VersionPattern> parseExact(String pattern) {
         return Version.version(pattern)
-            .map(Exact::new);
+                      .map(Exact::new);
     }
 
     // Error constants

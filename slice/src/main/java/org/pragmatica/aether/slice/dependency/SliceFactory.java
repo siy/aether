@@ -2,13 +2,11 @@ package org.pragmatica.aether.slice.dependency;
 
 import org.pragmatica.aether.slice.Slice;
 import org.pragmatica.lang.Cause;
-import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.utils.Causes;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.Parameter;
 import java.util.Arrays;
 import java.util.List;
 
@@ -31,46 +29,38 @@ public interface SliceFactory {
     /**
      * Create slice instance using static factory method.
      *
-     * @param sliceClass       The slice class to instantiate
-     * @param dependencies     Resolved dependency instances in declaration order
-     * @param descriptors      Dependency descriptors from META-INF/dependencies (for verification)
+     * @param sliceClass   The slice class to instantiate
+     * @param dependencies Resolved dependency instances in declaration order
+     * @param descriptors  Dependency descriptors from META-INF/dependencies (for verification)
+     *
      * @return Created slice instance
      */
-    static Result<Slice> createSlice(
-        Class<?> sliceClass,
-        List<Slice> dependencies,
-        List<DependencyDescriptor> descriptors
-    ) {
-        return findFactoryMethod(sliceClass)
-            .flatMap(method -> verifyParameters(method, dependencies, descriptors))
-            .flatMap(method -> invokeFactory(method, dependencies));
+    static Result<Slice> createSlice(Class<?> sliceClass,
+                                     List<Slice> dependencies,
+                                     List<DependencyDescriptor> descriptors) {
+        return findFactoryMethod(sliceClass).flatMap(method -> verifyParameters(method, dependencies, descriptors))
+                                            .flatMap(method -> invokeFactory(method, dependencies));
     }
 
     private static Result<Method> findFactoryMethod(Class<?> sliceClass) {
         var expectedName = toLowercaseFirst(sliceClass.getSimpleName());
 
         return Arrays.stream(sliceClass.getDeclaredMethods())
-            .filter(m -> Modifier.isStatic(m.getModifiers()))
-            .filter(m -> m.getName().equals(expectedName))
-            .filter(m -> sliceClass.isAssignableFrom(m.getReturnType()))
-            .findFirst()
-            .map(Result::success)
-            .orElseGet(() -> factoryMethodNotFound(sliceClass.getName(), expectedName).result());
+                     .filter(m -> Modifier.isStatic(m.getModifiers()))
+                     .filter(m -> m.getName().equals(expectedName))
+                     .filter(m -> sliceClass.isAssignableFrom(m.getReturnType()))
+                     .findFirst()
+                     .map(Result::success)
+                     .orElseGet(() -> factoryMethodNotFound(sliceClass.getName(), expectedName).result());
     }
 
-    private static Result<Method> verifyParameters(
-        Method method,
-        List<Slice> dependencies,
-        List<DependencyDescriptor> descriptors
-    ) {
+    private static Result<Method> verifyParameters(Method method,
+                                                   List<Slice> dependencies,
+                                                   List<DependencyDescriptor> descriptors) {
         var parameters = method.getParameters();
 
         if (parameters.length != dependencies.size()) {
-            return parameterCountMismatch(
-                method.getName(),
-                parameters.length,
-                dependencies.size()
-            ).result();
+            return parameterCountMismatch(method.getName(), parameters.length, dependencies.size()).result();
         }
 
         for (int i = 0; i < parameters.length; i++) {
@@ -80,11 +70,9 @@ public interface SliceFactory {
 
             // Verify type matches
             if (!parameter.getType().isInstance(dependency)) {
-                return parameterTypeMismatch(
-                    i,
-                    parameter.getType().getName(),
-                    dependency.getClass().getName()
-                ).result();
+                return parameterTypeMismatch(i,
+                                             parameter.getType().getName(),
+                                             dependency.getClass().getName()).result();
             }
 
             // Note: We don't verify parameter names because they require -parameters compiler flag
@@ -94,14 +82,11 @@ public interface SliceFactory {
     }
 
     private static Result<Slice> invokeFactory(Method method, List<Slice> dependencies) {
-        return Result.lift(
-            Causes::fromThrowable,
-            () -> {
-                method.setAccessible(true);
-                var instance = method.invoke(null, dependencies.toArray());
-                return (Slice) instance;
-            }
-        );
+        return Result.lift(Causes::fromThrowable, () -> {
+            method.setAccessible(true);
+            var instance = method.invoke(null, dependencies.toArray());
+            return (Slice) instance;
+        });
     }
 
     private static String toLowercaseFirst(String name) {

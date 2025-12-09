@@ -14,17 +14,8 @@ import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 // TODO: rework timeout handling, perhaps use existing values as defaults
 public enum SliceState {
-    LOAD,
-    LOADING(timeSpan(2).minutes()),
-    LOADED,
-    ACTIVATE,
-    ACTIVATING(timeSpan(1).minutes()),
-    ACTIVE,
-    DEACTIVATE,
-    DEACTIVATING(timeSpan(30).seconds()),
-    FAILED,
-    UNLOAD,
-    UNLOADING(timeSpan(2).minutes());
+    LOAD, LOADING(timeSpan(2).minutes()), LOADED, ACTIVATE, ACTIVATING(timeSpan(1).minutes()), ACTIVE, DEACTIVATE, DEACTIVATING(
+            timeSpan(30).seconds()), FAILED, UNLOAD, UNLOADING(timeSpan(2).minutes());
 
     private final TimeSpan timeout;
 
@@ -103,9 +94,7 @@ public enum SliceState {
     public static Result<SliceState> sliceState(String stateString) {
         var state = STRING_TO_STATE.get(stateString.toUpperCase());
 
-        return state == null
-                ? UNKNOWN_STATE.apply(stateString).result()
-                : Result.success(state);
+        return state == null ? UNKNOWN_STATE.apply(stateString).result() : Result.success(state);
 
     }
 

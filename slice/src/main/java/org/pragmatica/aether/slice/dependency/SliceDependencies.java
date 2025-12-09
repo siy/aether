@@ -1,7 +1,5 @@
 package org.pragmatica.aether.slice.dependency;
 
-import org.pragmatica.lang.Cause;
-import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.utils.Causes;
 
@@ -35,6 +33,7 @@ public interface SliceDependencies {
      *
      * @param sliceClassName Fully qualified class name of the slice
      * @param classLoader    ClassLoader to load resource from
+     *
      * @return List of dependency descriptors, empty if file not found or no dependencies
      */
     static Result<List<DependencyDescriptor>> load(String sliceClassName, ClassLoader classLoader) {
@@ -46,24 +45,20 @@ public interface SliceDependencies {
             return Result.success(List.of());
         }
 
-        return Result.lift(
-            Causes::fromThrowable,
-            () -> {
-                try (var reader = new BufferedReader(new InputStreamReader(resource))) {
-                    var dependencies = new ArrayList<DependencyDescriptor>();
-                    String line;
+        return Result.lift(Causes::fromThrowable, () -> {
+            try (var reader = new BufferedReader(new InputStreamReader(resource))) {
+                var dependencies = new ArrayList<DependencyDescriptor>();
+                String line;
 
-                    while ((line = reader.readLine()) != null) {
-                        DependencyDescriptor.parse(line)
-                            .onSuccess(dependencies::add);
-                        // Ignore empty lines and comments (they return failure)
-                    }
-
-                    return dependencies;
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to read dependencies from " + resourcePath, e);
+                while ((line = reader.readLine()) != null) {
+                    DependencyDescriptor.parse(line).onSuccess(dependencies::add);
+                    // Ignore empty lines and comments (they return failure)
                 }
+
+                return dependencies;
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read dependencies from " + resourcePath, e);
             }
-        );
+        });
     }
 }

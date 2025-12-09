@@ -29,13 +29,12 @@ public sealed interface MavenLocalRepoLocator {
     }
 
     private static Option<String> checkUserLevelSettings(String userHome) {
-        return getLocalRepoFromSettings(fromM2Home(userHome, "settings.xml"))
-                .map(userRepo -> expandPath(userRepo, userHome));
+        return getLocalRepoFromSettings(fromM2Home(userHome, "settings.xml")).map(userRepo -> expandPath(userRepo,
+                                                                                                         userHome));
     }
 
     private static Option<String> checkSystemProperty() {
-        return Option.option(System.getProperty("maven.repo.local"))
-                     .filter(Verify.Is::notEmpty);
+        return Option.option(System.getProperty("maven.repo.local")).filter(Verify.Is::notEmpty);
     }
 
     private static Option<String> getLocalRepoFromSettings(String settingsPath) {
@@ -54,8 +53,7 @@ public sealed interface MavenLocalRepoLocator {
             var nodes = doc.getElementsByTagName("localRepository");
 
             if (nodes.getLength() > 0) {
-                return Option.option(nodes.item(0).getTextContent().trim())
-                             .filter(Verify.Is::notEmpty);
+                return Option.option(nodes.item(0).getTextContent().trim()).filter(Verify.Is::notEmpty);
             }
         } catch (Exception ignored) {
         }

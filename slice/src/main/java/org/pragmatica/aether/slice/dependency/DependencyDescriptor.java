@@ -16,21 +16,18 @@ import org.pragmatica.lang.utils.Causes;
  * - {@code com.example.EmailService:^1.0.0:emailService} - Caret pattern with param name
  * - {@code com.example.OrderProcessor:[1.0.0,2.0.0):orderProcessor} - Range with param name
  *
- * @param sliceClassName    Fully qualified class name of the dependency slice
- * @param versionPattern    Version pattern for dependency resolution
- * @param parameterName     Optional parameter name for factory method (for verification)
+ * @param sliceClassName Fully qualified class name of the dependency slice
+ * @param versionPattern Version pattern for dependency resolution
+ * @param parameterName  Optional parameter name for factory method (for verification)
  */
-public record DependencyDescriptor(
-    String sliceClassName,
-    VersionPattern versionPattern,
-    Option<String> parameterName
-) {
+public record DependencyDescriptor(String sliceClassName, VersionPattern versionPattern, Option<String> parameterName) {
     /**
      * Parse dependency descriptor from string.
      * <p>
      * Format: {@code className:versionPattern[:paramName]}
      *
      * @param line The dependency descriptor string
+     *
      * @return Parsed descriptor or error
      */
     public static Result<DependencyDescriptor> parse(String line) {
@@ -66,8 +63,7 @@ public record DependencyDescriptor(
             return EMPTY_VERSION_PATTERN.apply(line).result();
         }
 
-        return VersionPattern.parse(versionStr)
-            .map(pattern -> new DependencyDescriptor(className, pattern, paramName));
+        return VersionPattern.parse(versionStr).map(pattern -> new DependencyDescriptor(className, pattern, paramName));
     }
 
     /**
@@ -75,16 +71,17 @@ public record DependencyDescriptor(
      */
     public String asString() {
         var base = sliceClassName + ":" + versionPattern.asString();
-        return parameterName
-            .map(name -> base + ":" + name)
-            .or(base);
+        return parameterName.map(name -> base + ":" + name).or(base);
     }
 
     // Error constants
     private static final Cause EMPTY_LINE = Causes.cause("Dependency descriptor line is empty");
     private static final Cause COMMENT_LINE = Causes.cause("Dependency descriptor line is a comment");
     private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forValue("Invalid dependency descriptor format: %s");
-    private static final Fn1<Cause, String> TOO_MANY_PARTS = Causes.forValue("Too many parts in dependency descriptor: %s");
-    private static final Fn1<Cause, String> EMPTY_CLASS_NAME = Causes.forValue("Empty class name in dependency descriptor: %s");
-    private static final Fn1<Cause, String> EMPTY_VERSION_PATTERN = Causes.forValue("Empty version pattern in dependency descriptor: %s");
+    private static final Fn1<Cause, String> TOO_MANY_PARTS = Causes.forValue(
+            "Too many parts in dependency descriptor: %s");
+    private static final Fn1<Cause, String> EMPTY_CLASS_NAME = Causes.forValue(
+            "Empty class name in dependency descriptor: %s");
+    private static final Fn1<Cause, String> EMPTY_VERSION_PATTERN = Causes.forValue(
+            "Empty version pattern in dependency descriptor: %s");
 }

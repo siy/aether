@@ -16,6 +16,7 @@ public interface SliceStore {
      *
      * @param registry     Registry for tracking loaded slices
      * @param repositories Repositories to search for slice JARs
+     *
      * @return SliceStore implementation
      */
     static SliceStore sliceStore(SliceRegistry registry, List<Repository> repositories) {

@@ -49,8 +49,8 @@ public interface BlueprintParser {
             return MISSING_HEADER.result();
         }
 
-        return parseHeader(lines[0])
-            .flatMap(id -> parseSections(lines, 1).map(sections -> createBlueprint(id, sections)));
+        return parseHeader(lines[0]).flatMap(id -> parseSections(lines, 1).map(sections -> createBlueprint(id,
+                                                                                                           sections)));
     }
 
     private static Result<BlueprintId> parseHeader(String line) {
@@ -92,13 +92,11 @@ public interface BlueprintParser {
         return Result.success(new ParsedSections(slices, routingSections));
     }
 
-    private static Result<Integer> parseSection(
-        String[] lines,
-        int sectionStart,
-        String sectionHeader,
-        List<SliceSpec> slices,
-        List<RoutingSection> routingSections
-    ) {
+    private static Result<Integer> parseSection(String[] lines,
+                                                int sectionStart,
+                                                String sectionHeader,
+                                                List<SliceSpec> slices,
+                                                List<RoutingSection> routingSections) {
         if (sectionHeader.equals("slices")) {
             return parseSlicesSection(lines, sectionStart + 1, slices);
         }
@@ -146,32 +144,27 @@ public interface BlueprintParser {
         var artifactStr = matcher.group(1).trim();
         var instancesStr = matcher.group(2);
 
-        return Artifact.artifact(artifactStr)
-            .flatMap(artifact -> parseInstanceCount(instancesStr, lineNum)
-                .flatMap(instances -> SliceSpec.sliceSpec(artifact, instances)));
+        return Artifact.artifact(artifactStr).flatMap(artifact -> parseInstanceCount(instancesStr, lineNum).flatMap(
+                instances -> SliceSpec.sliceSpec(artifact, instances)));
     }
 
     private static Result<Integer> parseInstanceCount(String instancesStr, int lineNum) {
         if (instancesStr == null) {
             return Result.success(1);
         }
-        return Result.lift(
-            _ -> PARSE_ERROR.apply(lineNum, "Invalid instance count: " + instancesStr),
-            () -> Integer.parseInt(instancesStr)
-        );
+        return Result.lift(_ -> PARSE_ERROR.apply(lineNum, "Invalid instance count: " + instancesStr),
+                           () -> Integer.parseInt(instancesStr));
     }
 
-    private static Result<Integer> parseRoutingSection(
-        String[] lines,
-        int startLine,
-        String sectionHeader,
-        List<RoutingSection> routingSections
-    ) {
+    private static Result<Integer> parseRoutingSection(String[] lines,
+                                                       int startLine,
+                                                       String sectionHeader,
+                                                       List<RoutingSection> routingSections) {
         var parts = sectionHeader.split(":", 3);
         var protocol = parts[1];
-        var connectorOpt = parts.length == 3
-            ? Artifact.artifact(parts[2]).map(Option::some).unwrap()
-            : Option.<Artifact>none();
+        var connectorOpt = parts.length == 3 ? Artifact.artifact(parts[2])
+                                                       .map(Option::some)
+                                                       .unwrap() : Option.<Artifact>none();
 
         var routes = new ArrayList<Route>();
         var lineNum = startLine;
@@ -219,17 +212,19 @@ public interface BlueprintParser {
         var pattern = matcher.group(1).trim();
         var targetStr = matcher.group(2).trim();
 
-        return RouteTarget.routeTarget(targetStr)
-            .flatMap(target -> resolveBindings(pattern, target, protocol, lineNum)
-                .flatMap(bindings -> Route.route(pattern, target, bindings)));
+        return RouteTarget.routeTarget(targetStr).flatMap(target -> resolveBindings(pattern,
+                                                                                    target,
+                                                                                    protocol,
+                                                                                    lineNum).flatMap(bindings -> Route.route(
+                pattern,
+                target,
+                bindings)));
     }
 
-    private static Result<List<Binding>> resolveBindings(
-        String pattern,
-        RouteTarget target,
-        String protocol,
-        int lineNum
-    ) {
+    private static Result<List<Binding>> resolveBindings(String pattern,
+                                                         RouteTarget target,
+                                                         String protocol,
+                                                         int lineNum) {
         var bindings = new ArrayList<Binding>();
 
         for (var param : target.params()) {
@@ -266,9 +261,9 @@ public interface BlueprintParser {
         var pathVarMatcher = PATH_VAR_PATTERN.matcher(pattern);
         while (pathVarMatcher.find()) {
             if (pathVarMatcher.group(1).equals(param)) {
-                return isQueryParam(pattern, param)
-                    ? Result.success(new BindingSource.QueryVar(param))
-                    : Result.success(new BindingSource.PathVar(param));
+                return isQueryParam(pattern,
+                                    param) ? Result.success(new BindingSource.QueryVar(param)) : Result.success(new BindingSource.PathVar(
+                        param));
             }
         }
 

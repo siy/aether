@@ -37,16 +37,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public interface SliceStoreImpl {
 
     enum EntryState {
-        LOADED,
-        ACTIVE
+        LOADED, ACTIVE
     }
 
-    record LoadedSliceEntry(
-        Artifact artifact,
-        Slice sliceInstance,
-        SliceClassLoader classLoader,
-        EntryState state
-    ) implements SliceStore.LoadedSlice {
+    record LoadedSliceEntry(Artifact artifact, Slice sliceInstance, SliceClassLoader classLoader,
+                            EntryState state) implements SliceStore.LoadedSlice {
 
         @Override
         public Result<Slice> slice() {
@@ -62,11 +57,8 @@ public interface SliceStoreImpl {
         return new SliceStoreRecord(registry, repositories, new ConcurrentHashMap<>());
     }
 
-    record SliceStoreRecord(
-        SliceRegistry registry,
-        List<Repository> repositories,
-        Map<Artifact, LoadedSliceEntry> entries
-    ) implements SliceStore {
+    record SliceStoreRecord(SliceRegistry registry, List<Repository> repositories,
+                            Map<Artifact, LoadedSliceEntry> entries) implements SliceStore {
 
         private static final Logger log = LoggerFactory.getLogger(SliceStoreRecord.class);
 
@@ -79,16 +71,16 @@ public interface SliceStoreImpl {
             }
 
             log.info("Loading slice {}", artifact);
-            return locateInRepositories(artifact)
-                .flatMap(location -> loadFromLocation(artifact, location));
+            return locateInRepositories(artifact).flatMap(location -> loadFromLocation(artifact, location));
         }
 
         private Promise<LoadedSlice> loadFromLocation(Artifact artifact, Location location) {
             var classLoader = new SliceClassLoader(new URL[]{location.url()}, SliceStoreRecord.class.getClassLoader());
 
-            return DependencyResolver.resolve(artifact, compositeRepository(), registry)
-                .map(slice -> createEntry(artifact, slice, classLoader))
-                .onFailure(cause -> handleLoadFailure(artifact, classLoader, cause));
+            return DependencyResolver.resolve(artifact, compositeRepository(), registry).map(slice -> createEntry(
+                    artifact,
+                    slice,
+                    classLoader)).onFailure(cause -> handleLoadFailure(artifact, classLoader, cause));
         }
 
         private LoadedSlice createEntry(Artifact artifact, Slice slice, SliceClassLoader classLoader) {
@@ -120,9 +112,10 @@ public interface SliceStoreImpl {
             }
 
             log.info("Activating slice {}", artifact);
-            return entry.sliceInstance().start()
-                .map(_ -> transitionToActive(artifact, entry))
-                .onFailure(cause -> log.error("Failed to activate slice {}: {}", artifact, cause.message()));
+            return entry.sliceInstance()
+                        .start()
+                        .map(_ -> transitionToActive(artifact, entry))
+                        .onFailure(cause -> log.error("Failed to activate slice {}: {}", artifact, cause.message()));
         }
 
         private LoadedSlice transitionToActive(Artifact artifact, LoadedSliceEntry entry) {
@@ -149,9 +142,10 @@ public interface SliceStoreImpl {
             }
 
             log.info("Deactivating slice {}", artifact);
-            return entry.sliceInstance().stop()
-                .map(_ -> transitionToLoaded(artifact, entry))
-                .onFailure(cause -> log.error("Failed to deactivate slice {}: {}", artifact, cause.message()));
+            return entry.sliceInstance()
+                        .stop()
+                        .map(_ -> transitionToLoaded(artifact, entry))
+                        .onFailure(cause -> log.error("Failed to deactivate slice {}: {}", artifact, cause.message()));
         }
 
         private LoadedSlice transitionToLoaded(Artifact artifact, LoadedSliceEntry entry) {
@@ -171,13 +165,13 @@ public interface SliceStoreImpl {
 
             log.info("Unloading slice {}", artifact);
 
-            Promise<Unit> deactivatePromise = entry.state() == EntryState.ACTIVE
-                ? entry.sliceInstance().stop()
-                : Promise.success(Unit.unit());
+            Promise<Unit> deactivatePromise = entry.state() == EntryState.ACTIVE ? entry.sliceInstance()
+                                                                                        .stop() : Promise.success(Unit.unit());
 
-            return deactivatePromise
-                .map(_ -> cleanup(artifact, entry))
-                .onFailure(cause -> log.error("Failed to unload slice {}: {}", artifact, cause.message()));
+            return deactivatePromise.map(_ -> cleanup(artifact, entry)).onFailure(cause -> log.error(
+                    "Failed to unload slice {}: {}",
+                    artifact,
+                    cause.message()));
         }
 
         private Unit cleanup(Artifact artifact, LoadedSliceEntry entry) {
@@ -195,9 +189,7 @@ public interface SliceStoreImpl {
 
         @Override
         public List<LoadedSlice> loaded() {
-            return entries.values().stream()
-                .map(entry -> (LoadedSlice) entry)
-                .toList();
+            return entries.values().stream().map(entry -> (LoadedSlice) entry).toList();
         }
 
         private Promise<Location> locateInRepositories(Artifact artifact) {
@@ -222,13 +214,12 @@ public interface SliceStoreImpl {
             }
         }
 
-        private static final Fn1<Cause, String> SLICE_NOT_LOADED =
-            Causes.forValue("Slice not loaded: %s");
+        private static final Fn1<Cause, String> SLICE_NOT_LOADED = Causes.forValue("Slice not loaded: %s");
 
-        private static final Fn1<Cause, String> INVALID_STATE_TRANSITION =
-            Causes.forValue("Invalid state transition: %s");
+        private static final Fn1<Cause, String> INVALID_STATE_TRANSITION = Causes.forValue(
+                "Invalid state transition: %s");
 
-        private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND =
-            Causes.forValue("Artifact not found in any repository: %s");
+        private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND = Causes.forValue(
+                "Artifact not found in any repository: %s");
     }
 }

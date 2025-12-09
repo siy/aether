@@ -18,8 +18,7 @@ public sealed interface ExpanderError extends Cause {
 
         @Override
         public String message() {
-            return "Artifact mismatch: requested " + requested.asString() +
-                " but JAR manifest declares " + declared.asString();
+            return "Artifact mismatch: requested " + requested.asString() + " but JAR manifest declares " + declared.asString();
         }
     }
 }

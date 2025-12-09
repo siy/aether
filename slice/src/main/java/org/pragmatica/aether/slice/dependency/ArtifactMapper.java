@@ -31,6 +31,7 @@ public interface ArtifactMapper {
      *
      * @param className fully qualified class name (e.g., "org.example.UserService")
      * @param version   version string (e.g., "1.0.0")
+     *
      * @return artifact or error if className format is invalid
      */
     static Result<Artifact> toArtifact(String className, String version) {
@@ -56,6 +57,7 @@ public interface ArtifactMapper {
      *
      * @param className      fully qualified class name
      * @param versionPattern version pattern to extract version from
+     *
      * @return artifact or error
      */
     static Result<Artifact> toArtifact(String className, VersionPattern versionPattern) {
@@ -66,6 +68,7 @@ public interface ArtifactMapper {
      * Convert artifact coordinates to a fully qualified class name.
      *
      * @param artifact the artifact
+     *
      * @return class name (e.g., "org.example.UserService")
      */
     static String toClassName(Artifact artifact) {
@@ -164,6 +167,5 @@ public interface ArtifactMapper {
     }
 
     Fn1<Cause, String> INVALID_CLASS_NAME = Causes.forValue(
-        "Invalid class name format: %s. Expected fully qualified name like 'org.example.ClassName'"
-    );
+            "Invalid class name format: %s. Expected fully qualified name like 'org.example.ClassName'");
 }

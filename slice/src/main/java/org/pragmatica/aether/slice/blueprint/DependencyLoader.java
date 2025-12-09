@@ -15,6 +15,7 @@ public interface DependencyLoader {
      * Load dependencies for the given artifact.
      *
      * @param artifact The artifact to load dependencies for
+     *
      * @return Set of dependency artifacts
      */
     Promise<Set<Artifact>> loadDependencies(Artifact artifact);

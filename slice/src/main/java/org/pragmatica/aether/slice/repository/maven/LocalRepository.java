@@ -51,22 +51,21 @@ public interface LocalRepository extends Repository {
                     return ARTIFACT_NOT_FOUND.apply(artifact.asString() + " at " + jarPath).result();
                 }
 
-                return Result.lift(Causes::fromThrowable, () -> jarPath.toUri().toURL())
-                             .map(url -> location(artifact, url));
+                return Result.lift(Causes::fromThrowable, () -> jarPath.toUri().toURL()).map(url -> location(artifact,
+                                                                                                             url));
             }
 
             private Path resolvePath(Artifact artifact, String packaging) {
                 var version = artifact.version();
                 var artifactId = artifact.artifactId().id();
-                return localRepo
-                        .resolve(artifact.groupId().id().replace('.', '/'))
-                        .resolve(artifactId)
-                        .resolve(version.bareVersion())
-                        .resolve(artifactId + "-" + version.withQualifier() + "." + packaging);
+                return localRepo.resolve(artifact.groupId().id().replace('.', '/'))
+                                .resolve(artifactId)
+                                .resolve(version.bareVersion())
+                                .resolve(artifactId + "-" + version.withQualifier() + "." + packaging);
             }
 
-            private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND =
-                Causes.forValue("Artifact not found in local repository: %s");
+            private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND = Causes.forValue(
+                    "Artifact not found in local repository: %s");
         }
         return new repository(localRepo);
     }

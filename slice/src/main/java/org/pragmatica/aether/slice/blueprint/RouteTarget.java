@@ -35,11 +35,9 @@ public record RouteTarget(String sliceId, String methodName, List<String> params
         var methodName = methodPart.substring(0, parenIndex);
         var paramsStr = methodPart.substring(parenIndex + 1, methodPart.length() - 1);
 
-        List<String> params = paramsStr.isEmpty()
-            ? List.of()
-            : Arrays.stream(paramsStr.split(","))
-                    .map(String::trim)
-                    .toList();
+        List<String> params = paramsStr.isEmpty() ? List.of() : Arrays.stream(paramsStr.split(","))
+                                                                      .map(String::trim)
+                                                                      .toList();
 
         if (!sliceId.matches(SLICE_ID_PATTERN.pattern())) {
             return INVALID_SLICE_ID.apply(sliceId).result();
@@ -48,16 +46,15 @@ public record RouteTarget(String sliceId, String methodName, List<String> params
             return INVALID_METHOD_NAME.apply(methodName).result();
         }
 
-        return validateParams(params)
-            .map(__ -> new RouteTarget(sliceId, methodName, params));
+        return validateParams(params).map(__ -> new RouteTarget(sliceId, methodName, params));
     }
 
     private static Result<List<String>> validateParams(List<String> params) {
         return params.stream()
-            .filter(param -> !PARAM_PATTERN.matcher(param).matches())
-            .findFirst()
-            .map(invalid -> INVALID_PARAM.apply(invalid).<List<String>>result())
-            .orElse(Result.success(params));
+                     .filter(param -> !PARAM_PATTERN.matcher(param).matches())
+                     .findFirst()
+                     .map(invalid -> INVALID_PARAM.apply(invalid).<List<String>>result())
+                     .orElse(Result.success(params));
     }
 
     public String asString() {

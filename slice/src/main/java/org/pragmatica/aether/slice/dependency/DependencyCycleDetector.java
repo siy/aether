@@ -21,6 +21,7 @@ public interface DependencyCycleDetector {
      * The graph is represented as a map from slice class name to its dependencies.
      *
      * @param dependencies Map from slice class name to list of dependency class names
+     *
      * @return Success with Unit if no cycles, failure with cycle path if cycle detected
      */
     static Result<Void> checkForCycles(Map<String, List<String>> dependencies) {
@@ -40,13 +41,11 @@ public interface DependencyCycleDetector {
         return Result.success(null);
     }
 
-    private static Result<Void> dfs(
-        String node,
-        Map<String, List<String>> dependencies,
-        Set<String> visited,
-        Set<String> visiting,
-        List<String> path
-    ) {
+    private static Result<Void> dfs(String node,
+                                    Map<String, List<String>> dependencies,
+                                    Set<String> visited,
+                                    Set<String> visiting,
+                                    List<String> path) {
         visiting.add(node);
         path.add(node);
 
@@ -82,6 +81,5 @@ public interface DependencyCycleDetector {
     }
 
     // Error constants
-    Fn1<Cause, String> CIRCULAR_DEPENDENCY =
-        Causes.forValue("Circular dependency detected: %s");
+    Fn1<Cause, String> CIRCULAR_DEPENDENCY = Causes.forValue("Circular dependency detected: %s");
 }

@@ -35,6 +35,7 @@ public interface SliceRegistry {
      *
      * @param artifact The artifact identifier
      * @param slice    The loaded slice instance
+     *
      * @return Success with Unit, or failure if artifact already registered
      */
     Result<Void> register(Artifact artifact, Slice slice);
@@ -43,6 +44,7 @@ public interface SliceRegistry {
      * Unregister a slice.
      *
      * @param artifact The artifact identifier
+     *
      * @return Success with Unit, or failure if artifact not found
      */
     Result<Void> unregister(Artifact artifact);
@@ -51,6 +53,7 @@ public interface SliceRegistry {
      * Lookup slice by exact artifact.
      *
      * @param artifact The artifact identifier
+     *
      * @return Option containing the slice if found
      */
     Option<Slice> lookup(Artifact artifact);
@@ -63,6 +66,7 @@ public interface SliceRegistry {
      *
      * @param className      Fully qualified class name
      * @param versionPattern Version pattern to match
+     *
      * @return Option containing the first matching slice
      */
     Option<Slice> find(String className, VersionPattern versionPattern);
@@ -99,13 +103,14 @@ public interface SliceRegistry {
 
         @Override
         public Option<Slice> find(String className, VersionPattern versionPattern) {
-            return registry.entrySet().stream()
-                .filter(entry -> matchesClassName(entry.getKey(), className))
-                .filter(entry -> versionPattern.matches(entry.getKey().version()))
-                .map(entry -> entry.getValue())
-                .findFirst()
-                .map(Option::option)
-                .orElse(Option.none());
+            return registry.entrySet()
+                           .stream()
+                           .filter(entry -> matchesClassName(entry.getKey(), className))
+                           .filter(entry -> versionPattern.matches(entry.getKey().version()))
+                           .map(entry -> entry.getValue())
+                           .findFirst()
+                           .map(Option::option)
+                           .orElse(Option.none());
         }
 
         @Override
@@ -126,10 +131,8 @@ public interface SliceRegistry {
             return lastDot >= 0 ? className.substring(lastDot + 1) : className;
         }
 
-        private static final Fn1<Cause, String> ALREADY_REGISTERED =
-            Causes.forValue("Artifact already registered: %s");
+        private static final Fn1<Cause, String> ALREADY_REGISTERED = Causes.forValue("Artifact already registered: %s");
 
-        private static final Fn1<Cause, String> NOT_FOUND =
-            Causes.forValue("Artifact not found in registry: %s");
+        private static final Fn1<Cause, String> NOT_FOUND = Causes.forValue("Artifact not found in registry: %s");
     }
 }

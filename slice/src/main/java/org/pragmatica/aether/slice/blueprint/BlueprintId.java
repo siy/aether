@@ -22,8 +22,7 @@ public record BlueprintId(String name, Version version) {
             return INVALID_FORMAT.apply(input).result();
         }
 
-        return Result.all(ensure(parts[0], Is::matches, NAME_PATTERN),
-                          Version.version(parts[1]))
+        return Result.all(ensure(parts[0], Is::matches, NAME_PATTERN), Version.version(parts[1]))
                      .map(BlueprintId::blueprintId);
     }
 

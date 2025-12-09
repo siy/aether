@@ -23,50 +23,34 @@ import java.util.Set;
 public interface RepositoryDependencyLoader {
 
     static DependencyLoader repositoryDependencyLoader(Repository repository) {
-        return artifact -> repository.locate(artifact)
-            .flatMap(location -> loadDependenciesFromJar(artifact, location));
+        return artifact -> repository.locate(artifact).flatMap(location -> loadDependenciesFromJar(artifact, location));
     }
 
     private static Promise<Set<Artifact>> loadDependenciesFromJar(Artifact artifact, Location location) {
-        return SliceManifest.read(location.url())
-            .flatMap(manifest -> validateManifest(artifact, manifest))
-            .flatMap(manifest -> loadDependencies(manifest, location.url()))
-            .async();
+        return SliceManifest.read(location.url()).flatMap(manifest -> validateManifest(artifact, manifest)).flatMap(
+                manifest -> loadDependencies(manifest, location.url())).async();
     }
 
-    private static Result<SliceManifest.SliceManifestInfo> validateManifest(
-        Artifact expected,
-        SliceManifest.SliceManifestInfo manifest
-    ) {
+    private static Result<SliceManifest.SliceManifestInfo> validateManifest(Artifact expected,
+                                                                            SliceManifest.SliceManifestInfo manifest) {
         if (!manifest.artifact().equals(expected)) {
             return ExpanderError.ArtifactMismatch.cause(expected, manifest.artifact()).result();
         }
         return Result.success(manifest);
     }
 
-    private static Result<Set<Artifact>> loadDependencies(
-        SliceManifest.SliceManifestInfo manifest,
-        URL jarUrl
-    ) {
-        var classLoader = new SliceClassLoader(
-            new URL[]{jarUrl},
-            RepositoryDependencyLoader.class.getClassLoader()
-        );
+    private static Result<Set<Artifact>> loadDependencies(SliceManifest.SliceManifestInfo manifest, URL jarUrl) {
+        var classLoader = new SliceClassLoader(new URL[]{jarUrl}, RepositoryDependencyLoader.class.getClassLoader());
 
         return SliceDependencies.load(manifest.sliceClassName(), classLoader)
-            .flatMap(RepositoryDependencyLoader::convertToArtifacts);
+                                .flatMap(RepositoryDependencyLoader::convertToArtifacts);
     }
 
-    private static Result<Set<Artifact>> convertToArtifacts(
-        List<DependencyDescriptor> descriptors
-    ) {
+    private static Result<Set<Artifact>> convertToArtifacts(List<DependencyDescriptor> descriptors) {
         var artifacts = new HashSet<Artifact>();
 
         for (var descriptor : descriptors) {
-            var result = ArtifactMapper.toArtifact(
-                descriptor.sliceClassName(),
-                descriptor.versionPattern()
-            );
+            var result = ArtifactMapper.toArtifact(descriptor.sliceClassName(), descriptor.versionPattern());
 
             if (result.isFailure()) {
                 return result.map(_ -> Set.of());

@@ -16,6 +16,7 @@ import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification;
 import org.pragmatica.cluster.topology.QuorumStateNotification;
 import org.pragmatica.cluster.topology.TopologyChangeNotification;
+import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.message.MessageRouter;
@@ -23,6 +24,8 @@ import org.pragmatica.net.serialization.Deserializer;
 import org.pragmatica.net.serialization.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 import static org.pragmatica.net.serialization.binary.fury.FuryDeserializer.furyDeserializer;
 import static org.pragmatica.net.serialization.binary.fury.FurySerializer.furySerializer;
@@ -42,6 +45,11 @@ public interface AetherNode {
     KVStore<AetherKey, AetherValue> kvStore();
 
     SliceStore sliceStore();
+
+    /**
+     * Apply commands to the cluster via consensus.
+     */
+    <R> Promise<List<R>> apply(List<KVCommand<AetherKey>> commands);
 
     static AetherNode aetherNode(AetherNodeConfig config) {
         var router = MessageRouter.mutable();
@@ -85,6 +93,11 @@ public interface AetherNode {
                 log.info("Stopping Aether node {}", self());
                 return clusterNode.stop()
                                   .onSuccess(_ -> log.info("Aether node {} stopped", self()));
+            }
+
+            @Override
+            public <R> Promise<List<R>> apply(List<KVCommand<AetherKey>> commands) {
+                return clusterNode.apply(commands);
             }
         }
 

@@ -449,6 +449,8 @@ router.addRoute(QuorumStateNotification.class, this::onQuorumStateChange);
 - Blueprint DSL parser
 - Endpoint registry
 - ClusterDeploymentManager (allocation, reconciliation, scale up/down)
+- AetherNode assembly (wires all components together)
+- AetherNode integration tests (cluster formation, consensus, replication)
 - Example slice implementation
 
 ### Planned 📋
@@ -740,11 +742,14 @@ cd example-slice && ../mvnw test
 
 ### Key Files and Locations
 
+- **AetherNode**: `node/src/main/java/org/pragmatica/aether/node/AetherNode.java` - Main node assembly
+- **AetherNodeConfig**: `node/src/main/java/org/pragmatica/aether/node/AetherNodeConfig.java` - Node configuration
 - **Slice interface**: `slice-api/src/main/java/org/pragmatica/aether/slice/Slice.java`
 - **SliceStore**: `slice/src/main/java/org/pragmatica/aether/slice/SliceStore.java`
 - **Artifact types**: `slice/src/main/java/org/pragmatica/aether/artifact/`
 - **KV Schema**: `slice/src/main/java/org/pragmatica/aether/slice/kvstore/`
 - **NodeDeploymentManager**: `node/src/main/java/org/pragmatica/aether/deployment/node/`
+- **ClusterDeploymentManager**: `node/src/main/java/org/pragmatica/aether/deployment/cluster/`
 - **Rabia Consensus**: `cluster/src/main/java/org/pragmatica/cluster/consensus/rabia/`
 - **KVStore**: `cluster/src/main/java/org/pragmatica/cluster/state/kvstore/`
 

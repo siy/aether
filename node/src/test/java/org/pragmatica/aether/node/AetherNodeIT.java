@@ -228,4 +228,59 @@ class AetherNodeIT {
 
         log.info("Remove operation replicated to all nodes");
     }
+
+    @Test
+    void metrics_collector_collects_local_metrics() {
+        // Each node should have its own metrics
+        for (var node : nodes) {
+            var localMetrics = node.metricsCollector().collectLocal();
+
+            // Should have CPU metrics
+            assertThat(localMetrics.containsKey("cpu.usage")).isTrue();
+            var cpuUsage = localMetrics.get("cpu.usage");
+            assertThat(cpuUsage).isBetween(0.0, 1.0);
+
+            // Should have heap metrics
+            assertThat(localMetrics.containsKey("heap.used")).isTrue();
+            assertThat(localMetrics.containsKey("heap.max")).isTrue();
+
+            log.info("Node {} has local metrics: cpu={}, heap.used={}, heap.max={}",
+                     node.self(),
+                     localMetrics.get("cpu.usage"),
+                     localMetrics.get("heap.used"),
+                     localMetrics.get("heap.max"));
+        }
+    }
+
+    @Test
+    void all_nodes_have_metrics_collector_and_control_loop() {
+        // Verify components are wired correctly
+        for (var node : nodes) {
+            assertThat(node.metricsCollector())
+                    .as("Node %s should have MetricsCollector", node.self())
+                    .isNotNull();
+
+            assertThat(node.controlLoop())
+                    .as("Node %s should have ControlLoop", node.self())
+                    .isNotNull();
+
+            log.info("Node {} has MetricsCollector and ControlLoop", node.self());
+        }
+    }
+
+    @Test
+    void nodes_have_slice_invoker_and_invocation_handler() {
+        // Verify invocation components are wired correctly
+        for (var node : nodes) {
+            assertThat(node.sliceInvoker())
+                    .as("Node %s should have SliceInvoker", node.self())
+                    .isNotNull();
+
+            assertThat(node.invocationHandler())
+                    .as("Node %s should have InvocationHandler", node.self())
+                    .isNotNull();
+
+            log.info("Node {} has SliceInvoker and InvocationHandler", node.self());
+        }
+    }
 }

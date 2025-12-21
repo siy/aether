@@ -1,0 +1,260 @@
+package org.pragmatica.aether.api;
+
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.codec.http.HttpVersion;
+import io.netty.util.CharsetUtil;
+import org.pragmatica.aether.node.AetherNode;
+import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.utils.Causes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.function.Supplier;
+
+import static org.pragmatica.lang.Unit.unit;
+
+/**
+ * HTTP management API server for cluster administration.
+ *
+ * <p>Exposes REST endpoints for:
+ * <ul>
+ *   <li>GET /status - Cluster status</li>
+ *   <li>GET /nodes - List active nodes</li>
+ *   <li>GET /slices - List deployed slices</li>
+ *   <li>GET /metrics - Cluster metrics</li>
+ * </ul>
+ */
+public interface ManagementServer {
+
+    Promise<Unit> start();
+
+    Promise<Unit> stop();
+
+    static ManagementServer managementServer(int port, Supplier<AetherNode> nodeSupplier) {
+        return new ManagementServerImpl(port, nodeSupplier);
+    }
+}
+
+class ManagementServerImpl implements ManagementServer {
+
+    private static final Logger log = LoggerFactory.getLogger(ManagementServerImpl.class);
+
+    private final int port;
+    private final Supplier<AetherNode> nodeSupplier;
+    private final NioEventLoopGroup bossGroup;
+    private final NioEventLoopGroup workerGroup;
+    private Channel serverChannel;
+
+    ManagementServerImpl(int port, Supplier<AetherNode> nodeSupplier) {
+        this.port = port;
+        this.nodeSupplier = nodeSupplier;
+        this.bossGroup = new NioEventLoopGroup(1);
+        this.workerGroup = new NioEventLoopGroup();
+    }
+
+    @Override
+    public Promise<Unit> start() {
+        return Promise.promise(promise -> {
+            var bootstrap = new ServerBootstrap()
+                    .group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel ch) {
+                            ChannelPipeline p = ch.pipeline();
+                            p.addLast(new HttpServerCodec());
+                            p.addLast(new HttpObjectAggregator(65536));
+                            p.addLast(new HttpRequestHandler(nodeSupplier));
+                        }
+                    });
+
+            bootstrap.bind(port).addListener(future -> {
+                if (future.isSuccess()) {
+                    serverChannel = ((io.netty.channel.ChannelFuture) future).channel();
+                    log.info("Management server started on port {}", port);
+                    promise.succeed(unit());
+                } else {
+                    log.error("Failed to start management server on port {}", port, future.cause());
+                    promise.fail(Causes.fromThrowable(future.cause()));
+                }
+            });
+        });
+    }
+
+    @Override
+    public Promise<Unit> stop() {
+        return Promise.promise(promise -> {
+            if (serverChannel != null) {
+                serverChannel.close().addListener(f -> {
+                    bossGroup.shutdownGracefully();
+                    workerGroup.shutdownGracefully();
+                    log.info("Management server stopped");
+                    promise.succeed(unit());
+                });
+            } else {
+                bossGroup.shutdownGracefully();
+                workerGroup.shutdownGracefully();
+                promise.succeed(unit());
+            }
+        });
+    }
+}
+
+class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
+
+    private static final Logger log = LoggerFactory.getLogger(HttpRequestHandler.class);
+    private static final String CONTENT_TYPE_JSON = "application/json";
+
+    private final Supplier<AetherNode> nodeSupplier;
+
+    HttpRequestHandler(Supplier<AetherNode> nodeSupplier) {
+        this.nodeSupplier = nodeSupplier;
+    }
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+        if (!request.decoderResult().isSuccess()) {
+            sendError(ctx, HttpResponseStatus.BAD_REQUEST);
+            return;
+        }
+
+        var method = request.method();
+        var uri = request.uri();
+
+        log.debug("Received {} {}", method, uri);
+
+        if (method == HttpMethod.GET) {
+            handleGet(ctx, uri);
+        } else {
+            sendError(ctx, HttpResponseStatus.METHOD_NOT_ALLOWED);
+        }
+    }
+
+    private void handleGet(ChannelHandlerContext ctx, String uri) {
+        var node = nodeSupplier.get();
+
+        var response = switch (uri) {
+            case "/status" -> buildStatusResponse(node);
+            case "/nodes" -> buildNodesResponse(node);
+            case "/slices" -> buildSlicesResponse(node);
+            case "/metrics" -> buildMetricsResponse(node);
+            case "/health" -> "{\"status\":\"ok\"}";
+            default -> null;
+        };
+
+        if (response != null) {
+            sendJson(ctx, response);
+        } else {
+            sendError(ctx, HttpResponseStatus.NOT_FOUND);
+        }
+    }
+
+    private String buildStatusResponse(AetherNode node) {
+        var sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"nodeId\":\"").append(node.self().id()).append("\",");
+        sb.append("\"status\":\"running\"");
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private String buildNodesResponse(AetherNode node) {
+        var metrics = node.metricsCollector().allMetrics();
+        var sb = new StringBuilder();
+        sb.append("{\"nodes\":[");
+
+        boolean first = true;
+        for (NodeId nodeId : metrics.keySet()) {
+            if (!first) sb.append(",");
+            sb.append("\"").append(nodeId.id()).append("\"");
+            first = false;
+        }
+
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    private String buildSlicesResponse(AetherNode node) {
+        var slices = node.sliceStore().loaded();
+        var sb = new StringBuilder();
+        sb.append("{\"slices\":[");
+
+        boolean first = true;
+        for (var slice : slices) {
+            if (!first) sb.append(",");
+            sb.append("\"").append(slice.artifact().asString()).append("\"");
+            first = false;
+        }
+
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    private String buildMetricsResponse(AetherNode node) {
+        var allMetrics = node.metricsCollector().allMetrics();
+        var sb = new StringBuilder();
+        sb.append("{\"metrics\":{");
+
+        boolean firstNode = true;
+        for (var entry : allMetrics.entrySet()) {
+            if (!firstNode) sb.append(",");
+            sb.append("\"").append(entry.getKey().id()).append("\":{");
+
+            boolean firstMetric = true;
+            for (var metric : entry.getValue().entrySet()) {
+                if (!firstMetric) sb.append(",");
+                sb.append("\"").append(metric.getKey()).append("\":").append(metric.getValue());
+                firstMetric = false;
+            }
+
+            sb.append("}");
+            firstNode = false;
+        }
+
+        sb.append("}}");
+        return sb.toString();
+    }
+
+    private void sendJson(ChannelHandlerContext ctx, String content) {
+        var buf = Unpooled.copiedBuffer(content, CharsetUtil.UTF_8);
+        var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, buf);
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_JSON);
+        response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, buf.readableBytes());
+        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
+        var content = "{\"error\":\"" + status.reasonPhrase() + "\"}";
+        var buf = Unpooled.copiedBuffer(content, CharsetUtil.UTF_8);
+        var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, buf);
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_JSON);
+        response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, buf.readableBytes());
+        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        log.error("Error handling HTTP request", cause);
+        ctx.close();
+    }
+}

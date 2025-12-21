@@ -1,0 +1,262 @@
+package org.pragmatica.aether.cli;
+
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.concurrent.Callable;
+
+/**
+ * Aether cluster management CLI.
+ *
+ * <p>Supports two modes:
+ * <ul>
+ *   <li>Batch mode: Execute commands directly from command line</li>
+ *   <li>REPL mode: Interactive shell when no command specified</li>
+ * </ul>
+ *
+ * <p>Usage examples:
+ * <pre>
+ * # Batch mode
+ * aether-cli --connect node1:8080 status
+ * aether-cli --connect node1:8080 nodes
+ * aether-cli --connect node1:8080 metrics
+ *
+ * # REPL mode
+ * aether-cli --connect node1:8080
+ * aether> status
+ * aether> nodes
+ * aether> exit
+ * </pre>
+ */
+@Command(name = "aether-cli",
+         mixinStandardHelpOptions = true,
+         version = "Aether CLI 0.3.0",
+         description = "Command-line interface for Aether cluster management",
+         subcommands = {
+                 AetherCli.StatusCommand.class,
+                 AetherCli.NodesCommand.class,
+                 AetherCli.SlicesCommand.class,
+                 AetherCli.MetricsCommand.class,
+                 AetherCli.HealthCommand.class
+         })
+public class AetherCli implements Runnable {
+
+    @Option(names = {"-c", "--connect"},
+            description = "Node address to connect to (host:port)",
+            defaultValue = "localhost:8080")
+    private String nodeAddress;
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    public static void main(String[] args) {
+        var cli = new AetherCli();
+        var cmd = new CommandLine(cli);
+
+        if (args.length == 0 || (args.length == 2 && (args[0].equals("-c") || args[0].equals("--connect")))) {
+            // REPL mode when no command specified (only --connect option)
+            if (args.length == 2) {
+                cli.nodeAddress = args[1];
+            }
+            cli.runRepl(cmd);
+        } else {
+            // Batch mode
+            int exitCode = cmd.execute(args);
+            System.exit(exitCode);
+        }
+    }
+
+    @Override
+    public void run() {
+        // When no subcommand is specified, show help
+        CommandLine.usage(this, System.out);
+    }
+
+    private void runRepl(CommandLine cmd) {
+        System.out.println("Aether CLI v0.3.0 - Connected to " + nodeAddress);
+        System.out.println("Type 'help' for available commands, 'exit' to quit.");
+        System.out.println();
+
+        try (var reader = new BufferedReader(new InputStreamReader(System.in))) {
+            String line;
+            while (true) {
+                System.out.print("aether> ");
+                System.out.flush();
+                line = reader.readLine();
+
+                if (line == null || line.trim().equalsIgnoreCase("exit") || line.trim().equalsIgnoreCase("quit")) {
+                    System.out.println("Goodbye!");
+                    break;
+                }
+
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+
+                // Parse and execute command
+                String[] replArgs = parseReplCommand(line.trim());
+                if (replArgs.length > 0) {
+                    // Prepend --connect option
+                    String[] fullArgs = new String[replArgs.length + 2];
+                    fullArgs[0] = "--connect";
+                    fullArgs[1] = nodeAddress;
+                    System.arraycopy(replArgs, 0, fullArgs, 2, replArgs.length);
+
+                    cmd.execute(fullArgs);
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error reading input: " + e.getMessage());
+        }
+    }
+
+    private String[] parseReplCommand(String line) {
+        // Simple space-based splitting (could be enhanced for quoted strings)
+        return line.split("\\s+");
+    }
+
+    String fetchFromNode(String path) {
+        try {
+            var uri = URI.create("http://" + nodeAddress + path);
+            var request = HttpRequest.newBuilder()
+                                     .uri(uri)
+                                     .GET()
+                                     .build();
+
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                return response.body();
+            } else {
+                return "{\"error\":\"HTTP " + response.statusCode() + "\"}";
+            }
+        } catch (Exception e) {
+            return "{\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    // ===== Subcommands =====
+
+    @Command(name = "status", description = "Show cluster status")
+    static class StatusCommand implements Callable<Integer> {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Override
+        public Integer call() {
+            var response = parent.fetchFromNode("/status");
+            System.out.println(formatJson(response));
+            return 0;
+        }
+    }
+
+    @Command(name = "nodes", description = "List active nodes")
+    static class NodesCommand implements Callable<Integer> {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Override
+        public Integer call() {
+            var response = parent.fetchFromNode("/nodes");
+            System.out.println(formatJson(response));
+            return 0;
+        }
+    }
+
+    @Command(name = "slices", description = "List deployed slices")
+    static class SlicesCommand implements Callable<Integer> {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Override
+        public Integer call() {
+            var response = parent.fetchFromNode("/slices");
+            System.out.println(formatJson(response));
+            return 0;
+        }
+    }
+
+    @Command(name = "metrics", description = "Show cluster metrics")
+    static class MetricsCommand implements Callable<Integer> {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Override
+        public Integer call() {
+            var response = parent.fetchFromNode("/metrics");
+            System.out.println(formatJson(response));
+            return 0;
+        }
+    }
+
+    @Command(name = "health", description = "Check node health")
+    static class HealthCommand implements Callable<Integer> {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Override
+        public Integer call() {
+            var response = parent.fetchFromNode("/health");
+            System.out.println(formatJson(response));
+            return 0;
+        }
+    }
+
+    // Simple JSON formatter for readability
+    private static String formatJson(String json) {
+        if (json == null || json.isEmpty()) {
+            return json;
+        }
+
+        var sb = new StringBuilder();
+        int indent = 0;
+        boolean inString = false;
+
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+
+            if (c == '"' && (i == 0 || json.charAt(i - 1) != '\\')) {
+                inString = !inString;
+                sb.append(c);
+            } else if (!inString) {
+                switch (c) {
+                    case '{', '[' -> {
+                        sb.append(c);
+                        sb.append('\n');
+                        indent++;
+                        sb.append("  ".repeat(indent));
+                    }
+                    case '}', ']' -> {
+                        sb.append('\n');
+                        indent--;
+                        sb.append("  ".repeat(indent));
+                        sb.append(c);
+                    }
+                    case ',' -> {
+                        sb.append(c);
+                        sb.append('\n');
+                        sb.append("  ".repeat(indent));
+                    }
+                    case ':' -> sb.append(": ");
+                    default -> {
+                        if (!Character.isWhitespace(c)) {
+                            sb.append(c);
+                        }
+                    }
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+
+        return sb.toString();
+    }
+}

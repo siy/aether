@@ -16,6 +16,7 @@
         <module>mcp</module>
         <module>cluster</module>
         <module>common</module>
+        <module>cli</module>
     </modules>
 
     <properties>
@@ -147,6 +148,13 @@
                 <groupId>org.apache.fury</groupId>
                 <artifactId>fury-core</artifactId>
                 <version>${fury-core.version}</version>
+            </dependency>
+
+            <!-- CLI -->
+            <dependency>
+                <groupId>info.picocli</groupId>
+                <artifactId>picocli</artifactId>
+                <version>4.7.6</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

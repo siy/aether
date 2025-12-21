@@ -29,6 +29,8 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
     @SuppressWarnings("unused")
     MessageRouter router();
 
+    ClusterNetwork network();
+
     static <C extends Command> RabiaNode<C> rabiaNode(NodeConfig config,
                                                       MessageRouter.MutableRouter router,
                                                       StateMachine<C> stateMachine,

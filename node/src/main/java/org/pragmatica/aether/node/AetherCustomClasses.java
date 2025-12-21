@@ -16,6 +16,8 @@ import org.pragmatica.aether.slice.blueprint.RouteTarget;
 import org.pragmatica.aether.slice.blueprint.RoutingSection;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
+import org.pragmatica.aether.invoke.InvocationMessage;
+import org.pragmatica.cluster.metrics.MetricsMessage;
 import org.pragmatica.cluster.node.rabia.CustomClasses;
 
 import java.util.function.Consumer;
@@ -55,5 +57,11 @@ public interface AetherCustomClasses {
         consumer.accept(RouteTarget.class);
         consumer.accept(Binding.class);
         concreteSubtypes(BindingSource.class).forEach(consumer);
+
+        // Metrics types
+        concreteSubtypes(MetricsMessage.class).forEach(consumer);
+
+        // Invocation types
+        concreteSubtypes(InvocationMessage.class).forEach(consumer);
     }
 }

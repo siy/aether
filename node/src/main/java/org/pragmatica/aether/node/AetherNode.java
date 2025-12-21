@@ -1,6 +1,6 @@
 package org.pragmatica.aether.node;
 
-import org.pragmatica.aether.controller.ClusterController;
+import org.pragmatica.aether.api.ManagementServer;
 import org.pragmatica.aether.controller.ControlLoop;
 import org.pragmatica.aether.controller.DecisionTreeController;
 import org.pragmatica.aether.deployment.cluster.ClusterDeploymentManager;
@@ -25,6 +25,7 @@ import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification;
 import org.pragmatica.cluster.topology.QuorumStateNotification;
 import org.pragmatica.cluster.topology.TopologyChangeNotification;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.message.MessageRouter;
@@ -93,7 +94,8 @@ public interface AetherNode {
                 MetricsScheduler metricsScheduler,
                 ControlLoop controlLoop,
                 SliceInvoker sliceInvoker,
-                InvocationHandler invocationHandler
+                InvocationHandler invocationHandler,
+                Option<ManagementServer> managementServer
         ) implements AetherNode {
             private static final Logger log = LoggerFactory.getLogger(aetherNode.class);
 
@@ -106,6 +108,10 @@ public interface AetherNode {
             public Promise<Unit> start() {
                 log.info("Starting Aether node {}", self());
                 return clusterNode.start()
+                                  .flatMap(_ -> managementServer.fold(
+                                          () -> Promise.success(Unit.unit()),
+                                          ManagementServer::start
+                                  ))
                                   .onSuccess(_ -> log.info("Aether node {} started successfully", self()));
             }
 
@@ -114,8 +120,12 @@ public interface AetherNode {
                 log.info("Stopping Aether node {}", self());
                 controlLoop.stop();
                 metricsScheduler.stop();
-                return clusterNode.stop()
-                                  .onSuccess(_ -> log.info("Aether node {} stopped", self()));
+                return managementServer.fold(
+                               () -> Promise.success(Unit.unit()),
+                               ManagementServer::stop
+                       )
+                       .flatMap(_ -> clusterNode.stop())
+                       .onSuccess(_ -> log.info("Aether node {} stopped", self()));
             }
 
             @Override
@@ -170,11 +180,26 @@ public interface AetherNode {
                         endpointRegistry, metricsCollector, metricsScheduler, controlLoop,
                         sliceInvoker, invocationHandler);
 
-        return new aetherNode(
+        // Create the node first (without management server reference)
+        var node = new aetherNode(
                 config, router, kvStore, sliceRegistry, sliceStore,
                 clusterNode, nodeDeploymentManager, clusterDeploymentManager, endpointRegistry,
-                metricsCollector, metricsScheduler, controlLoop, sliceInvoker, invocationHandler
+                metricsCollector, metricsScheduler, controlLoop, sliceInvoker, invocationHandler,
+                Option.empty()
         );
+
+        // Create management server if enabled
+        if (config.managementPort() > 0) {
+            var managementServer = ManagementServer.managementServer(config.managementPort(), () -> node);
+            return new aetherNode(
+                    config, router, kvStore, sliceRegistry, sliceStore,
+                    clusterNode, nodeDeploymentManager, clusterDeploymentManager, endpointRegistry,
+                    metricsCollector, metricsScheduler, controlLoop, sliceInvoker, invocationHandler,
+                    Option.some(managementServer)
+            );
+        }
+
+        return node;
     }
 
     private static void configureRoutes(MessageRouter.MutableRouter router,

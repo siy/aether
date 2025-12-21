@@ -21,15 +21,21 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.CharsetUtil;
+import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.node.AetherNode;
+import org.pragmatica.aether.slice.kvstore.AetherKey;
+import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 import static org.pragmatica.lang.Unit.unit;
 
@@ -145,6 +151,9 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
         if (method == HttpMethod.GET) {
             handleGet(ctx, uri);
+        } else if (method == HttpMethod.POST) {
+            var body = request.content().toString(CharsetUtil.UTF_8);
+            handlePost(ctx, uri, body);
         } else {
             sendError(ctx, HttpResponseStatus.METHOD_NOT_ALLOWED);
         }
@@ -167,6 +176,100 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         } else {
             sendError(ctx, HttpResponseStatus.NOT_FOUND);
         }
+    }
+
+    private void handlePost(ChannelHandlerContext ctx, String uri, String body) {
+        var node = nodeSupplier.get();
+
+        switch (uri) {
+            case "/deploy" -> handleDeploy(ctx, node, body);
+            case "/scale" -> handleScale(ctx, node, body);
+            case "/undeploy" -> handleUndeploy(ctx, node, body);
+            default -> sendError(ctx, HttpResponseStatus.NOT_FOUND);
+        }
+    }
+
+    // Simple JSON parsing helpers
+    private static final Pattern ARTIFACT_PATTERN = Pattern.compile("\"artifact\"\\s*:\\s*\"([^\"]+)\"");
+    private static final Pattern INSTANCES_PATTERN = Pattern.compile("\"instances\"\\s*:\\s*(\\d+)");
+
+    private void handleDeploy(ChannelHandlerContext ctx, AetherNode node, String body) {
+        // Parse: {"artifact": "group:id:version", "instances": 1}
+        var artifactMatch = ARTIFACT_PATTERN.matcher(body);
+        var instancesMatch = INSTANCES_PATTERN.matcher(body);
+
+        if (!artifactMatch.find()) {
+            sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing 'artifact' field");
+            return;
+        }
+
+        int instances = 1;
+        if (instancesMatch.find()) {
+            instances = Integer.parseInt(instancesMatch.group(1));
+        }
+
+        var artifactStr = artifactMatch.group(1);
+        int finalInstances = instances;
+        Artifact.artifact(artifactStr)
+                .onSuccess(artifact -> {
+                    AetherKey key = new AetherKey.BlueprintKey(artifact);
+                    AetherValue value = new AetherValue.BlueprintValue(finalInstances);
+                    KVCommand<AetherKey> command = new KVCommand.Put<>(key, value);
+
+                    node.apply(List.of(command))
+                        .onSuccess(_ -> sendJson(ctx, "{\"status\":\"deployed\",\"artifact\":\"" + artifactStr + "\",\"instances\":" + finalInstances + "}"))
+                        .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, cause.message()));
+                })
+                .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, cause.message()));
+    }
+
+    private void handleScale(ChannelHandlerContext ctx, AetherNode node, String body) {
+        // Parse: {"artifact": "group:id:version", "instances": N}
+        var artifactMatch = ARTIFACT_PATTERN.matcher(body);
+        var instancesMatch = INSTANCES_PATTERN.matcher(body);
+
+        if (!artifactMatch.find() || !instancesMatch.find()) {
+            sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing 'artifact' or 'instances' field");
+            return;
+        }
+
+        var artifactStr = artifactMatch.group(1);
+        var instances = Integer.parseInt(instancesMatch.group(1));
+
+        Artifact.artifact(artifactStr)
+                .onSuccess(artifact -> {
+                    AetherKey key = new AetherKey.BlueprintKey(artifact);
+                    AetherValue value = new AetherValue.BlueprintValue(instances);
+                    KVCommand<AetherKey> command = new KVCommand.Put<>(key, value);
+
+                    node.apply(List.of(command))
+                        .onSuccess(_ -> sendJson(ctx, "{\"status\":\"scaled\",\"artifact\":\"" + artifactStr + "\",\"instances\":" + instances + "}"))
+                        .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, cause.message()));
+                })
+                .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, cause.message()));
+    }
+
+    private void handleUndeploy(ChannelHandlerContext ctx, AetherNode node, String body) {
+        // Parse: {"artifact": "group:id:version"}
+        var artifactMatch = ARTIFACT_PATTERN.matcher(body);
+
+        if (!artifactMatch.find()) {
+            sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing 'artifact' field");
+            return;
+        }
+
+        var artifactStr = artifactMatch.group(1);
+
+        Artifact.artifact(artifactStr)
+                .onSuccess(artifact -> {
+                    AetherKey key = new AetherKey.BlueprintKey(artifact);
+                    KVCommand<AetherKey> command = new KVCommand.Remove<>(key);
+
+                    node.apply(List.of(command))
+                        .onSuccess(_ -> sendJson(ctx, "{\"status\":\"undeployed\",\"artifact\":\"" + artifactStr + "\"}"))
+                        .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, cause.message()));
+                })
+                .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, cause.message()));
     }
 
     private String buildStatusResponse(AetherNode node) {
@@ -245,6 +348,16 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     private void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
         var content = "{\"error\":\"" + status.reasonPhrase() + "\"}";
+        var buf = Unpooled.copiedBuffer(content, CharsetUtil.UTF_8);
+        var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, buf);
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_JSON);
+        response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, buf.readableBytes());
+        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void sendJsonError(ChannelHandlerContext ctx, HttpResponseStatus status, String message) {
+        var escapedMessage = message.replace("\"", "\\\"").replace("\n", "\\n");
+        var content = "{\"error\":\"" + escapedMessage + "\"}";
         var buf = Unpooled.copiedBuffer(content, CharsetUtil.UTF_8);
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, buf);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_JSON);

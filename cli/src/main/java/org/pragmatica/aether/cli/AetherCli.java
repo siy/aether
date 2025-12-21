@@ -46,7 +46,10 @@ import java.util.concurrent.Callable;
                  AetherCli.NodesCommand.class,
                  AetherCli.SlicesCommand.class,
                  AetherCli.MetricsCommand.class,
-                 AetherCli.HealthCommand.class
+                 AetherCli.HealthCommand.class,
+                 AetherCli.DeployCommand.class,
+                 AetherCli.ScaleCommand.class,
+                 AetherCli.UndeployCommand.class
          })
 public class AetherCli implements Runnable {
 
@@ -136,7 +139,28 @@ public class AetherCli implements Runnable {
             if (response.statusCode() == 200) {
                 return response.body();
             } else {
-                return "{\"error\":\"HTTP " + response.statusCode() + "\"}";
+                return "{\"error\":\"HTTP " + response.statusCode() + ": " + response.body() + "\"}";
+            }
+        } catch (Exception e) {
+            return "{\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    String postToNode(String path, String body) {
+        try {
+            var uri = URI.create("http://" + nodeAddress + path);
+            var request = HttpRequest.newBuilder()
+                                     .uri(uri)
+                                     .header("Content-Type", "application/json")
+                                     .POST(HttpRequest.BodyPublishers.ofString(body))
+                                     .build();
+
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                return response.body();
+            } else {
+                return "{\"error\":\"HTTP " + response.statusCode() + ": " + response.body() + "\"}";
             }
         } catch (Exception e) {
             return "{\"error\":\"" + e.getMessage() + "\"}";
@@ -205,6 +229,63 @@ public class AetherCli implements Runnable {
         @Override
         public Integer call() {
             var response = parent.fetchFromNode("/health");
+            System.out.println(formatJson(response));
+            return 0;
+        }
+    }
+
+    @Command(name = "deploy", description = "Deploy a slice to the cluster")
+    static class DeployCommand implements Callable<Integer> {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Parameters(index = "0", description = "Artifact coordinates (group:artifact:version)")
+        private String artifact;
+
+        @Option(names = {"-n", "--instances"}, description = "Number of instances", defaultValue = "1")
+        private int instances;
+
+        @Override
+        public Integer call() {
+            var body = "{\"artifact\":\"" + artifact + "\",\"instances\":" + instances + "}";
+            var response = parent.postToNode("/deploy", body);
+            System.out.println(formatJson(response));
+            return 0;
+        }
+    }
+
+    @Command(name = "scale", description = "Scale a deployed slice")
+    static class ScaleCommand implements Callable<Integer> {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Parameters(index = "0", description = "Artifact coordinates (group:artifact:version)")
+        private String artifact;
+
+        @Option(names = {"-n", "--instances"}, description = "Target number of instances", required = true)
+        private int instances;
+
+        @Override
+        public Integer call() {
+            var body = "{\"artifact\":\"" + artifact + "\",\"instances\":" + instances + "}";
+            var response = parent.postToNode("/scale", body);
+            System.out.println(formatJson(response));
+            return 0;
+        }
+    }
+
+    @Command(name = "undeploy", description = "Remove a slice from the cluster")
+    static class UndeployCommand implements Callable<Integer> {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Parameters(index = "0", description = "Artifact coordinates (group:artifact:version)")
+        private String artifact;
+
+        @Override
+        public Integer call() {
+            var body = "{\"artifact\":\"" + artifact + "\"}";
+            var response = parent.postToNode("/undeploy", body);
             System.out.println(formatJson(response));
             return 0;
         }

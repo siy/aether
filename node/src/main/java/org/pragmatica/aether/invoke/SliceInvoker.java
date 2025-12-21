@@ -23,6 +23,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static org.pragmatica.lang.Unit.unit;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
@@ -64,6 +67,20 @@ public interface SliceInvoker {
     <R> Promise<R> invokeAndWait(Artifact slice, MethodName method, Object request, Class<R> responseType);
 
     /**
+     * Request-response invocation with retry for idempotent operations.
+     * Uses exponential backoff with the specified number of retries.
+     *
+     * @param slice        Target slice artifact
+     * @param method       Method to invoke
+     * @param request      Request parameter
+     * @param responseType Expected response type
+     * @param maxRetries   Maximum number of retry attempts (0 = no retries)
+     * @param <R>          Response type
+     * @return Promise resolving to response
+     */
+    <R> Promise<R> invokeWithRetry(Artifact slice, MethodName method, Object request, Class<R> responseType, int maxRetries);
+
+    /**
      * Handle response from remote invocation.
      */
     @MessageReceiver
@@ -73,6 +90,16 @@ public interface SliceInvoker {
      * Default timeout for invocations (30 seconds).
      */
     long DEFAULT_TIMEOUT_MS = 30_000;
+
+    /**
+     * Default maximum retries.
+     */
+    int DEFAULT_MAX_RETRIES = 3;
+
+    /**
+     * Base delay for exponential backoff (100ms).
+     */
+    long BASE_RETRY_DELAY_MS = 100;
 
     /**
      * Create a new SliceInvoker.
@@ -110,6 +137,7 @@ class SliceInvokerImpl implements SliceInvoker {
     private final Serializer serializer;
     private final Deserializer deserializer;
     private final long timeoutMs;
+    private final ScheduledExecutorService retryScheduler;
 
     // Pending request-response invocations awaiting responses
     private final ConcurrentHashMap<String, Promise<Object>> pendingInvocations = new ConcurrentHashMap<>();
@@ -126,6 +154,11 @@ class SliceInvokerImpl implements SliceInvoker {
         this.serializer = serializer;
         this.deserializer = deserializer;
         this.timeoutMs = timeoutMs;
+        this.retryScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            var t = new Thread(r, "slice-invoker-retry");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     @Override
@@ -174,6 +207,38 @@ class SliceInvokerImpl implements SliceInvoker {
                                   endpoint.nodeId(), slice, method, correlationId);
                     });
                 });
+    }
+
+    @Override
+    public <R> Promise<R> invokeWithRetry(Artifact slice, MethodName method, Object request, Class<R> responseType, int maxRetries) {
+        return invokeWithRetryInternal(slice, method, request, responseType, 0, maxRetries);
+    }
+
+    private <R> Promise<R> invokeWithRetryInternal(Artifact slice, MethodName method, Object request,
+                                                    Class<R> responseType, int attempt, int maxRetries) {
+        return Promise.promise(promise -> {
+            invokeAndWait(slice, method, request, responseType)
+                    .onSuccess(promise::succeed)
+                    .onFailure(cause -> {
+                        if (attempt < maxRetries) {
+                            var nextAttempt = attempt + 1;
+                            var delayMs = BASE_RETRY_DELAY_MS * (1L << attempt); // Exponential backoff: 100, 200, 400, 800...
+
+                            log.debug("Invocation failed, scheduling retry {}/{} in {}ms: {}.{} - {}",
+                                      nextAttempt, maxRetries, delayMs, slice, method, cause.message());
+
+                            retryScheduler.schedule(() -> {
+                                invokeWithRetryInternal(slice, method, request, responseType, nextAttempt, maxRetries)
+                                        .onSuccess(promise::succeed)
+                                        .onFailure(promise::fail);
+                            }, delayMs, TimeUnit.MILLISECONDS);
+                        } else {
+                            log.warn("Invocation failed after {} retries: {}.{} - {}",
+                                     maxRetries, slice, method, cause.message());
+                            promise.fail(cause);
+                        }
+                    });
+        });
     }
 
     @Override

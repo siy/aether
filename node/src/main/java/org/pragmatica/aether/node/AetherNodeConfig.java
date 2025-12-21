@@ -13,22 +13,38 @@ import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 /**
  * Configuration for an Aether cluster node.
+ *
+ * @param topology     Cluster topology configuration
+ * @param protocol     Consensus protocol configuration
+ * @param sliceAction  Slice lifecycle configuration
+ * @param managementPort Port for HTTP management API (0 to disable)
  */
 public record AetherNodeConfig(
         TopologyConfig topology,
         ProtocolConfig protocol,
-        SliceActionConfig sliceAction
+        SliceActionConfig sliceAction,
+        int managementPort
 ) {
+    public static final int DEFAULT_MANAGEMENT_PORT = 8080;
+    public static final int MANAGEMENT_DISABLED = 0;
     public static AetherNodeConfig aetherNodeConfig(NodeId self,
                                                     int port,
                                                     List<NodeInfo> coreNodes) {
-        return aetherNodeConfig(self, port, coreNodes, SliceActionConfig.defaultConfiguration());
+        return aetherNodeConfig(self, port, coreNodes, SliceActionConfig.defaultConfiguration(), DEFAULT_MANAGEMENT_PORT);
     }
 
     public static AetherNodeConfig aetherNodeConfig(NodeId self,
                                                     int port,
                                                     List<NodeInfo> coreNodes,
                                                     SliceActionConfig sliceActionConfig) {
+        return aetherNodeConfig(self, port, coreNodes, sliceActionConfig, DEFAULT_MANAGEMENT_PORT);
+    }
+
+    public static AetherNodeConfig aetherNodeConfig(NodeId self,
+                                                    int port,
+                                                    List<NodeInfo> coreNodes,
+                                                    SliceActionConfig sliceActionConfig,
+                                                    int managementPort) {
         var topology = new TopologyConfig(
                 self,
                 timeSpan(5).seconds(),  // reconciliation interval
@@ -36,7 +52,7 @@ public record AetherNodeConfig(
                 coreNodes
         );
 
-        return new AetherNodeConfig(topology, ProtocolConfig.defaultConfig(), sliceActionConfig);
+        return new AetherNodeConfig(topology, ProtocolConfig.defaultConfig(), sliceActionConfig, managementPort);
     }
 
     public static AetherNodeConfig testConfig(NodeId self, int port, List<NodeInfo> coreNodes) {
@@ -47,7 +63,7 @@ public record AetherNodeConfig(
                 coreNodes
         );
 
-        return new AetherNodeConfig(topology, ProtocolConfig.testConfig(), SliceActionConfig.defaultConfiguration());
+        return new AetherNodeConfig(topology, ProtocolConfig.testConfig(), SliceActionConfig.defaultConfiguration(), MANAGEMENT_DISABLED);
     }
 
     public NodeId self() {

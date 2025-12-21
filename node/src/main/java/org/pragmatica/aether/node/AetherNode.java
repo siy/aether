@@ -1,11 +1,14 @@
 package org.pragmatica.aether.node;
 
 import org.pragmatica.aether.api.ManagementServer;
+import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.controller.ControlLoop;
 import org.pragmatica.aether.controller.DecisionTreeController;
 import org.pragmatica.aether.deployment.cluster.ClusterDeploymentManager;
 import org.pragmatica.aether.deployment.node.NodeDeploymentManager;
 import org.pragmatica.aether.endpoint.EndpointRegistry;
+import org.pragmatica.aether.http.HttpRouter;
+import org.pragmatica.aether.http.SliceDispatcher;
 import org.pragmatica.aether.invoke.InvocationHandler;
 import org.pragmatica.aether.invoke.InvocationMessage;
 import org.pragmatica.aether.invoke.SliceInvoker;
@@ -63,6 +66,8 @@ public interface AetherNode {
 
     InvocationHandler invocationHandler();
 
+    Option<HttpRouter> httpRouter();
+
     /**
      * Apply commands to the cluster via consensus.
      */
@@ -95,7 +100,8 @@ public interface AetherNode {
                 ControlLoop controlLoop,
                 SliceInvoker sliceInvoker,
                 InvocationHandler invocationHandler,
-                Option<ManagementServer> managementServer
+                Option<ManagementServer> managementServer,
+                Option<HttpRouter> httpRouter
         ) implements AetherNode {
             private static final Logger log = LoggerFactory.getLogger(aetherNode.class);
 
@@ -112,6 +118,10 @@ public interface AetherNode {
                                           () -> Promise.success(Unit.unit()),
                                           ManagementServer::start
                                   ))
+                                  .flatMap(_ -> httpRouter.fold(
+                                          () -> Promise.success(Unit.unit()),
+                                          HttpRouter::start
+                                  ))
                                   .onSuccess(_ -> log.info("Aether node {} started successfully", self()));
             }
 
@@ -120,10 +130,14 @@ public interface AetherNode {
                 log.info("Stopping Aether node {}", self());
                 controlLoop.stop();
                 metricsScheduler.stop();
-                return managementServer.fold(
+                return httpRouter.fold(
+                               () -> Promise.success(Unit.unit()),
+                               HttpRouter::stop
+                       )
+                       .flatMap(_ -> managementServer.fold(
                                () -> Promise.success(Unit.unit()),
                                ManagementServer::stop
-                       )
+                       ))
                        .flatMap(_ -> clusterNode.stop())
                        .onSuccess(_ -> log.info("Aether node {} stopped", self()));
             }
@@ -180,12 +194,29 @@ public interface AetherNode {
                         endpointRegistry, metricsCollector, metricsScheduler, controlLoop,
                         sliceInvoker, invocationHandler);
 
+        // Create HTTP router if configured
+        Option<HttpRouter> httpRouter = config.httpRouter().map(setup -> {
+            // Create artifact resolver that parses slice ID strings to Artifact
+            SliceDispatcher.ArtifactResolver artifactResolver = sliceId ->
+                    Artifact.artifact(sliceId)
+                            .fold(cause -> null, artifact -> artifact);
+
+            return HttpRouter.httpRouter(
+                    setup.config(),
+                    setup.routingSections(),
+                    sliceInvoker,
+                    artifactResolver,
+                    serializer,
+                    deserializer
+            );
+        });
+
         // Create the node first (without management server reference)
         var node = new aetherNode(
                 config, router, kvStore, sliceRegistry, sliceStore,
                 clusterNode, nodeDeploymentManager, clusterDeploymentManager, endpointRegistry,
                 metricsCollector, metricsScheduler, controlLoop, sliceInvoker, invocationHandler,
-                Option.empty()
+                Option.empty(), httpRouter
         );
 
         // Create management server if enabled
@@ -195,7 +226,7 @@ public interface AetherNode {
                     config, router, kvStore, sliceRegistry, sliceStore,
                     clusterNode, nodeDeploymentManager, clusterDeploymentManager, endpointRegistry,
                     metricsCollector, metricsScheduler, controlLoop, sliceInvoker, invocationHandler,
-                    Option.some(managementServer)
+                    Option.some(managementServer), httpRouter
             );
         }
 

@@ -1,4 +1,4 @@
-package org.pragmatica.aether.slice.blueprint;
+package org.pragmatica.aether.slice.routing;
 
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;

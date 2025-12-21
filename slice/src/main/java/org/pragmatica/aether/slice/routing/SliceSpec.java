@@ -1,4 +1,4 @@
-package org.pragmatica.aether.slice.blueprint;
+package org.pragmatica.aether.slice.routing;
 
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.lang.Cause;

@@ -172,7 +172,7 @@ public interface AetherNode {
         // Create invocation components
         var invocationHandler = InvocationHandler.invocationHandler(config.self(), clusterNode.network());
         var sliceInvoker = SliceInvoker.sliceInvoker(
-                config.self(), clusterNode.network(), endpointRegistry, serializer, deserializer
+                config.self(), clusterNode.network(), endpointRegistry, invocationHandler, serializer, deserializer
         );
 
         // Wire up message routing

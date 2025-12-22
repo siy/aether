@@ -14,6 +14,7 @@ import org.pragmatica.aether.invoke.InvocationMessage;
 import org.pragmatica.aether.invoke.SliceInvoker;
 import org.pragmatica.aether.metrics.MetricsCollector;
 import org.pragmatica.aether.metrics.MetricsScheduler;
+import org.pragmatica.aether.slice.SharedLibraryClassLoader;
 import org.pragmatica.aether.slice.SliceStore;
 import org.pragmatica.aether.slice.dependency.SliceRegistry;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
@@ -153,7 +154,8 @@ public interface AetherNode {
 
         // Create slice management components
         var sliceRegistry = SliceRegistry.create();
-        var sliceStore = SliceStore.sliceStore(sliceRegistry, config.sliceAction().repositories());
+        var sharedLibraryLoader = new SharedLibraryClassLoader(AetherNode.class.getClassLoader());
+        var sliceStore = SliceStore.sliceStore(sliceRegistry, config.sliceAction().repositories(), sharedLibraryLoader);
 
         // Create Rabia cluster node
         var nodeConfig = NodeConfig.nodeConfig(config.protocol(), config.topology());

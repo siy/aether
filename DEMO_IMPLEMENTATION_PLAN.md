@@ -973,7 +973,7 @@ aetherx/
     <parent>
         <groupId>org.pragmatica-lite.aether</groupId>
         <artifactId>aether</artifactId>
-        <version>0.3.0</version>
+        <version>0.4.0</version>
     </parent>
 
     <groupId>org.pragmatica-lite.aether.demo</groupId>

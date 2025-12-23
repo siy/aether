@@ -9,6 +9,7 @@
     <version>0.4.0</version>
     <packaging>pom</packaging>
     <modules>
+        <module>http-server</module>
         <module>node</module>
         <module>slice-api</module>
         <module>slice</module>

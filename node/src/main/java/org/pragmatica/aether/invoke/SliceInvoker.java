@@ -269,13 +269,21 @@ class SliceInvokerImpl implements SliceInvoker {
                         () -> SLICE_NOT_FOUND.<R>promise(),
                         internalSlice -> {
                             var inputBuf = Unpooled.buffer();
-                            serializer.write(inputBuf, request);
+                            try {
+                                serializer.write(inputBuf, request);
+                            } catch (Exception e) {
+                                inputBuf.release();
+                                throw e;
+                            }
 
                             return internalSlice.call(method, inputBuf)
+                                    .onFailureRun(inputBuf::release)
                                     .map(outputBuf -> {
-                                        var result = (R) deserializer.read(outputBuf);
-                                        outputBuf.release();
-                                        return result;
+                                        try {
+                                            return (R) deserializer.read(outputBuf);
+                                        } finally {
+                                            outputBuf.release();
+                                        }
                                     });
                         }
                 );

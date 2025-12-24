@@ -1,5 +1,7 @@
 package org.pragmatica.aether.http;
 
+import java.util.Locale;
+
 /**
  * HTTP methods supported by the router.
  */
@@ -13,7 +15,7 @@ public enum HttpMethod {
     OPTIONS;
 
     public static HttpMethod fromString(String method) {
-        return switch (method.toUpperCase()) {
+        return switch (method.toUpperCase(Locale.ROOT)) {
             case "GET" -> GET;
             case "POST" -> POST;
             case "PUT" -> PUT;

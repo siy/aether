@@ -487,8 +487,20 @@ function updateLoadDisplay(load) {
     }
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function updateTimeline(newEvents) {
     const timeline = document.getElementById('timeline');
+
+    // Handle reset case
+    if (newEvents.length < events.length) {
+        timeline.innerHTML = '';
+        events = [];
+    }
 
     // Check for new events
     if (newEvents.length > events.length) {
@@ -496,11 +508,22 @@ function updateTimeline(newEvents) {
         added.forEach(event => {
             const div = document.createElement('div');
             div.className = 'timeline-event';
-            div.innerHTML = `
-                <span class="event-time">${formatEventTime(event.timestamp)}</span>
-                <span class="event-type ${event.type}">${event.type}</span>
-                <span class="event-message">${event.message}</span>
-            `;
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'event-time';
+            timeSpan.textContent = formatEventTime(event.timestamp);
+
+            const typeSpan = document.createElement('span');
+            typeSpan.className = 'event-type ' + escapeHtml(event.type);
+            typeSpan.textContent = event.type;
+
+            const msgSpan = document.createElement('span');
+            msgSpan.className = 'event-message';
+            msgSpan.textContent = event.message;
+
+            div.appendChild(timeSpan);
+            div.appendChild(typeSpan);
+            div.appendChild(msgSpan);
             timeline.insertBefore(div, timeline.firstChild);
         });
 

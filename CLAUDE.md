@@ -801,6 +801,7 @@ cd example-slice && ../mvnw test
 
 - **Architecture**: `docs/architecture-overview.md` - Comprehensive architecture documentation
 - **High-level**: `docs/aether-high-level-overview.md` - Project overview and concepts
+- **Infrastructure Services**: `docs/infrastructure-services.md` - Platform services (artifact repo, caching, etc.)
 - **Slice lifecycle**: `docs/slice-lifecycle.md` - Detailed lifecycle documentation
 - **Cluster manager**: `docs/cluster-deployment-manager.md` - ClusterDeploymentManager design
 - **JBCT Guide**: `docs/jbct-coder.md` - Java Backend Coding Technology patterns

@@ -47,17 +47,35 @@ Most foundational work is complete. Priorities have shifted to polish and AI int
    - Improve historical data storage
    - Better visualization support
 
+### FUTURE (Infrastructure Services)
+
+See [infrastructure-services.md](infrastructure-services.md) for full vision.
+
+6. **Distributed Hash Map Foundation**
+   - Consistent hashing implementation
+   - Pluggable storage engines
+   - Partition management via SMR
+
+7. **Artifact Repository**
+   - Maven protocol subset
+   - Deploy/resolve operations
+   - Bootstrap: bundled → self-hosted
+
+8. **HTTP Routing Service**
+   - Self-registration API
+   - Remove routing from blueprint
+
 ### FUTURE (AI Integration)
 
-6. **SLM Integration (Layer 2)**
+9. **SLM Integration (Layer 2)**
    - Local model integration (Ollama)
    - Pattern learning
    - Anomaly detection
 
-7. **LLM Integration (Layer 3)**
-   - Claude/GPT API integration
-   - Complex reasoning workflows
-   - Multi-cloud decision support
+10. **LLM Integration (Layer 3)**
+    - Claude/GPT API integration
+    - Complex reasoning workflows
+    - Multi-cloud decision support
 
 ## Deprecated
 

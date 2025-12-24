@@ -19,6 +19,7 @@
         <module>common</module>
         <module>cli</module>
         <module>demo-order</module>
+        <module>demo</module>
     </modules>
 
     <properties>

@@ -110,6 +110,8 @@ public interface SliceStoreImpl {
                             return createEntry(artifact, slice, scl);
                         }
                         // Fallback - create a minimal classloader entry
+                        log.warn("Slice {} loaded with unexpected classloader type: {}. Resource access may be limited.",
+                                 artifact, sliceClassLoader.getClass().getName());
                         return createEntry(artifact, slice, new SliceClassLoader(new URL[0], shared));
                     })
                     .onFailure(cause -> log.error("Failed to load slice {}: {}", artifact, cause.message()));

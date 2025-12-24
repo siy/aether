@@ -277,7 +277,7 @@ class SliceInvokerImpl implements SliceInvoker {
                             }
 
                             return internalSlice.call(method, inputBuf)
-                                    .onFailureRun(inputBuf::release)
+                                    .onResultRun(inputBuf::release)
                                     .map(outputBuf -> {
                                         try {
                                             return (R) deserializer.read(outputBuf);

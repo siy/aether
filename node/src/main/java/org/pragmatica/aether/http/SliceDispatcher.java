@@ -65,10 +65,8 @@ class SliceDispatcherImpl implements SliceDispatcher {
         Object request;
         if (resolvedParams.size() == 1) {
             request = resolvedParams.values().iterator().next();
-        } else if (resolvedParams.isEmpty()) {
-            request = null;
         } else {
-            // Multiple params - wrap in a map or construct specific request type
+            // Empty or multiple params - use the map (empty map is safer than null)
             request = resolvedParams;
         }
 

@@ -37,16 +37,18 @@ public final class HttpRequestHandler extends SimpleChannelInboundHandler<FullHt
         }
 
         var keepAlive = HttpUtil.isKeepAlive(request);
-        var context = createRequestContext(request);
-        var writer = new NettyResponseWriter(ctx, keepAlive);
-
+        RequestContext context = null;
         try {
+            context = createRequestContext(request);
+            var writer = new NettyResponseWriter(ctx, keepAlive);
             handler.accept(context, writer);
         } catch (Exception e) {
             LOG.error("Handler error", e);
-            writer.internalError(Causes.fromThrowable(e));
+            new NettyResponseWriter(ctx, keepAlive).internalError(Causes.fromThrowable(e));
         } finally {
-            context.release();
+            if (context != null) {
+                context.release();
+            }
         }
     }
 

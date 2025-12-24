@@ -125,6 +125,8 @@ function updateTopology(clusterData) {
     simulation.force('link').links(links);
     simulation.alpha(0.3).restart();
 
+    // Remove previous tick handler before adding new one
+    simulation.on('tick', null);
     simulation.on('tick', () => {
         svg.selectAll('.link')
             .attr('x1', d => d.source.x)

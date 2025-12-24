@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
@@ -79,7 +80,7 @@ public final class HttpRequestHandler extends SimpleChannelInboundHandler<FullHt
     private Map<String, String> extractHeaders(FullHttpRequest request) {
         var headers = new HashMap<String, String>();
         for (var entry : request.headers()) {
-            headers.put(entry.getKey().toLowerCase(), entry.getValue());
+            headers.put(entry.getKey().toLowerCase(Locale.ROOT), entry.getValue());
         }
         return headers;
     }

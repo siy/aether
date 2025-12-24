@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -55,6 +56,9 @@ public final class StaticFileHandler extends SimpleChannelInboundHandler<FullHtt
         if (queryIdx >= 0) {
             path = path.substring(0, queryIdx);
         }
+
+        // Decode URL before security check to prevent bypass via percent-encoding
+        path = URLDecoder.decode(path, StandardCharsets.UTF_8);
 
         // Security: prevent directory traversal
         if (path.contains("..")) {

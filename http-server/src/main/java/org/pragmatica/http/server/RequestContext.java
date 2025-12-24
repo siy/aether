@@ -90,6 +90,15 @@ public record RequestContext(
                 .fold(() -> false, bool -> bool);
     }
 
+    /**
+     * Release the body buffer. Must be called when done with the request.
+     */
+    public void release() {
+        if (body != null && body.refCnt() > 0) {
+            body.release();
+        }
+    }
+
     private Map<String, String> parseQueryParams() {
         var params = new HashMap<String, String>();
         var pairs = query.split("&");

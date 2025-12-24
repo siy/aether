@@ -44,6 +44,8 @@ public final class HttpRequestHandler extends SimpleChannelInboundHandler<FullHt
         } catch (Exception e) {
             LOG.error("Handler error", e);
             writer.internalError(Causes.fromThrowable(e));
+        } finally {
+            context.release();
         }
     }
 

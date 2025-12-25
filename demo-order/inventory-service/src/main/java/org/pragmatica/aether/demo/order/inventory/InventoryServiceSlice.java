@@ -70,23 +70,15 @@ public record InventoryServiceSlice() implements Slice {
     private Promise<StockReservation> reserveStock(ReserveStockRequest request) {
         var productId = request.productId();
         var available = STOCK.getOrDefault(productId, 0);
-        var requested = request.quantity();
 
         if (available == 0) {
             return new InventoryError.ProductNotFound(productId).promise();
         }
 
-        if (available < requested) {
-            return new InventoryError.InsufficientStock(productId, requested, available).promise();
-        }
-
-        // Reserve atomically
-        STOCK.compute(productId, (k, v) -> v - requested);
-
+        // Demo mode: don't actually decrement stock - infinite supply for load testing
         var reservationId = "RES-" + UUID.randomUUID().toString().substring(0, 8);
-        RESERVATIONS.put(reservationId, new ReservedStock(productId, requested));
 
-        return Promise.success(new StockReservation(reservationId, productId, requested));
+        return Promise.success(new StockReservation(reservationId, productId, request.quantity()));
     }
 
     private Promise<StockReleased> releaseStock(ReleaseStockRequest request) {

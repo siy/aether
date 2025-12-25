@@ -1,11 +1,14 @@
 package org.pragmatica.aether.deployment.node;
 
+import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.SliceActionConfig;
 import org.pragmatica.aether.slice.SliceState;
 import org.pragmatica.aether.slice.SliceStore;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
+import org.pragmatica.aether.slice.kvstore.AetherKey.EndpointKey;
 import org.pragmatica.aether.slice.kvstore.AetherKey.SliceNodeKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
+import org.pragmatica.aether.slice.kvstore.AetherValue.EndpointValue;
 import org.pragmatica.aether.slice.kvstore.AetherValue.SliceNodeValue;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.node.ClusterNode;
@@ -157,9 +160,10 @@ public interface NodeDeploymentManager {
             }
 
             private void handleLoaded(SliceNodeKey sliceKey) {
-                // Slice is loaded and ready for activation
-                // No automatic action - waiting for ACTIVATE command
-                // TODO: we may need to send notification about slice readiness.
+                // Slice is loaded - auto-activate it
+                // In future, this could include health checks or dependency validation
+                log.info("Slice {} loaded, auto-activating", sliceKey.artifact());
+                transitionTo(sliceKey, SliceState.ACTIVATE);
             }
 
             private void handleActivating(SliceNodeKey sliceKey) {
@@ -173,12 +177,46 @@ public interface NodeDeploymentManager {
             }
 
             private void handleActive(SliceNodeKey sliceKey) {
-                // Slice is now active and serving requests
-                // Register endpoints in EndpointRegistry (future implementation)
-                // TODO: We may want to generate a notification for slice activation.
+                // Slice is now active and serving requests - publish endpoints to KV-Store
+                publishEndpoints(sliceKey);
+            }
+
+            private void publishEndpoints(SliceNodeKey sliceKey) {
+                var artifact = sliceKey.artifact();
+                var loadedSlice = sliceStore.loaded().stream()
+                        .filter(ls -> ls.artifact().equals(artifact))
+                        .findFirst();
+
+                loadedSlice.ifPresent(ls -> {
+                    var slice = ls.slice();
+                    var methods = slice.methods();
+                    // Use nodeId hash as instance number to ensure uniqueness across cluster
+                    int instanceNumber = Math.abs(self.id().hashCode());
+
+                    var commands = methods.stream()
+                            .map(method -> createEndpointPutCommand(artifact, method.name(), instanceNumber))
+                            .toList();
+
+                    if (!commands.isEmpty()) {
+                        cluster.apply(commands)
+                               .onSuccess(_ -> log.info("Published {} endpoints for slice {}", methods.size(), artifact))
+                               .onFailure(cause -> log.error("Failed to publish endpoints for {}: {}", artifact, cause.message()));
+                    }
+                });
+            }
+
+            private KVCommand<AetherKey> createEndpointPutCommand(org.pragmatica.aether.artifact.Artifact artifact,
+                                                                   MethodName methodName,
+                                                                   int instanceNumber) {
+                var key = new EndpointKey(artifact, methodName, instanceNumber);
+                var value = new EndpointValue(self);
+                return new KVCommand.Put<>(key, value);
             }
 
             private void handleDeactivating(SliceNodeKey sliceKey) {
+                // First unpublish endpoints, then proceed with deactivation
+                unpublishEndpoints(sliceKey);
+
                 executeWithStateTransition(
                         sliceKey,
                         SliceState.DEACTIVATING,
@@ -186,6 +224,36 @@ public interface NodeDeploymentManager {
                         SliceState.LOADED,
                         SliceState.FAILED
                                           );
+            }
+
+            private void unpublishEndpoints(SliceNodeKey sliceKey) {
+                var artifact = sliceKey.artifact();
+                var loadedSlice = sliceStore.loaded().stream()
+                        .filter(ls -> ls.artifact().equals(artifact))
+                        .findFirst();
+
+                loadedSlice.ifPresent(ls -> {
+                    var slice = ls.slice();
+                    var methods = slice.methods();
+                    int instanceNumber = Math.abs(self.id().hashCode());
+
+                    var commands = methods.stream()
+                            .map(method -> createEndpointRemoveCommand(artifact, method.name(), instanceNumber))
+                            .toList();
+
+                    if (!commands.isEmpty()) {
+                        cluster.apply(commands)
+                               .onSuccess(_ -> log.info("Unpublished {} endpoints for slice {}", methods.size(), artifact))
+                               .onFailure(cause -> log.error("Failed to unpublish endpoints for {}: {}", artifact, cause.message()));
+                    }
+                });
+            }
+
+            private KVCommand<AetherKey> createEndpointRemoveCommand(org.pragmatica.aether.artifact.Artifact artifact,
+                                                                      MethodName methodName,
+                                                                      int instanceNumber) {
+                var key = new EndpointKey(artifact, methodName, instanceNumber);
+                return new KVCommand.Remove<>(key);
             }
 
             private void handleFailed(SliceNodeKey sliceKey) {

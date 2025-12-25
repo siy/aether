@@ -90,6 +90,12 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
                 handleNodeMetrics(ctx);
             } else if (path.equals("/api/orders") && method == HttpMethod.POST) {
                 handlePlaceOrder(ctx, request);
+            } else if (path.equals("/api/simulator/metrics") && method == HttpMethod.GET) {
+                handleSimulatorMetrics(ctx);
+            } else if (path.startsWith("/api/simulator/rate/") && method == HttpMethod.POST) {
+                handleSimulatorRate(ctx, path.substring("/api/simulator/rate/".length()), request);
+            } else if (path.equals("/api/simulator/entrypoints") && method == HttpMethod.GET) {
+                handleSimulatorEntryPoints(ctx);
             } else {
                 sendResponse(ctx, NOT_FOUND, "{\"error\": \"Not found\"}");
             }
@@ -243,6 +249,62 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
     }
 
     /**
+     * Handle simulator metrics request - returns per-entry-point metrics.
+     */
+    private void handleSimulatorMetrics(ChannelHandlerContext ctx) {
+        var snapshots = loadGenerator.entryPointMetrics().snapshot();
+        var json = new StringBuilder("{\"entryPoints\":[");
+        var first = true;
+        for (var snapshot : snapshots) {
+            if (!first) json.append(",");
+            first = false;
+            json.append(snapshot.toJson());
+        }
+        json.append("]}");
+        sendResponse(ctx, OK, json.toString());
+    }
+
+    /**
+     * Handle setting per-entry-point rate.
+     * Path format: /api/simulator/rate/{entryPoint}
+     * Body: {"rate": 500}
+     */
+    private void handleSimulatorRate(ChannelHandlerContext ctx, String entryPoint, FullHttpRequest request) {
+        try {
+            var body = request.content().toString(StandardCharsets.UTF_8);
+            var rate = extractInt(body, "rate", -1);
+
+            if (rate < 0) {
+                sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing or invalid rate\"}");
+                return;
+            }
+
+            loadGenerator.setRate(entryPoint, rate);
+            addEvent("RATE_SET", "Set " + entryPoint + " rate to " + rate + " req/sec");
+            sendResponse(ctx, OK, "{\"success\":true,\"entryPoint\":\"" + entryPoint + "\",\"rate\":" + rate + "}");
+        } catch (Exception e) {
+            sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
+        }
+    }
+
+    /**
+     * Handle listing all available entry points.
+     */
+    private void handleSimulatorEntryPoints(ChannelHandlerContext ctx) {
+        var entryPoints = loadGenerator.entryPoints();
+        var json = new StringBuilder("{\"entryPoints\":[");
+        var first = true;
+        for (var ep : entryPoints) {
+            if (!first) json.append(",");
+            first = false;
+            var rate = loadGenerator.currentRate(ep);
+            json.append("{\"name\":\"").append(ep).append("\",\"rate\":").append(rate).append("}");
+        }
+        json.append("]}");
+        sendResponse(ctx, OK, json.toString());
+    }
+
+    /**
      * Handle order placement requests by invoking PlaceOrderSlice.
      */
     private void handlePlaceOrder(ChannelHandlerContext ctx, FullHttpRequest request) {
@@ -316,7 +378,7 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes());
         response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-        response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS");
+        response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, DELETE, OPTIONS");
         response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type");
 
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);

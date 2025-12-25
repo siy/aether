@@ -10,6 +10,8 @@ import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherKey.SliceNodeKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.aether.slice.kvstore.AetherValue.SliceNodeValue;
+import org.pragmatica.aether.invoke.InvocationHandler;
+import org.pragmatica.aether.slice.InternalSlice;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.node.ClusterNode;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
@@ -33,6 +35,7 @@ class NodeDeploymentManagerTest {
     private MessageRouter.MutableRouter router;
     private TestSliceStore sliceStore;
     private TestClusterNode clusterNode;
+    private TestInvocationHandler invocationHandler;
     private NodeDeploymentManager manager;
 
     @BeforeEach
@@ -41,8 +44,9 @@ class NodeDeploymentManagerTest {
         router = MessageRouter.mutable();
         sliceStore = new TestSliceStore();
         clusterNode = new TestClusterNode(self);
+        invocationHandler = new TestInvocationHandler();
         manager = NodeDeploymentManager.nodeDeploymentManager(
-                self, router, sliceStore, clusterNode
+                self, router, sliceStore, clusterNode, invocationHandler
                                                              );
     }
 
@@ -428,6 +432,31 @@ class NodeDeploymentManagerTest {
         public <R> Promise<List<R>> apply(List<KVCommand<AetherKey>> commands) {
             appliedCommands.addAll(commands);
             return Promise.success((List<R>) commands.stream().map(_ -> Unit.unit()).toList());
+        }
+    }
+
+    static class TestInvocationHandler implements InvocationHandler {
+        final List<Artifact> registeredSlices = new CopyOnWriteArrayList<>();
+        final List<Artifact> unregisteredSlices = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void onInvokeRequest(org.pragmatica.aether.invoke.InvocationMessage.InvokeRequest request) {
+            // Not used in these tests
+        }
+
+        @Override
+        public void registerSlice(Artifact artifact, InternalSlice internalSlice) {
+            registeredSlices.add(artifact);
+        }
+
+        @Override
+        public void unregisterSlice(Artifact artifact) {
+            unregisteredSlices.add(artifact);
+        }
+
+        @Override
+        public Option<InternalSlice> getLocalSlice(Artifact artifact) {
+            return Option.none();
         }
     }
 }

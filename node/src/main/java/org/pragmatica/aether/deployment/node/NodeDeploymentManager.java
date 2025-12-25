@@ -1,5 +1,8 @@
 package org.pragmatica.aether.deployment.node;
 
+import org.pragmatica.aether.invoke.InvocationHandler;
+import org.pragmatica.aether.slice.InternalSlice;
+import org.pragmatica.aether.slice.InternalSlice.InternalMethod;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.SliceActionConfig;
 import org.pragmatica.aether.slice.SliceState;
@@ -26,9 +29,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public interface NodeDeploymentManager {
     record SliceDeployment(SliceNodeKey key, SliceState state, long timestamp) {}
@@ -56,6 +61,7 @@ public interface NodeDeploymentManager {
                 SliceStore sliceStore,
                 SliceActionConfig configuration,
                 ClusterNode<KVCommand<AetherKey>> cluster,
+                InvocationHandler invocationHandler,
                 ConcurrentHashMap<SliceNodeKey, SliceDeployment> deployments
         ) implements NodeDeploymentState {
 
@@ -177,8 +183,52 @@ public interface NodeDeploymentManager {
             }
 
             private void handleActive(SliceNodeKey sliceKey) {
-                // Slice is now active and serving requests - publish endpoints to KV-Store
+                // Slice is now active and serving requests
+                // 1. Create InternalSlice and register with InvocationHandler
+                registerSliceForInvocation(sliceKey);
+                // 2. Publish endpoints to KV-Store
                 publishEndpoints(sliceKey);
+            }
+
+            private void registerSliceForInvocation(SliceNodeKey sliceKey) {
+                var artifact = sliceKey.artifact();
+                var loadedSlice = sliceStore.loaded().stream()
+                        .filter(ls -> ls.artifact().equals(artifact))
+                        .findFirst();
+
+                loadedSlice.ifPresent(ls -> {
+                    var slice = ls.slice();
+                    var serializerProvider = configuration.serializerProvider();
+
+                    if (serializerProvider == null) {
+                        log.warn("No SerializerFactoryProvider configured, skipping invocation registration for {}", artifact);
+                        return;
+                    }
+
+                    // Build method map for InternalSlice
+                    Map<MethodName, InternalMethod> methodMap = slice.methods().stream()
+                            .collect(Collectors.toMap(
+                                    method -> method.name(),
+                                    method -> new InternalMethod(method, method.parameterType(), method.returnType())
+                            ));
+
+                    // Create SerializerFactory from provider using all type tokens
+                    var typeTokens = slice.methods().stream()
+                            .flatMap(m -> java.util.stream.Stream.of(m.parameterType(), m.returnType()))
+                            .collect(Collectors.toList());
+                    var serializerFactory = serializerProvider.createFactory(typeTokens);
+
+                    // Create and register InternalSlice
+                    var internalSlice = new InternalSlice(artifact, slice, methodMap, serializerFactory);
+                    invocationHandler.registerSlice(artifact, internalSlice);
+                    log.info("Registered slice {} for invocation", artifact);
+                });
+            }
+
+            private void unregisterSliceFromInvocation(SliceNodeKey sliceKey) {
+                var artifact = sliceKey.artifact();
+                invocationHandler.unregisterSlice(artifact);
+                log.info("Unregistered slice {} from invocation", artifact);
             }
 
             private void publishEndpoints(SliceNodeKey sliceKey) {
@@ -214,7 +264,9 @@ public interface NodeDeploymentManager {
             }
 
             private void handleDeactivating(SliceNodeKey sliceKey) {
-                // First unpublish endpoints, then proceed with deactivation
+                // 1. Unregister from invocation handler
+                unregisterSliceFromInvocation(sliceKey);
+                // 2. Unpublish endpoints from KV-Store
                 unpublishEndpoints(sliceKey);
 
                 executeWithStateTransition(
@@ -328,19 +380,22 @@ public interface NodeDeploymentManager {
     static NodeDeploymentManager nodeDeploymentManager(NodeId self,
                                                        MessageRouter router,
                                                        SliceStore sliceStore,
-                                                       ClusterNode<KVCommand<AetherKey>> cluster) {
-        return nodeDeploymentManager(self, router, sliceStore, cluster, SliceActionConfig.defaultConfiguration());
+                                                       ClusterNode<KVCommand<AetherKey>> cluster,
+                                                       InvocationHandler invocationHandler) {
+        return nodeDeploymentManager(self, router, sliceStore, cluster, invocationHandler, SliceActionConfig.defaultConfiguration());
     }
 
     static NodeDeploymentManager nodeDeploymentManager(NodeId self,
                                                        MessageRouter router,
                                                        SliceStore sliceStore,
                                                        ClusterNode<KVCommand<AetherKey>> cluster,
+                                                       InvocationHandler invocationHandler,
                                                        SliceActionConfig configuration) {
         record deploymentManager(
                 NodeId self,
                 SliceStore sliceStore,
                 ClusterNode<KVCommand<AetherKey>> cluster,
+                InvocationHandler invocationHandler,
                 SliceActionConfig configuration,
                 MessageRouter router,
                 AtomicReference<NodeDeploymentState> state
@@ -364,6 +419,7 @@ public interface NodeDeploymentManager {
                             sliceStore(),
                             configuration(),
                             cluster(),
+                            invocationHandler(),
                             new ConcurrentHashMap<>()
                     ));
                     case DISAPPEARED -> {
@@ -379,6 +435,7 @@ public interface NodeDeploymentManager {
                 self,
                 sliceStore,
                 cluster,
+                invocationHandler,
                 configuration,
                 router,
                 new AtomicReference<>(new NodeDeploymentState.DormantNodeDeploymentState())

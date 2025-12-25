@@ -161,9 +161,12 @@ public interface AetherNode {
         var nodeConfig = NodeConfig.nodeConfig(config.protocol(), config.topology());
         var clusterNode = RabiaNode.rabiaNode(nodeConfig, router, kvStore, serializer, deserializer);
 
+        // Create invocation handler BEFORE deployment manager (needed for slice registration)
+        var invocationHandler = InvocationHandler.invocationHandler(config.self(), clusterNode.network());
+
         // Create deployment managers
         var nodeDeploymentManager = NodeDeploymentManager.nodeDeploymentManager(
-                config.self(), router, sliceStore, clusterNode, config.sliceAction()
+                config.self(), router, sliceStore, clusterNode, invocationHandler, config.sliceAction()
         );
 
         var clusterDeploymentManager = ClusterDeploymentManager.clusterDeploymentManager(
@@ -185,8 +188,7 @@ public interface AetherNode {
                 config.self(), controller, metricsCollector, clusterNode
         );
 
-        // Create invocation components
-        var invocationHandler = InvocationHandler.invocationHandler(config.self(), clusterNode.network());
+        // Create slice invoker (invocationHandler already created above)
         var sliceInvoker = SliceInvoker.sliceInvoker(
                 config.self(), clusterNode.network(), endpointRegistry, invocationHandler, serializer, deserializer
         );

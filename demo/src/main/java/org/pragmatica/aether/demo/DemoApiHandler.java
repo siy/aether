@@ -18,6 +18,14 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.pragmatica.aether.artifact.Artifact;
+import org.pragmatica.aether.demo.order.inventory.CheckStockRequest;
+import org.pragmatica.aether.demo.order.inventory.StockAvailability;
+import org.pragmatica.aether.demo.order.pricing.GetPriceRequest;
+import org.pragmatica.aether.demo.order.pricing.ProductPrice;
+import org.pragmatica.aether.demo.order.usecase.cancelorder.CancelOrderRequest;
+import org.pragmatica.aether.demo.order.usecase.cancelorder.CancelOrderResponse;
+import org.pragmatica.aether.demo.order.usecase.getorderstatus.GetOrderStatusRequest;
+import org.pragmatica.aether.demo.order.usecase.getorderstatus.GetOrderStatusResponse;
 import org.pragmatica.aether.demo.order.usecase.placeorder.PlaceOrderRequest;
 import org.pragmatica.aether.demo.order.usecase.placeorder.PlaceOrderRequest.OrderItemRequest;
 import org.pragmatica.aether.demo.order.usecase.placeorder.PlaceOrderResponse;
@@ -34,9 +42,26 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private static final Logger log = LoggerFactory.getLogger(DemoApiHandler.class);
 
+    // Slice artifacts and method names
     private static final Artifact PLACE_ORDER_ARTIFACT =
         Artifact.artifact("org.pragmatica-lite.aether.demo:place-order:0.1.0").unwrap();
     private static final MethodName PLACE_ORDER_METHOD = MethodName.methodName("placeOrder").unwrap();
+
+    private static final Artifact GET_ORDER_STATUS_ARTIFACT =
+        Artifact.artifact("org.pragmatica-lite.aether.demo:get-order-status:0.1.0").unwrap();
+    private static final MethodName GET_ORDER_STATUS_METHOD = MethodName.methodName("getOrderStatus").unwrap();
+
+    private static final Artifact CANCEL_ORDER_ARTIFACT =
+        Artifact.artifact("org.pragmatica-lite.aether.demo:cancel-order:0.1.0").unwrap();
+    private static final MethodName CANCEL_ORDER_METHOD = MethodName.methodName("cancelOrder").unwrap();
+
+    private static final Artifact INVENTORY_ARTIFACT =
+        Artifact.artifact("org.pragmatica-lite.aether.demo:inventory-service:0.1.0").unwrap();
+    private static final MethodName CHECK_STOCK_METHOD = MethodName.methodName("checkStock").unwrap();
+
+    private static final Artifact PRICING_ARTIFACT =
+        Artifact.artifact("org.pragmatica-lite.aether.demo:pricing-service:0.1.0").unwrap();
+    private static final MethodName GET_PRICE_METHOD = MethodName.methodName("getPrice").unwrap();
 
     private final DemoCluster cluster;
     private final LoadGenerator loadGenerator;
@@ -90,6 +115,14 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
                 handleNodeMetrics(ctx);
             } else if (path.equals("/api/orders") && method == HttpMethod.POST) {
                 handlePlaceOrder(ctx, request);
+            } else if (path.startsWith("/api/orders/") && method == HttpMethod.GET) {
+                handleGetOrderStatus(ctx, path.substring("/api/orders/".length()));
+            } else if (path.startsWith("/api/orders/") && method == HttpMethod.DELETE) {
+                handleCancelOrder(ctx, path.substring("/api/orders/".length()), request);
+            } else if (path.startsWith("/api/inventory/") && method == HttpMethod.GET) {
+                handleCheckStock(ctx, path.substring("/api/inventory/".length()));
+            } else if (path.startsWith("/api/pricing/") && method == HttpMethod.GET) {
+                handleGetPrice(ctx, path.substring("/api/pricing/".length()));
             } else if (path.equals("/api/simulator/metrics") && method == HttpMethod.GET) {
                 handleSimulatorMetrics(ctx);
             } else if (path.startsWith("/api/simulator/rate/") && method == HttpMethod.POST) {
@@ -334,6 +367,99 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
         }
     }
 
+    /**
+     * Handle get order status requests by invoking GetOrderStatusSlice.
+     */
+    private void handleGetOrderStatus(ChannelHandlerContext ctx, String orderId) {
+        var request = new GetOrderStatusRequest(orderId);
+
+        sliceInvoker.invokeAndWait(GET_ORDER_STATUS_ARTIFACT, GET_ORDER_STATUS_METHOD, request, GetOrderStatusResponse.class)
+            .onSuccess(response -> {
+                var json = String.format(
+                    "{\"success\":true,\"orderId\":\"%s\",\"status\":\"%s\",\"total\":\"%s %s\",\"itemCount\":%d}",
+                    response.orderId().value(),
+                    response.status(),
+                    response.total().currency(),
+                    response.total().amount().toPlainString(),
+                    response.items().size()
+                );
+                sendResponse(ctx, OK, json);
+            })
+            .onFailure(cause -> {
+                sendResponse(ctx, NOT_FOUND,
+                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
+            });
+    }
+
+    /**
+     * Handle cancel order requests by invoking CancelOrderSlice.
+     */
+    private void handleCancelOrder(ChannelHandlerContext ctx, String orderId, FullHttpRequest request) {
+        var body = request.content().toString(StandardCharsets.UTF_8);
+        var reason = extractString(body, "reason", "User requested cancellation");
+
+        var cancelRequest = new CancelOrderRequest(orderId, reason);
+
+        sliceInvoker.invokeAndWait(CANCEL_ORDER_ARTIFACT, CANCEL_ORDER_METHOD, cancelRequest, CancelOrderResponse.class)
+            .onSuccess(response -> {
+                var json = String.format(
+                    "{\"success\":true,\"orderId\":\"%s\",\"status\":\"%s\",\"reason\":\"%s\"}",
+                    response.orderId().value(),
+                    response.status(),
+                    escapeJson(response.reason())
+                );
+                sendResponse(ctx, OK, json);
+            })
+            .onFailure(cause -> {
+                sendResponse(ctx, BAD_REQUEST,
+                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
+            });
+    }
+
+    /**
+     * Handle check stock requests by invoking InventoryServiceSlice.
+     */
+    private void handleCheckStock(ChannelHandlerContext ctx, String productId) {
+        var request = new CheckStockRequest(productId, 1);
+
+        sliceInvoker.invokeAndWait(INVENTORY_ARTIFACT, CHECK_STOCK_METHOD, request, StockAvailability.class)
+            .onSuccess(response -> {
+                var json = String.format(
+                    "{\"success\":true,\"productId\":\"%s\",\"available\":%d,\"sufficient\":%b}",
+                    response.productId(),
+                    response.available(),
+                    response.sufficient()
+                );
+                sendResponse(ctx, OK, json);
+            })
+            .onFailure(cause -> {
+                sendResponse(ctx, NOT_FOUND,
+                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
+            });
+    }
+
+    /**
+     * Handle get price requests by invoking PricingServiceSlice.
+     */
+    private void handleGetPrice(ChannelHandlerContext ctx, String productId) {
+        var request = new GetPriceRequest(productId);
+
+        sliceInvoker.invokeAndWait(PRICING_ARTIFACT, GET_PRICE_METHOD, request, ProductPrice.class)
+            .onSuccess(response -> {
+                var json = String.format(
+                    "{\"success\":true,\"productId\":\"%s\",\"price\":\"%s %s\"}",
+                    response.productId(),
+                    response.unitPrice().currency(),
+                    response.unitPrice().amount().toPlainString()
+                );
+                sendResponse(ctx, OK, json);
+            })
+            .onFailure(cause -> {
+                sendResponse(ctx, NOT_FOUND,
+                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
+            });
+    }
+
     private PlaceOrderRequest parseOrderRequest(String body) {
         // For demo load testing, generate realistic orders
         // Each order has 1-3 items from the known product catalog
@@ -445,6 +571,15 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
         var matcher = java.util.regex.Pattern.compile(pattern).matcher(json);
         if (matcher.find()) {
             return Long.parseLong(matcher.group(1));
+        }
+        return defaultValue;
+    }
+
+    private String extractString(String json, String key, String defaultValue) {
+        var pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]*)\"";
+        var matcher = java.util.regex.Pattern.compile(pattern).matcher(json);
+        if (matcher.find()) {
+            return matcher.group(1);
         }
         return defaultValue;
     }

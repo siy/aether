@@ -13,6 +13,7 @@ let throughputHistory = [];
 const MAX_HISTORY = 60; // 30 seconds at 500ms intervals
 let showNodeMetrics = false;  // Toggle for per-node JVM metrics
 let nodeMetricsData = [];     // Cached node metrics
+let entryPointMetrics = [];   // Cached entry point metrics
 
 // D3 Topology
 let svg, simulation;
@@ -508,6 +509,82 @@ async function fetchNodeMetrics() {
     }
 }
 
+async function fetchEntryPointMetrics() {
+    try {
+        const response = await fetch(`${API_BASE}/api/simulator/metrics`);
+        if (!response.ok) throw new Error('Entry point metrics fetch failed');
+        const data = await response.json();
+        entryPointMetrics = data.entryPoints || [];
+        updateEntryPointsTable();
+    } catch (e) {
+        console.error('Error fetching entry point metrics:', e);
+    }
+}
+
+function updateEntryPointsTable() {
+    const tbody = document.getElementById('entrypoints-body');
+    if (!tbody) return;
+
+    if (!entryPointMetrics || entryPointMetrics.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="placeholder">No entry points</td></tr>';
+        return;
+    }
+
+    // Sort by name
+    const sorted = [...entryPointMetrics].sort((a, b) => a.name.localeCompare(b.name));
+
+    let html = '';
+    sorted.forEach(ep => {
+        const successClass = ep.successRate >= 99 ? 'success' : (ep.successRate >= 95 ? 'warning' : 'danger');
+        html += `
+            <tr>
+                <td class="ep-name">${escapeHtml(ep.name)}</td>
+                <td class="ep-rate">
+                    <input type="number" value="${ep.rate}" min="0" max="100000" step="100"
+                           data-entrypoint="${escapeHtml(ep.name)}"
+                           class="rate-input"
+                           onchange="updateEntryPointRate(this)">
+                </td>
+                <td class="ep-total">${formatNumber(ep.totalCalls)}</td>
+                <td class="ep-success ${successClass}">${ep.successRate.toFixed(1)}%</td>
+                <td class="ep-latency">${ep.avgLatencyMs.toFixed(1)}</td>
+                <td class="ep-p99">${ep.p99LatencyMs.toFixed(0)}</td>
+                <td class="ep-rps">${ep.requestsPerSecond.toFixed(0)}</td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
+async function updateEntryPointRate(input) {
+    const entryPoint = input.dataset.entrypoint;
+    const rate = parseInt(input.value) || 0;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/simulator/rate/${entryPoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rate })
+        });
+        if (!response.ok) throw new Error('Failed to update rate');
+        console.log(`Updated ${entryPoint} rate to ${rate}`);
+    } catch (e) {
+        console.error('Error updating entry point rate:', e);
+        input.classList.add('error');
+        setTimeout(() => input.classList.remove('error'), 2000);
+    }
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
 function updateNodeMetricsDisplay() {
     if (!showNodeMetrics) {
         // Remove all metrics labels
@@ -577,6 +654,9 @@ async function poll() {
     // Fetch node metrics and update node list
     await fetchNodeMetrics();
     updateNodesList(status.cluster.nodes, status.sliceCount);
+
+    // Fetch entry point metrics
+    await fetchEntryPointMetrics();
 }
 
 function updateMetricsDisplay(metrics) {

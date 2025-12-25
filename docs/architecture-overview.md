@@ -80,8 +80,8 @@ Observes metrics + events, produces blueprint changes and node actions:
 
 ### Cluster Controller
 
-**Status**: ❌ Not Implemented
-**Location**: TBD (likely in `node/` module)
+**Status**: ✅ Implemented (DecisionTreeController)
+**Location**: `node/src/main/java/org/pragmatica/aether/controller/`
 **Runs On**: Leader node only
 
 Pluggable component making topology decisions:
@@ -99,8 +99,8 @@ Pluggable component making topology decisions:
 
 ### MetricsAggregator
 
-**Status**: ❌ Not Implemented
-**Location**: TBD (likely in `node/` module)
+**Status**: ✅ Implemented (MetricsScheduler)
+**Location**: `node/src/main/java/org/pragmatica/aether/metrics/`
 **Runs On**: Leader node only
 
 Aggregates metrics from all nodes and broadcasts cluster-wide snapshot:
@@ -114,8 +114,8 @@ Aggregates metrics from all nodes and broadcasts cluster-wide snapshot:
 
 ### MetricsCollector
 
-**Status**: ❌ Not Implemented
-**Location**: TBD (likely in `node/` module)
+**Status**: ✅ Implemented
+**Location**: `node/src/main/java/org/pragmatica/aether/metrics/MetricsCollector.java`
 **Runs On**: All nodes
 
 Collects local metrics and pushes to leader:
@@ -128,8 +128,8 @@ Pushes MetricsUpdate to leader every 1 second via MessageRouter.
 
 ### ClusterEventBus
 
-**Status**: ❌ Not Implemented
-**Location**: TBD (likely in `common/` or `node/` module)
+**Status**: ⚡ Integrated (via MessageRouter)
+**Location**: Events flow through `common/` MessageRouter
 **Runs On**: All nodes
 
 Distributes cluster events to interested components:
@@ -140,12 +140,12 @@ Distributes cluster events to interested components:
 - Blueprint changes
 - KV-Store commits
 
-Events delivered via MessageRouter, buffered in memory for recent history.
+Events delivered via MessageRouter pattern - no separate EventBus component needed.
 
 ### SliceStore
 
-**Status**: ❌ Not Implemented  
-**Location**: `slice/src/main/java/org/pragmatica/aether/slice/manager/SliceStore.java`
+**Status**: ✅ Implemented
+**Location**: `slice/src/main/java/org/pragmatica/aether/slice/SliceStore.java`
 
 Manages the complete slice lifecycle on individual nodes:
 
@@ -154,11 +154,11 @@ Manages the complete slice lifecycle on individual nodes:
 - **Deactivate**: Stop slice but keep it loaded
 - **Unload**: Remove slice from memory completely
 
-Supports both legacy single-step loading and new multi-step lifecycle.
+Supports SharedLibraryClassLoader for dependency isolation.
 
 ### NodeDeploymentManager
 
-**Status**: ❌ Not Implemented
+**Status**: ✅ Implemented
 **Location**: `node/src/main/java/org/pragmatica/aether/deployment/node/NodeDeploymentManager.java`
 
 Handles slice lifecycle transitions on individual nodes by:
@@ -168,38 +168,32 @@ Handles slice lifecycle transitions on individual nodes by:
 - Managing timeouts and error handling for each lifecycle step
 - Updating slice state back to consensus KV-Store
 
-**Current TODO items**:
-
-- Link consensus integration (line 234: "TODO: link with consensus")
-- Move timeouts to SliceStore (lines 152-156)
-- Implement EndpointRegistry integration (line 190)
-
 ### ClusterDeploymentManager
 
-**Status**: ❌ Not Implemented  
-**Design**: Complete
+**Status**: ✅ Implemented
+**Location**: `node/src/main/java/org/pragmatica/aether/deployment/cluster/ClusterDeploymentManager.java`
 
 Cluster-wide orchestration component that:
 
 - Runs on every node but only activates when node becomes leader
 - Watches blueprint changes in KV-Store
-- Decides slice instance allocation across cluster nodes
+- Decides slice instance allocation across cluster nodes (round-robin)
 - Handles automatic rebalancing when nodes join/leave
 - Performs reconciliation to ensure desired state matches actual state
 
-**Integration**: Uses `LeaderNotification.LeaderChange` messages from the local cluster module's LeaderManager.
+**Integration**: Uses `LeaderNotification.LeaderChange` messages from LeaderManager.
 
 ### EndpointRegistry
 
-**Status**: ❌ Not Implemented  
-**Design**: Complete
+**Status**: ✅ Implemented
+**Location**: `node/src/main/java/org/pragmatica/aether/endpoint/EndpointRegistry.java`
 
 Pure event-driven component that:
 
 - Watches KV-Store endpoint events (no active synchronization)
 - Maintains local cache of all cluster endpoints
 - Provides endpoint discovery for remote slice calls
-- Supports load balancing strategies for endpoint selection
+- Supports round-robin load balancing for endpoint selection
 
 **Note**: Slices automatically publish/unpublish endpoints via consensus - no manual coordination needed.
 

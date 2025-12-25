@@ -1,1 +1,2 @@
-./mvnw versions:display-dependency-updates
+#!/bin/bash
+mvn versions:display-dependency-updates

@@ -81,7 +81,7 @@ The web dashboard (`index.html`) provides:
 
 - JDK 21+
 - Maven 3.9+
-- Built Aether project (`./mvnw clean install`)
+- Built Aether project (`mvn clean install`)
 
 ### Running Locally
 

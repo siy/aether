@@ -12,6 +12,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
 /**
@@ -39,7 +41,7 @@ import java.util.concurrent.Callable;
  */
 @Command(name = "aether-cli",
          mixinStandardHelpOptions = true,
-         version = "Aether CLI 0.4.0",
+         version = "Aether CLI 0.5.0",
          description = "Command-line interface for Aether cluster management",
          subcommands = {
                  AetherCli.StatusCommand.class,
@@ -49,7 +51,8 @@ import java.util.concurrent.Callable;
                  AetherCli.HealthCommand.class,
                  AetherCli.DeployCommand.class,
                  AetherCli.ScaleCommand.class,
-                 AetherCli.UndeployCommand.class
+                 AetherCli.UndeployCommand.class,
+                 AetherCli.ArtifactCommand.class
          })
 public class AetherCli implements Runnable {
 
@@ -84,7 +87,7 @@ public class AetherCli implements Runnable {
     }
 
     private void runRepl(CommandLine cmd) {
-        System.out.println("Aether CLI v0.4.0 - Connected to " + nodeAddress);
+        System.out.println("Aether CLI v0.5.0 - Connected to " + nodeAddress);
         System.out.println("Type 'help' for available commands, 'exit' to quit.");
         System.out.println();
 
@@ -159,6 +162,27 @@ public class AetherCli implements Runnable {
 
             if (response.statusCode() == 200) {
                 return response.body();
+            } else {
+                return "{\"error\":\"HTTP " + response.statusCode() + ": " + response.body() + "\"}";
+            }
+        } catch (Exception e) {
+            return "{\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    String putToNode(String path, byte[] content, String contentType) {
+        try {
+            var uri = URI.create("http://" + nodeAddress + path);
+            var request = HttpRequest.newBuilder()
+                                     .uri(uri)
+                                     .header("Content-Type", contentType)
+                                     .PUT(HttpRequest.BodyPublishers.ofByteArray(content))
+                                     .build();
+
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200 || response.statusCode() == 201) {
+                return response.body().isEmpty() ? "{\"status\":\"ok\"}" : response.body();
             } else {
                 return "{\"error\":\"HTTP " + response.statusCode() + ": " + response.body() + "\"}";
             }
@@ -288,6 +312,109 @@ public class AetherCli implements Runnable {
             var response = parent.postToNode("/undeploy", body);
             System.out.println(formatJson(response));
             return 0;
+        }
+    }
+
+    @Command(name = "artifact",
+             description = "Artifact repository management",
+             subcommands = {
+                     ArtifactCommand.DeployArtifactCommand.class,
+                     ArtifactCommand.ListArtifactsCommand.class,
+                     ArtifactCommand.VersionsCommand.class
+             })
+    static class ArtifactCommand implements Runnable {
+        @CommandLine.ParentCommand
+        private AetherCli parent;
+
+        @Override
+        public void run() {
+            CommandLine.usage(this, System.out);
+        }
+
+        @Command(name = "deploy", description = "Deploy a JAR file to the artifact repository")
+        static class DeployArtifactCommand implements Callable<Integer> {
+            @CommandLine.ParentCommand
+            private ArtifactCommand artifactParent;
+
+            @Parameters(index = "0", description = "Path to the JAR file")
+            private Path jarPath;
+
+            @Option(names = {"-g", "--group"}, description = "Group ID", required = true)
+            private String groupId;
+
+            @Option(names = {"-a", "--artifact"}, description = "Artifact ID", required = true)
+            private String artifactId;
+
+            @Option(names = {"-v", "--version"}, description = "Version", required = true)
+            private String version;
+
+            @Override
+            public Integer call() {
+                try {
+                    if (!Files.exists(jarPath)) {
+                        System.err.println("File not found: " + jarPath);
+                        return 1;
+                    }
+
+                    byte[] content = Files.readAllBytes(jarPath);
+                    var coordinates = groupId + ":" + artifactId + ":" + version;
+                    var repoPath = "/repository/" +
+                                   groupId.replace('.', '/') + "/" +
+                                   artifactId + "/" +
+                                   version + "/" +
+                                   artifactId + "-" + version + ".jar";
+
+                    var response = artifactParent.parent.putToNode(repoPath, content, "application/java-archive");
+
+                    if (response.startsWith("{\"error\":")) {
+                        System.out.println("Failed to deploy: " + response);
+                        return 1;
+                    }
+
+                    System.out.println("Deployed " + coordinates);
+                    System.out.println("  File: " + jarPath);
+                    System.out.println("  Size: " + content.length + " bytes");
+                    return 0;
+                } catch (IOException e) {
+                    System.err.println("Error reading file: " + e.getMessage());
+                    return 1;
+                }
+            }
+        }
+
+        @Command(name = "list", description = "List artifacts in the repository")
+        static class ListArtifactsCommand implements Callable<Integer> {
+            @CommandLine.ParentCommand
+            private ArtifactCommand artifactParent;
+
+            @Override
+            public Integer call() {
+                var response = artifactParent.parent.fetchFromNode("/repository/artifacts");
+                System.out.println(formatJson(response));
+                return 0;
+            }
+        }
+
+        @Command(name = "versions", description = "List versions of an artifact")
+        static class VersionsCommand implements Callable<Integer> {
+            @CommandLine.ParentCommand
+            private ArtifactCommand artifactParent;
+
+            @Parameters(index = "0", description = "Artifact (group:artifact)")
+            private String artifact;
+
+            @Override
+            public Integer call() {
+                var parts = artifact.split(":");
+                if (parts.length != 2) {
+                    System.err.println("Invalid artifact format. Expected: group:artifact");
+                    return 1;
+                }
+                var path = "/repository/" + parts[0].replace('.', '/') + "/" + parts[1] + "/maven-metadata.xml";
+                var response = artifactParent.parent.fetchFromNode(path);
+                System.out.println(response);
+                return 0;
+            }
         }
     }
 

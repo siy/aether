@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Aether** (v0.4.0) is an AI-driven distributed runtime environment for Java that enables predictive scaling,
+**Aether** (v0.5.0) is an AI-driven distributed runtime environment for Java that enables predictive scaling,
 intelligent orchestration, and seamless multi-cloud deployment without requiring changes to business logic.
 
 **See [docs/vision-and-goals.md](docs/vision-and-goals.md) for complete vision and design principles.**
@@ -96,7 +96,7 @@ Maven-style coordinates for slices:
 
 ```java
 // Format: groupId:artifactId:version[-qualifier]
-Artifact.artifact("org.pragmatica-lite.aether:example-slice:0.4.0")
+Artifact.artifact("org.pragmatica-lite.aether:example-slice:0.5.0")
 ```
 
 **Components**:
@@ -759,13 +759,13 @@ When the specific error doesn't matter, just validate failure occurred:
 
 ### Maven Commands
 
-- Build all modules: `./mvnw clean install`
-- Run all tests: `./mvnw test`
-- Run specific test class: `./mvnw test -Dtest=ClassName`
-- Run specific test method: `./mvnw test -Dtest=ClassName#methodName`
-- Skip tests: `./mvnw install -DskipTests`
-- Compile only: `./mvnw compile`
-- Package without tests: `./mvnw package -DskipTests`
+- Build all modules: `mvn clean install`
+- Run all tests: `mvn test`
+- Run specific test class: `mvn test -Dtest=ClassName`
+- Run specific test method: `mvn test -Dtest=ClassName#methodName`
+- Skip tests: `mvn install -DskipTests`
+- Compile only: `mvn compile`
+- Package without tests: `mvn package -DskipTests`
 
 ### Module-Specific Commands
 

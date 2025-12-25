@@ -183,5 +183,5 @@ public record DependencyFile(
 
     // Error constants
     private static final Fn1<Cause, String> UNKNOWN_SECTION =
-            Causes.forValue("Unknown section in dependency file: %s. Valid sections: [shared], [slices]");
+            Causes.forOneValue("Unknown section in dependency file: %s. Valid sections: [shared], [slices]");
 }

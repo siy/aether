@@ -183,6 +183,6 @@ public interface ArtifactMapper {
         };
     }
 
-    Fn1<Cause, String> INVALID_CLASS_NAME = Causes.forValue(
+    Fn1<Cause, String> INVALID_CLASS_NAME = Causes.forOneValue(
             "Invalid class name format: %s. Expected fully qualified name like 'org.example.ClassName'");
 }

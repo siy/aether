@@ -104,7 +104,7 @@ public interface SliceManifest {
     record SliceManifestInfo(Artifact artifact, String sliceClassName) {}
 
     // Error causes
-    Fn1<Cause, String> MANIFEST_NOT_FOUND_FN = Causes.forValue("Manifest not found in JAR: %s");
+    Fn1<Cause, String> MANIFEST_NOT_FOUND_FN = Causes.forOneValue("Manifest not found in JAR: %s");
     Cause MANIFEST_NOT_FOUND = Causes.cause("Manifest not found in ClassLoader resources");
     Cause MISSING_ARTIFACT_ATTR = Causes.cause("Missing required manifest attribute: "
                                                + SLICE_ARTIFACT_ATTR

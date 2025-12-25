@@ -62,6 +62,6 @@ public record Version(int major, int minor, int patch, String qualifier) {
     }
 
     private static final Pattern QUALIFIER_PATTERN = Pattern.compile("^[\\-a-zA-Z0-9-_.]*$");
-    private static final Fn1<Cause, String> FORMAT_ERROR = Causes.forValue(
+    private static final Fn1<Cause, String> FORMAT_ERROR = Causes.forOneValue(
             "Invalid version format: {0}, expected {major}.{minor}.{patch}[-{suffix}]");
 }

@@ -87,7 +87,7 @@ public interface RouteRegistry {
      * Route registration errors.
      */
     sealed interface RouteRegistryError extends Cause {
-        Fn1<Cause, String> ROUTE_CONFLICT_ERROR = Causes.forValue(
+        Fn1<Cause, String> ROUTE_CONFLICT_ERROR = Causes.forOneValue(
             "Route conflict: %s"
         );
 

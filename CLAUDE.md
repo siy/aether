@@ -298,7 +298,7 @@ Valid objects constructed only when validation succeeds:
 ```java
 public record Email(String value) {
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[a-z0-9+_.-]+@[a-z0-9.-]+$");
-    private static final Fn1<Cause, String> INVALID_EMAIL = Causes.forValue("Invalid email format: {}");
+    private static final Fn1<Cause, String> INVALID_EMAIL = Causes.forOneValue("Invalid email format: {}");
 
     public static Result<Email> email(String raw) {
         return Verify.ensure(raw, Verify.Is::notNull)
@@ -790,6 +790,7 @@ cd example-slice && mvn test
 - **NodeDeploymentManager**: `node/src/main/java/org/pragmatica/aether/deployment/node/`
 - **ClusterDeploymentManager**: `node/src/main/java/org/pragmatica/aether/deployment/cluster/`
 - **MetricsCollector**: `node/src/main/java/org/pragmatica/aether/metrics/MetricsCollector.java`
+- **InvocationMetricsCollector**: `node/src/main/java/org/pragmatica/aether/metrics/invocation/`
 - **ControlLoop**: `node/src/main/java/org/pragmatica/aether/controller/ControlLoop.java`
 - **SliceInvoker**: `node/src/main/java/org/pragmatica/aether/invoke/SliceInvoker.java`
 - **ManagementServer**: `node/src/main/java/org/pragmatica/aether/api/ManagementServer.java`
@@ -804,6 +805,7 @@ cd example-slice && mvn test
 - **Infrastructure Services**: `docs/infrastructure-services.md` - Platform services (artifact repo, caching, etc.)
 - **Slice lifecycle**: `docs/slice-lifecycle.md` - Detailed lifecycle documentation
 - **Cluster manager**: `docs/cluster-deployment-manager.md` - ClusterDeploymentManager design
+- **Invocation metrics**: `docs/invocation-metrics.md` - Per-method metrics and slow call capture
 - **JBCT Guide**: `docs/jbct-coder.md` - Java Backend Coding Technology patterns
 - **Rabia**: `cluster/README.md` - Consensus algorithm documentation
 

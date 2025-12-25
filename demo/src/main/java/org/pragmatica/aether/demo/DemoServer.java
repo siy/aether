@@ -13,6 +13,7 @@ import org.pragmatica.aether.demo.order.pricing.PricingServiceSlice;
 import org.pragmatica.aether.demo.order.usecase.cancelorder.CancelOrderSlice;
 import org.pragmatica.aether.demo.order.usecase.getorderstatus.GetOrderStatusSlice;
 import org.pragmatica.aether.demo.order.usecase.placeorder.PlaceOrderSlice;
+import org.pragmatica.aether.slice.SliceRuntime;
 import org.pragmatica.lang.io.TimeSpan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -209,17 +210,20 @@ public final class DemoServer {
         var inventoryArtifact = Artifact.artifact("org.pragmatica-lite.aether.demo:inventory-service:0.1.0").unwrap();
         var pricingArtifact = Artifact.artifact("org.pragmatica-lite.aether.demo:pricing-service:0.1.0").unwrap();
 
+        // Configure SliceRuntime so slices can access the invoker
+        SliceRuntime.setSliceInvoker(invoker);
+
         invoker.register(inventoryArtifact, InventoryServiceSlice.inventoryServiceSlice());
         invoker.register(pricingArtifact, PricingServiceSlice.pricingServiceSlice());
 
-        // Register use case slices (they depend on service slices via invoker)
+        // Register use case slices (they access invoker via SliceRuntime)
         var placeOrderArtifact = Artifact.artifact("org.pragmatica-lite.aether.demo:place-order:0.1.0").unwrap();
         var getOrderStatusArtifact = Artifact.artifact("org.pragmatica-lite.aether.demo:get-order-status:0.1.0").unwrap();
         var cancelOrderArtifact = Artifact.artifact("org.pragmatica-lite.aether.demo:cancel-order:0.1.0").unwrap();
 
-        invoker.register(placeOrderArtifact, PlaceOrderSlice.placeOrderSlice(invoker));
+        invoker.register(placeOrderArtifact, PlaceOrderSlice.placeOrderSlice());
         invoker.register(getOrderStatusArtifact, GetOrderStatusSlice.getOrderStatusSlice());
-        invoker.register(cancelOrderArtifact, CancelOrderSlice.cancelOrderSlice(invoker));
+        invoker.register(cancelOrderArtifact, CancelOrderSlice.cancelOrderSlice());
 
         log.info("Registered {} demo-order slices", invoker.sliceCount());
 

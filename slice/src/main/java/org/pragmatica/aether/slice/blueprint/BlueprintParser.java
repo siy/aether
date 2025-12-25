@@ -23,11 +23,11 @@ import java.util.regex.Pattern;
 
 public interface BlueprintParser {
     Fn2<Cause, Integer, String> PARSE_ERROR = Causes.forTwoValues("Line %d: %s");
-    Fn1<Cause, String> FILE_ERROR = Causes.forValue("Failed to read file: %s");
+    Fn1<Cause, String> FILE_ERROR = Causes.forOneValue("Failed to read file: %s");
     Cause MISSING_HEADER = Causes.cause("Missing blueprint header");
-    Fn1<Cause, String> INVALID_SECTION = Causes.forValue("Invalid section header: %s");
-    Fn1<Cause, String> INVALID_SLICE_FORMAT = Causes.forValue("Invalid slice format: %s");
-    Fn1<Cause, String> INVALID_ROUTE_FORMAT = Causes.forValue("Invalid route format: %s");
+    Fn1<Cause, String> INVALID_SECTION = Causes.forOneValue("Invalid section header: %s");
+    Fn1<Cause, String> INVALID_SLICE_FORMAT = Causes.forOneValue("Invalid slice format: %s");
+    Fn1<Cause, String> INVALID_ROUTE_FORMAT = Causes.forOneValue("Invalid route format: %s");
     Fn2<Cause, String, String> BINDING_MISMATCH = Causes.forTwoValues("Parameter '%s' not found in pattern: %s");
 
     Pattern HEADER_PATTERN = Pattern.compile("^#\\s*Blueprint:\\s*(.+)$");

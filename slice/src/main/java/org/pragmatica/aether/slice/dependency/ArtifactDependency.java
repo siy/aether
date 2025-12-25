@@ -102,11 +102,11 @@ public record ArtifactDependency(
     static final Cause COMMENT_LINE = Causes.cause("Dependency line is a comment");
     static final Cause SECTION_HEADER = Causes.cause("Line is a section header");
     private static final Fn1<Cause, String> INVALID_FORMAT =
-            Causes.forValue("Invalid artifact dependency format: %s. Expected groupId:artifactId:versionPattern");
+            Causes.forOneValue("Invalid artifact dependency format: %s. Expected groupId:artifactId:versionPattern");
     private static final Fn1<Cause, String> EMPTY_GROUP_ID =
-            Causes.forValue("Empty group ID in dependency: %s");
+            Causes.forOneValue("Empty group ID in dependency: %s");
     private static final Fn1<Cause, String> EMPTY_ARTIFACT_ID =
-            Causes.forValue("Empty artifact ID in dependency: %s");
+            Causes.forOneValue("Empty artifact ID in dependency: %s");
     private static final Fn1<Cause, String> EMPTY_VERSION =
-            Causes.forValue("Empty version pattern in dependency: %s");
+            Causes.forOneValue("Empty version pattern in dependency: %s");
 }

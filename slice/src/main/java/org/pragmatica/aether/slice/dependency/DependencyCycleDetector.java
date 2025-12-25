@@ -81,5 +81,5 @@ public interface DependencyCycleDetector {
     }
 
     // Error constants
-    Fn1<Cause, String> CIRCULAR_DEPENDENCY = Causes.forValue("Circular dependency detected: %s");
+    Fn1<Cause, String> CIRCULAR_DEPENDENCY = Causes.forOneValue("Circular dependency detected: %s");
 }

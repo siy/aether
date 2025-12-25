@@ -111,7 +111,7 @@ public sealed interface VersionPattern {
             }
 
             private static final Fn1<Cause, String> INVALID_OPERATOR =
-                    Causes.forValue("Invalid comparison operator: %s");
+                    Causes.forOneValue("Invalid comparison operator: %s");
         }
     }
 
@@ -270,6 +270,6 @@ public sealed interface VersionPattern {
 
     // Error constants
     Cause EMPTY_PATTERN = Causes.cause("Version pattern cannot be empty");
-    Fn1<Cause, String> INVALID_RANGE_FORMAT = Causes.forValue("Invalid range format: %s");
-    Fn1<Cause, String> INVALID_COMPARISON_FORMAT = Causes.forValue("Invalid comparison format: %s");
+    Fn1<Cause, String> INVALID_RANGE_FORMAT = Causes.forOneValue("Invalid range format: %s");
+    Fn1<Cause, String> INVALID_COMPARISON_FORMAT = Causes.forOneValue("Invalid comparison format: %s");
 }

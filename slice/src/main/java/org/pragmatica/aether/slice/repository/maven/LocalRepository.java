@@ -64,7 +64,7 @@ public interface LocalRepository extends Repository {
                                 .resolve(artifactId + "-" + version.withQualifier() + "." + packaging);
             }
 
-            private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND = Causes.forValue(
+            private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND = Causes.forOneValue(
                     "Artifact not found in local repository: %s");
         }
         return new repository(localRepo);

@@ -13,7 +13,7 @@ import static org.pragmatica.lang.Verify.ensure;
 
 public record BlueprintId(String name, Version version) {
     private static final Pattern NAME_PATTERN = Pattern.compile("^[a-z][a-z0-9-]*$");
-    private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forValue("Invalid blueprint ID format: %s");
+    private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forOneValue("Invalid blueprint ID format: %s");
 
     public static Result<BlueprintId> blueprintId(String input) {
         var parts = input.split(":", 2);

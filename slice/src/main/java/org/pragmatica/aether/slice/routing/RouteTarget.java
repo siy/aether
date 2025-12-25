@@ -13,10 +13,10 @@ public record RouteTarget(String sliceId, String methodName, List<String> params
     private static final Pattern SLICE_ID_PATTERN = Pattern.compile("^[a-z][a-z0-9-]*$");
     private static final Pattern METHOD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
     private static final Pattern PARAM_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
-    private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forValue("Invalid route target format: %s");
-    private static final Fn1<Cause, String> INVALID_SLICE_ID = Causes.forValue("Invalid slice ID: %s");
-    private static final Fn1<Cause, String> INVALID_METHOD_NAME = Causes.forValue("Invalid method name: %s");
-    private static final Fn1<Cause, String> INVALID_PARAM = Causes.forValue("Invalid parameter name: %s");
+    private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forOneValue("Invalid route target format: %s");
+    private static final Fn1<Cause, String> INVALID_SLICE_ID = Causes.forOneValue("Invalid slice ID: %s");
+    private static final Fn1<Cause, String> INVALID_METHOD_NAME = Causes.forOneValue("Invalid method name: %s");
+    private static final Fn1<Cause, String> INVALID_PARAM = Causes.forOneValue("Invalid parameter name: %s");
 
     public static Result<RouteTarget> routeTarget(String input) {
         var colonIndex = input.indexOf(':');

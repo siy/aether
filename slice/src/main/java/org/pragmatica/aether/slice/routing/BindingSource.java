@@ -71,7 +71,7 @@ public sealed interface BindingSource {
         }
     }
 
-    Fn1<Cause, String> INVALID_BINDING_SOURCE = Causes.forValue("Invalid binding source format: %s");
+    Fn1<Cause, String> INVALID_BINDING_SOURCE = Causes.forOneValue("Invalid binding source format: %s");
 
     static Result<BindingSource> parse(String input) {
         if (input.equals("body")) {

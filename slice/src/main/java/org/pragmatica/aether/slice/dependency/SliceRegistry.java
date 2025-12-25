@@ -161,8 +161,8 @@ public interface SliceRegistry {
                    : className;
         }
 
-        private static final Fn1<Cause, String> ALREADY_REGISTERED = Causes.forValue("Artifact already registered: %s");
+        private static final Fn1<Cause, String> ALREADY_REGISTERED = Causes.forOneValue("Artifact already registered: %s");
 
-        private static final Fn1<Cause, String> NOT_FOUND = Causes.forValue("Artifact not found in registry: %s");
+        private static final Fn1<Cause, String> NOT_FOUND = Causes.forOneValue("Artifact not found in registry: %s");
     }
 }

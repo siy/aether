@@ -1,15 +1,15 @@
 package org.pragmatica.aether.demo.order.usecase.cancelorder;
 
-import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.demo.order.domain.OrderId;
 import org.pragmatica.aether.demo.order.domain.OrderStatus;
 import org.pragmatica.aether.demo.order.inventory.ReleaseStockRequest;
 import org.pragmatica.aether.demo.order.inventory.StockReleased;
-import org.pragmatica.aether.invoke.SliceInvoker;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.Slice;
 import org.pragmatica.aether.slice.SliceMethod;
 import org.pragmatica.aether.slice.SliceRoute;
+import org.pragmatica.aether.slice.SliceRuntime;
+import org.pragmatica.aether.slice.SliceRuntime.SliceInvokerFacade;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.type.TypeToken;
 
@@ -29,9 +29,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 4. Update order status to CANCELLED
  * 5. Return cancellation confirmation
  */
-public record CancelOrderSlice(SliceInvoker invoker) implements Slice {
+public record CancelOrderSlice() implements Slice {
 
-    private static final Artifact INVENTORY = Artifact.artifact("org.pragmatica-lite.aether.demo:inventory-service:0.1.0").unwrap();
+    private static final String INVENTORY = "org.pragmatica-lite.aether.demo:inventory-service:0.1.0";
 
     // Mock order storage with reservations
     private static final Map<String, StoredOrder> ORDERS = new ConcurrentHashMap<>();
@@ -63,8 +63,12 @@ public record CancelOrderSlice(SliceInvoker invoker) implements Slice {
         List<String> reservationIds
     ) {}
 
-    public static CancelOrderSlice cancelOrderSlice(SliceInvoker invoker) {
-        return new CancelOrderSlice(invoker);
+    public static CancelOrderSlice cancelOrderSlice() {
+        return new CancelOrderSlice();
+    }
+
+    private SliceInvokerFacade invoker() {
+        return SliceRuntime.sliceInvoker();
     }
 
     @Override
@@ -116,9 +120,9 @@ public record CancelOrderSlice(SliceInvoker invoker) implements Slice {
 
     private Promise<OrderWithReleases> releaseAllStock(OrderWithContext context) {
         var releases = context.order().reservationIds().stream()
-            .map(reservationId -> invoker.invokeAndWait(
+            .map(reservationId -> invoker().invokeAndWait(
                 INVENTORY,
-                MethodName.methodName("releaseStock").unwrap(),
+                "releaseStock",
                 new ReleaseStockRequest(reservationId),
                 StockReleased.class
             ))

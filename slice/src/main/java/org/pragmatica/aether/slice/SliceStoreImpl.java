@@ -257,12 +257,12 @@ public interface SliceStoreImpl {
             }
         }
 
-        private static final Fn1<Cause, String> SLICE_NOT_LOADED = Causes.forValue("Slice not loaded: %s");
+        private static final Fn1<Cause, String> SLICE_NOT_LOADED = Causes.forOneValue("Slice not loaded: %s");
 
-        private static final Fn1<Cause, String> INVALID_STATE_TRANSITION = Causes.forValue(
+        private static final Fn1<Cause, String> INVALID_STATE_TRANSITION = Causes.forOneValue(
                 "Invalid state transition: %s");
 
-        private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND = Causes.forValue(
+        private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND = Causes.forOneValue(
                 "Artifact not found in any repository: %s");
     }
 }

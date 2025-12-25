@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 
 public record RoutingSection(String protocol, Option<Artifact> connector, List<Route> routes) {
     private static final Pattern PROTOCOL_PATTERN = Pattern.compile("^[a-z][a-z0-9+.-]*$");
-    private static final Fn1<Cause, String> INVALID_PROTOCOL = Causes.forValue("Invalid protocol name: %s");
+    private static final Fn1<Cause, String> INVALID_PROTOCOL = Causes.forOneValue("Invalid protocol name: %s");
 
     public static Result<RoutingSection> routingSection(String protocol,
                                                         Option<Artifact> connector,

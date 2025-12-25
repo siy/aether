@@ -1,6 +1,5 @@
 package org.pragmatica.aether.demo.order.usecase.placeorder;
 
-import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.demo.order.domain.OrderId;
 import org.pragmatica.aether.demo.order.domain.OrderStatus;
 import org.pragmatica.aether.demo.order.inventory.CheckStockRequest;
@@ -9,11 +8,12 @@ import org.pragmatica.aether.demo.order.inventory.StockAvailability;
 import org.pragmatica.aether.demo.order.inventory.StockReservation;
 import org.pragmatica.aether.demo.order.pricing.CalculateTotalRequest;
 import org.pragmatica.aether.demo.order.pricing.OrderTotal;
-import org.pragmatica.aether.invoke.SliceInvoker;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.Slice;
 import org.pragmatica.aether.slice.SliceMethod;
 import org.pragmatica.aether.slice.SliceRoute;
+import org.pragmatica.aether.slice.SliceRuntime;
+import org.pragmatica.aether.slice.SliceRuntime.SliceInvokerFacade;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.type.TypeToken;
 import org.pragmatica.lang.utils.Causes;
@@ -31,13 +31,17 @@ import java.util.List;
  * 4. Reserve stock for all items (parallel, calls InventoryService)
  * 5. Return order confirmation
  */
-public record PlaceOrderSlice(SliceInvoker invoker) implements Slice {
+public record PlaceOrderSlice() implements Slice {
 
-    private static final Artifact INVENTORY = Artifact.artifact("org.pragmatica-lite.aether.demo:inventory-service:0.1.0").unwrap();
-    private static final Artifact PRICING = Artifact.artifact("org.pragmatica-lite.aether.demo:pricing-service:0.1.0").unwrap();
+    private static final String INVENTORY = "org.pragmatica-lite.aether.demo:inventory-service:0.1.0";
+    private static final String PRICING = "org.pragmatica-lite.aether.demo:pricing-service:0.1.0";
 
-    public static PlaceOrderSlice placeOrderSlice(SliceInvoker invoker) {
-        return new PlaceOrderSlice(invoker);
+    public static PlaceOrderSlice placeOrderSlice() {
+        return new PlaceOrderSlice();
+    }
+
+    private SliceInvokerFacade invoker() {
+        return SliceRuntime.sliceInvoker();
     }
 
     @Override
@@ -72,9 +76,9 @@ public record PlaceOrderSlice(SliceInvoker invoker) implements Slice {
 
     private Promise<ValidWithStockCheck> checkAllStock(ValidPlaceOrderRequest request) {
         var stockChecks = request.items().stream()
-            .map(item -> invoker.invokeAndWait(
+            .map(item -> invoker().invokeAndWait(
                 INVENTORY,
-                MethodName.methodName("checkStock").unwrap(),
+                "checkStock",
                 new CheckStockRequest(item.productId(), item.quantity()),
                 StockAvailability.class
             ))
@@ -99,9 +103,9 @@ public record PlaceOrderSlice(SliceInvoker invoker) implements Slice {
             .map(item -> new CalculateTotalRequest.LineItem(item.productId(), item.quantity()))
             .toList();
 
-        return invoker.invokeAndWait(
+        return invoker().invokeAndWait(
             PRICING,
-            MethodName.methodName("calculateTotal").unwrap(),
+            "calculateTotal",
             new CalculateTotalRequest(lineItems, context.request().discountCode()),
             OrderTotal.class
         ).map(total -> new ValidWithPrice(context.request(), total))
@@ -112,9 +116,9 @@ public record PlaceOrderSlice(SliceInvoker invoker) implements Slice {
         var orderId = OrderId.generate();
 
         var reservations = context.request().items().stream()
-            .map(item -> invoker.invokeAndWait(
+            .map(item -> invoker().invokeAndWait(
                 INVENTORY,
-                MethodName.methodName("reserveStock").unwrap(),
+                "reserveStock",
                 new ReserveStockRequest(item.productId(), item.quantity(), orderId.value()),
                 StockReservation.class
             ))

@@ -40,6 +40,6 @@ public record SliceActionConfig(TimeSpan loadingTimeout, TimeSpan activatingTime
         };
     }
 
-    private static final Fn1<Cause, SliceState> NO_TIMEOUT_CONFIGURED = Causes.forValue(
+    private static final Fn1<Cause, SliceState> NO_TIMEOUT_CONFIGURED = Causes.forOneValue(
             "No timeout configured for state: %s");
 }

@@ -70,6 +70,10 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
                 handleEvents(ctx);
             } else if (path.equals("/api/reset-metrics") && method == HttpMethod.POST) {
                 handleResetMetrics(ctx);
+            } else if (path.equals("/api/node-metrics") && method == HttpMethod.GET) {
+                handleNodeMetrics(ctx);
+            } else if (path.equals("/api/orders") && method == HttpMethod.POST) {
+                handlePlaceOrder(ctx, request);
             } else {
                 sendResponse(ctx, NOT_FOUND, "{\"error\": \"Not found\"}");
             }
@@ -201,6 +205,36 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
         events.clear();
         addEvent("RESET", "Metrics and events reset");
         sendResponse(ctx, OK, "{\"success\": true}");
+    }
+
+    private void handleNodeMetrics(ChannelHandlerContext ctx) {
+        var nodeMetrics = cluster.nodeMetrics();
+        var json = new StringBuilder("[");
+        var first = true;
+        for (var m : nodeMetrics) {
+            if (!first) json.append(",");
+            first = false;
+            json.append("{")
+                .append("\"nodeId\":\"").append(m.nodeId()).append("\",")
+                .append("\"isLeader\":").append(m.isLeader()).append(",")
+                .append("\"cpuUsage\":").append(String.format("%.3f", m.cpuUsage())).append(",")
+                .append("\"heapUsedMb\":").append(m.heapUsedMb()).append(",")
+                .append("\"heapMaxMb\":").append(m.heapMaxMb())
+                .append("}");
+        }
+        json.append("]");
+        sendResponse(ctx, OK, json.toString());
+    }
+
+    /**
+     * Handle simulated order placement requests.
+     * This endpoint simulates slice request processing for load testing.
+     * TODO: Wire to actual demo-order slice invocation once slices are deployed.
+     */
+    private void handlePlaceOrder(ChannelHandlerContext ctx, FullHttpRequest request) {
+        // Simulate processing - just return success with generated order ID
+        var orderId = "ORD-" + System.nanoTime();
+        sendResponse(ctx, OK, "{\"success\":true,\"orderId\":\"" + orderId + "\"}");
     }
 
     public void addEvent(String type, String message) {

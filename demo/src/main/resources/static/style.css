@@ -461,6 +461,11 @@ body {
     color: var(--text-primary);
 }
 
+.btn-small {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+}
+
 /* Load Control */
 .load-control {
     display: flex;

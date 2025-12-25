@@ -293,6 +293,31 @@ public final class DemoCluster {
     }
 
     /**
+     * Get per-node metrics for all nodes.
+     */
+    public List<NodeMetrics> nodeMetrics() {
+        return nodes.entrySet().stream()
+                    .map(entry -> {
+                        var nodeId = entry.getKey();
+                        var node = entry.getValue();
+                        var metrics = node.metricsCollector().collectLocal();
+
+                        var cpuUsage = metrics.getOrDefault("cpu.usage", 0.0);
+                        var heapUsed = metrics.getOrDefault("heap.used", 0.0);
+                        var heapMax = metrics.getOrDefault("heap.max", 1.0);
+
+                        return new NodeMetrics(
+                                nodeId,
+                                currentLeader().fold(() -> false, l -> l.equals(nodeId)),
+                                cpuUsage,
+                                (long) (heapUsed / 1024 / 1024),
+                                (long) (heapMax / 1024 / 1024)
+                        );
+                    })
+                    .toList();
+    }
+
+    /**
      * Status of a single node.
      */
     public record NodeStatus(
@@ -308,5 +333,16 @@ public final class DemoCluster {
     public record ClusterStatus(
             List<NodeStatus> nodes,
             String leaderId
+    ) {}
+
+    /**
+     * Per-node metrics for dashboard display.
+     */
+    public record NodeMetrics(
+            String nodeId,
+            boolean isLeader,
+            double cpuUsage,
+            long heapUsedMb,
+            long heapMaxMb
     ) {}
 }

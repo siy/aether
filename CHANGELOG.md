@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CLI commands: `artifact deploy`, `artifact list`, `artifact versions`
 - **infra-services module** - Infrastructure service slices
 - **C-level resilience demo** with visual dashboard
+  - D3.js cluster topology visualization (fixed blinking on poll)
+  - Real-time metrics charts with Chart.js
+  - Per-node JVM metrics display (toggleable CPU/heap)
+  - HTTP-based load generator for realistic request simulation
+  - Chaos operations: kill node, kill leader, rolling restart
 
 ### Changed
 - Demo-order slices migrated to route self-registration

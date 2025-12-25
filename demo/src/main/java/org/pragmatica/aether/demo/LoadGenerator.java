@@ -1,36 +1,34 @@
 package org.pragmatica.aether.demo;
 
-import org.pragmatica.aether.artifact.Artifact;
-import org.pragmatica.aether.node.AetherNode;
-import org.pragmatica.aether.slice.SliceState;
-import org.pragmatica.aether.slice.kvstore.AetherKey.SliceNodeKey;
-import org.pragmatica.aether.slice.kvstore.AetherValue.SliceNodeValue;
-import org.pragmatica.cluster.state.kvstore.KVCommand;
-import org.pragmatica.lang.io.TimeSpan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 
 /**
- * Generates continuous load against the cluster for demo purposes.
- * Tracks success/failure rates and latency.
+ * Generates continuous HTTP load against the cluster for demo purposes.
+ * Sends simulated order requests to test slice request processing.
  */
 public final class LoadGenerator {
     private static final Logger log = LoggerFactory.getLogger(LoadGenerator.class);
 
-    private static final TimeSpan REQUEST_TIMEOUT = TimeSpan.timeSpan(3).seconds();
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(3);
 
-    private final Supplier<List<AetherNode>> nodeSupplier;
+    private final int port;
     private final DemoMetrics metrics;
+    private final HttpClient httpClient;
+    private final Random random = new Random();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicInteger currentRate = new AtomicInteger(1000);
     private final AtomicInteger targetRate = new AtomicInteger(1000);
@@ -39,13 +37,17 @@ public final class LoadGenerator {
     private ScheduledExecutorService scheduler;
     private Thread loadThread;
 
-    private LoadGenerator(Supplier<List<AetherNode>> nodeSupplier, DemoMetrics metrics) {
-        this.nodeSupplier = nodeSupplier;
+    private LoadGenerator(int port, DemoMetrics metrics) {
+        this.port = port;
         this.metrics = metrics;
+        this.httpClient = HttpClient.newBuilder()
+                                    .connectTimeout(REQUEST_TIMEOUT)
+                                    .executor(Executors.newVirtualThreadPerTaskExecutor())
+                                    .build();
     }
 
-    public static LoadGenerator loadGenerator(Supplier<List<AetherNode>> nodeSupplier, DemoMetrics metrics) {
-        return new LoadGenerator(nodeSupplier, metrics);
+    public static LoadGenerator loadGenerator(int port, DemoMetrics metrics) {
+        return new LoadGenerator(port, metrics);
     }
 
     /**
@@ -168,29 +170,42 @@ public final class LoadGenerator {
     }
 
     private void sendRequest() {
-        var nodes = nodeSupplier.get();
-        if (nodes.isEmpty()) {
-            return;
-        }
-
         var requestId = requestCounter.incrementAndGet();
-        var nodeIndex = (int) (requestId % nodes.size());
-        var node = nodes.get(nodeIndex);
-
         var startTime = System.nanoTime();
 
-        // Create a test artifact for this request
-        var artifact = Artifact.artifact("org.demo:load-test:" + requestId + ".0.0");
-        artifact.onFailure(_ -> metrics.recordFailure(System.nanoTime() - startTime))
-                .onSuccess(art -> {
-                    var key = new SliceNodeKey(art, node.self());
-                    var value = new SliceNodeValue(SliceState.LOADED);
+        // Create a simulated order request
+        var json = createOrderRequest(requestId);
 
-                    node.apply(List.of(new KVCommand.Put<>(key, value)))
-                        .timeout(REQUEST_TIMEOUT)
-                        .onSuccess(_ -> metrics.recordSuccess(System.nanoTime() - startTime))
-                        .onFailure(_ -> metrics.recordFailure(System.nanoTime() - startTime));
-                });
+        var request = HttpRequest.newBuilder()
+                                 .uri(URI.create("http://localhost:" + port + "/api/orders"))
+                                 .header("Content-Type", "application/json")
+                                 .POST(HttpRequest.BodyPublishers.ofString(json))
+                                 .timeout(REQUEST_TIMEOUT)
+                                 .build();
+
+        httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                  .thenAccept(response -> {
+                      var latencyNanos = System.nanoTime() - startTime;
+                      if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                          metrics.recordSuccess(latencyNanos);
+                      } else {
+                          metrics.recordFailure(latencyNanos);
+                      }
+                  })
+                  .exceptionally(e -> {
+                      metrics.recordFailure(System.nanoTime() - startTime);
+                      return null;
+                  });
+    }
+
+    private String createOrderRequest(long requestId) {
+        var customerId = "CUST-" + (requestId % 100);
+        var productId = "PROD-" + String.format("%03d", 1 + random.nextInt(10));
+        var quantity = 1 + random.nextInt(5);
+
+        return String.format("""
+            {"customerId":"%s","items":[{"productId":"%s","quantity":%d}]}""",
+                             customerId, productId, quantity);
     }
 
     private void adjustRate() {

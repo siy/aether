@@ -84,7 +84,7 @@ public final class DemoServer {
         // Initialize components
         metrics = DemoMetrics.demoMetrics();
         cluster = DemoCluster.demoCluster(clusterSize);
-        loadGenerator = LoadGenerator.loadGenerator(cluster::allNodes, metrics);
+        loadGenerator = LoadGenerator.loadGenerator(port, metrics);
         apiHandler = DemoApiHandler.demoApiHandler(cluster, loadGenerator, metrics);
         staticHandler = StaticFileHandler.staticFileHandler();
 

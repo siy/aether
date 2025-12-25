@@ -11,10 +11,13 @@ let throughputChart = null;
 let successHistory = [];
 let throughputHistory = [];
 const MAX_HISTORY = 60; // 30 seconds at 500ms intervals
+let showNodeMetrics = false;  // Toggle for per-node JVM metrics
+let nodeMetricsData = [];     // Cached node metrics
 
 // D3 Topology
 let svg, simulation;
 let width, height;
+let previousNodeIds = [];
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', () => {
@@ -55,6 +58,18 @@ function initTopology() {
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide().radius(40));
+
+    // Set tick handler once (not on every poll)
+    simulation.on('tick', () => {
+        svg.selectAll('.link')
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        svg.selectAll('.node')
+            .attr('transform', d => `translate(${d.x},${d.y})`);
+    });
 }
 
 function updateTopology(clusterData) {
@@ -65,6 +80,10 @@ function updateTopology(clusterData) {
         isLeader: n.isLeader,
         state: n.state
     }));
+
+    // Check if topology actually changed (nodes added/removed)
+    const currentNodeIds = nodeData.map(n => n.id).sort().join(',');
+    const topologyChanged = currentNodeIds !== previousNodeIds.join(',');
 
     // Create links between all nodes (full mesh)
     const links = [];
@@ -116,27 +135,23 @@ function updateTopology(clusterData) {
         .attr('dy', 4)
         .text(d => d.id.replace('node-', 'N'));
 
-    // Update all nodes
-    svg.selectAll('.node')
-        .attr('class', d => `node ${d.isLeader ? 'leader' : 'healthy'}`);
-
-    // Update simulation
-    simulation.nodes(nodeData);
-    simulation.force('link').links(links);
-    simulation.alpha(0.3).restart();
-
-    // Remove previous tick handler before adding new one
-    simulation.on('tick', null);
-    simulation.on('tick', () => {
-        svg.selectAll('.link')
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-
-        svg.selectAll('.node')
-            .attr('transform', d => `translate(${d.x},${d.y})`);
+    // Update node styles with smooth transition (no class swap that causes redraw)
+    svg.selectAll('.node').each(function(d) {
+        const nodeGroup = d3.select(this);
+        const nodeDataItem = nodeData.find(n => n.id === d.id);
+        if (nodeDataItem) {
+            nodeGroup.classed('leader', nodeDataItem.isLeader);
+            nodeGroup.classed('healthy', !nodeDataItem.isLeader);
+        }
     });
+
+    // Only restart simulation when topology actually changes
+    if (topologyChanged) {
+        simulation.nodes(nodeData);
+        simulation.force('link').links(links);
+        simulation.alpha(0.3).restart();
+        previousNodeIds = nodeData.map(n => n.id).sort();
+    }
 }
 
 function dragStarted(event, d) {
@@ -341,6 +356,14 @@ function initControls() {
 
     // Modal cancel
     document.getElementById('modal-cancel').addEventListener('click', hideNodeModal);
+
+    // Toggle node metrics display
+    document.getElementById('btn-toggle-metrics').addEventListener('click', () => {
+        showNodeMetrics = !showNodeMetrics;
+        const btn = document.getElementById('btn-toggle-metrics');
+        btn.textContent = showNodeMetrics ? 'Hide JVM' : 'Show JVM';
+        updateNodeMetricsDisplay();
+    });
 }
 
 function showNodeModal(includeLeader) {
@@ -422,6 +445,51 @@ async function apiPost(endpoint, body = {}) {
     }
 }
 
+async function fetchNodeMetrics() {
+    try {
+        const response = await fetch(`${API_BASE}/api/node-metrics`);
+        if (!response.ok) throw new Error('Node metrics fetch failed');
+        nodeMetricsData = await response.json();
+        updateNodeMetricsDisplay();
+    } catch (e) {
+        console.error('Error fetching node metrics:', e);
+    }
+}
+
+function updateNodeMetricsDisplay() {
+    if (!showNodeMetrics) {
+        // Remove all metrics labels
+        svg.selectAll('.node-metrics').remove();
+        return;
+    }
+
+    // Update metrics labels for each node
+    svg.selectAll('.node').each(function(d) {
+        const nodeGroup = d3.select(this);
+        const metrics = nodeMetricsData.find(m => m.nodeId === d.id);
+
+        // Remove existing metrics label
+        nodeGroup.select('.node-metrics').remove();
+
+        if (metrics) {
+            const label = `CPU: ${(metrics.cpuUsage * 100).toFixed(0)}%\nHeap: ${metrics.heapUsedMb}/${metrics.heapMaxMb}MB`;
+            nodeGroup.append('text')
+                .attr('class', 'node-metrics')
+                .attr('dy', 45)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '10px')
+                .style('fill', '#a0a0b0')
+                .selectAll('tspan')
+                .data(label.split('\n'))
+                .enter()
+                .append('tspan')
+                .attr('x', 0)
+                .attr('dy', (_, i) => i === 0 ? 0 : 12)
+                .text(t => t);
+        }
+    });
+}
+
 function startPolling() {
     poll();
     setInterval(poll, REFRESH_INTERVAL);
@@ -453,6 +521,11 @@ async function poll() {
     // Fetch and update events
     const newEvents = await fetchEvents();
     updateTimeline(newEvents);
+
+    // Fetch node metrics if enabled
+    if (showNodeMetrics) {
+        await fetchNodeMetrics();
+    }
 }
 
 function updateMetricsDisplay(metrics) {

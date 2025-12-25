@@ -1,5 +1,6 @@
 # Aether Resilience Demo - Docker Image
-FROM eclipse-temurin:21-jre-alpine
+# Requires Java 25+ (pragmatica-lite dependency)
+FROM eclipse-temurin:25-jre-alpine
 
 LABEL maintainer="Aether Team"
 LABEL description="Aether Resilience Demo - C-Level presentation dashboard"

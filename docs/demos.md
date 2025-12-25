@@ -88,7 +88,7 @@ The web dashboard (`index.html`) provides:
 ```bash
 # Build the demo
 cd demo
-.mvn package
+../mvnw package
 
 # Run with defaults (5 nodes, 1000 req/sec)
 java -jar target/demo-0.4.0.jar
@@ -405,7 +405,7 @@ The `PlaceOrderSlice` demonstrates orchestrated inter-slice calls:
 
 ```bash
 cd demo-order
-.mvn clean install
+../mvnw clean install
 ```
 
 This produces 6 slice JARs:

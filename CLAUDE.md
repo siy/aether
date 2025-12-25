@@ -771,10 +771,10 @@ When the specific error doesn't matter, just validate failure occurred:
 
 ```bash
 # Test specific module
-cd slice && .mvn test
+cd slice && ../mvnw test
 
 # Run tests in example-slice
-cd example-slice && .mvn test
+cd example-slice && ../mvnw test
 ```
 
 ## Quick Reference

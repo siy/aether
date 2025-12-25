@@ -366,7 +366,7 @@ public class AetherCli implements Runnable {
 
                     var response = artifactParent.parent.putToNode(repoPath, content, "application/java-archive");
 
-                    if (response.contains("error")) {
+                    if (response.startsWith("{\"error\":")) {
                         System.out.println("Failed to deploy: " + response);
                         return 1;
                     }

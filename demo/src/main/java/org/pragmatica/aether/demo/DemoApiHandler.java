@@ -20,6 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.demo.order.inventory.CheckStockRequest;
+import org.pragmatica.aether.demo.order.inventory.InventoryServiceSlice;
 import org.pragmatica.aether.demo.order.inventory.StockAvailability;
 import org.pragmatica.aether.demo.order.pricing.GetPriceRequest;
 import org.pragmatica.aether.demo.order.pricing.ProductPrice;
@@ -139,6 +140,16 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
                 handleSetMultiplier(ctx, request);
             } else if (path.equals("/api/simulator/config/enabled") && method == HttpMethod.POST) {
                 handleSetEnabled(ctx, request);
+            } else if (path.equals("/api/inventory/mode") && method == HttpMethod.GET) {
+                handleGetInventoryMode(ctx);
+            } else if (path.equals("/api/inventory/mode") && method == HttpMethod.POST) {
+                handleSetInventoryMode(ctx, request);
+            } else if (path.equals("/api/inventory/metrics") && method == HttpMethod.GET) {
+                handleInventoryMetrics(ctx);
+            } else if (path.equals("/api/inventory/stock") && method == HttpMethod.GET) {
+                handleInventoryStock(ctx);
+            } else if (path.equals("/api/inventory/reset") && method == HttpMethod.POST) {
+                handleInventoryReset(ctx);
             } else {
                 sendResponse(ctx, NOT_FOUND, "{\"error\": \"Not found\"}");
             }
@@ -437,6 +448,75 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
         } catch (Exception e) {
             sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
         }
+    }
+
+    /**
+     * Handle get inventory mode.
+     */
+    private void handleGetInventoryMode(ChannelHandlerContext ctx) {
+        var infinite = InventoryServiceSlice.isInfiniteMode();
+        sendResponse(ctx, OK, "{\"mode\":\"" + (infinite ? "infinite" : "realistic") + "\"}");
+    }
+
+    /**
+     * Handle set inventory mode.
+     * Body: {"mode": "infinite"} or {"mode": "realistic"}
+     */
+    private void handleSetInventoryMode(ChannelHandlerContext ctx, FullHttpRequest request) {
+        try {
+            var body = request.content().toString(StandardCharsets.UTF_8);
+            var pattern = java.util.regex.Pattern.compile("\"mode\"\\s*:\\s*\"(\\w+)\"");
+            var matcher = pattern.matcher(body);
+            if (matcher.find()) {
+                var mode = matcher.group(1);
+                var infinite = "infinite".equalsIgnoreCase(mode);
+                InventoryServiceSlice.setInfiniteMode(infinite);
+                addEvent("INVENTORY_MODE", "Inventory mode set to " + (infinite ? "infinite" : "realistic"));
+                sendResponse(ctx, OK, "{\"success\":true,\"mode\":\"" + (infinite ? "infinite" : "realistic") + "\"}");
+            } else {
+                sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing mode\"}");
+            }
+        } catch (Exception e) {
+            sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
+        }
+    }
+
+    /**
+     * Handle inventory metrics request.
+     */
+    private void handleInventoryMetrics(ChannelHandlerContext ctx) {
+        var metrics = InventoryServiceSlice.getMetrics();
+        var json = String.format(
+            "{\"totalReservations\":%d,\"totalReleases\":%d,\"stockOuts\":%d,\"infiniteMode\":%b,\"refillRate\":%d}",
+            metrics.totalReservations(), metrics.totalReleases(), metrics.stockOuts(),
+            metrics.infiniteMode(), metrics.refillRate()
+        );
+        sendResponse(ctx, OK, json);
+    }
+
+    /**
+     * Handle inventory stock levels request.
+     */
+    private void handleInventoryStock(ChannelHandlerContext ctx) {
+        var levels = InventoryServiceSlice.getStockLevels();
+        var json = new StringBuilder("{\"stock\":{");
+        var first = true;
+        for (var entry : levels.entrySet()) {
+            if (!first) json.append(",");
+            first = false;
+            json.append("\"").append(entry.getKey()).append("\":").append(entry.getValue());
+        }
+        json.append("}}");
+        sendResponse(ctx, OK, json.toString());
+    }
+
+    /**
+     * Handle inventory reset.
+     */
+    private void handleInventoryReset(ChannelHandlerContext ctx) {
+        InventoryServiceSlice.resetStock();
+        addEvent("INVENTORY_RESET", "Inventory stock reset to initial levels");
+        sendResponse(ctx, OK, "{\"success\":true}");
     }
 
     /**

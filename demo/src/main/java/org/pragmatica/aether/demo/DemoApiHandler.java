@@ -8,7 +8,9 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.*;
 import org.pragmatica.aether.demo.DemoCluster.ClusterStatus;
 import org.pragmatica.aether.demo.DemoMetrics.MetricsSnapshot;
+import org.pragmatica.aether.demo.simulator.BackendSimulation;
 import org.pragmatica.aether.demo.simulator.SimulatorConfig;
+import org.pragmatica.lang.Promise;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -529,7 +531,8 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
             // Parse order request from body or generate a random one
             var orderRequest = parseOrderRequest(body);
 
-            sliceInvoker.invokeAndWait(PLACE_ORDER_ARTIFACT, PLACE_ORDER_METHOD, orderRequest, PlaceOrderResponse.class)
+            applySimulation("place-order")
+                .flatMap(_ -> sliceInvoker.invokeAndWait(PLACE_ORDER_ARTIFACT, PLACE_ORDER_METHOD, orderRequest, PlaceOrderResponse.class))
                 .onSuccess(response -> {
                     var total = response.total();
                     var totalStr = total.currency() + " " + total.amount().toPlainString();
@@ -555,7 +558,8 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
     private void handleGetOrderStatus(ChannelHandlerContext ctx, String orderId) {
         var request = new GetOrderStatusRequest(orderId);
 
-        sliceInvoker.invokeAndWait(GET_ORDER_STATUS_ARTIFACT, GET_ORDER_STATUS_METHOD, request, GetOrderStatusResponse.class)
+        applySimulation("get-order-status")
+            .flatMap(_ -> sliceInvoker.invokeAndWait(GET_ORDER_STATUS_ARTIFACT, GET_ORDER_STATUS_METHOD, request, GetOrderStatusResponse.class))
             .onSuccess(response -> {
                 var json = String.format(
                     "{\"success\":true,\"orderId\":\"%s\",\"status\":\"%s\",\"total\":\"%s %s\",\"itemCount\":%d}",
@@ -582,7 +586,8 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
 
         var cancelRequest = new CancelOrderRequest(orderId, reason);
 
-        sliceInvoker.invokeAndWait(CANCEL_ORDER_ARTIFACT, CANCEL_ORDER_METHOD, cancelRequest, CancelOrderResponse.class)
+        applySimulation("cancel-order")
+            .flatMap(_ -> sliceInvoker.invokeAndWait(CANCEL_ORDER_ARTIFACT, CANCEL_ORDER_METHOD, cancelRequest, CancelOrderResponse.class))
             .onSuccess(response -> {
                 var json = String.format(
                     "{\"success\":true,\"orderId\":\"%s\",\"status\":\"%s\",\"reason\":\"%s\"}",
@@ -604,7 +609,8 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
     private void handleCheckStock(ChannelHandlerContext ctx, String productId) {
         var request = new CheckStockRequest(productId, 1);
 
-        sliceInvoker.invokeAndWait(INVENTORY_ARTIFACT, CHECK_STOCK_METHOD, request, StockAvailability.class)
+        applySimulation("inventory-service")
+            .flatMap(_ -> sliceInvoker.invokeAndWait(INVENTORY_ARTIFACT, CHECK_STOCK_METHOD, request, StockAvailability.class))
             .onSuccess(response -> {
                 var json = String.format(
                     "{\"success\":true,\"productId\":\"%s\",\"available\":%d,\"sufficient\":%b}",
@@ -626,7 +632,8 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
     private void handleGetPrice(ChannelHandlerContext ctx, String productId) {
         var request = new GetPriceRequest(productId);
 
-        sliceInvoker.invokeAndWait(PRICING_ARTIFACT, GET_PRICE_METHOD, request, ProductPrice.class)
+        applySimulation("pricing-service")
+            .flatMap(_ -> sliceInvoker.invokeAndWait(PRICING_ARTIFACT, GET_PRICE_METHOD, request, ProductPrice.class))
             .onSuccess(response -> {
                 var json = String.format(
                     "{\"success\":true,\"productId\":\"%s\",\"price\":\"%s %s\"}",
@@ -640,6 +647,14 @@ public final class DemoApiHandler extends SimpleChannelInboundHandler<FullHttpRe
                 sendResponse(ctx, NOT_FOUND,
                     "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
             });
+    }
+
+    /**
+     * Apply backend simulation for a slice based on current config.
+     */
+    private Promise<org.pragmatica.lang.Unit> applySimulation(String sliceName) {
+        var sliceConfig = config.sliceConfig(sliceName);
+        return sliceConfig.buildSimulation().apply();
     }
 
     private PlaceOrderRequest parseOrderRequest(String body) {

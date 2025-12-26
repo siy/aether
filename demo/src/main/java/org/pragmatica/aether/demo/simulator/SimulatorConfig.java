@@ -110,16 +110,51 @@ public record SimulatorConfig(
         int refillRate,
         int baseLatencyMs,
         int jitterMs,
-        double failureRate
+        double failureRate,
+        double spikeChance,
+        int spikeLatencyMs
     ) {
         public static SliceConfig defaultConfig() {
-            return new SliceConfig("infinite", 0, 0, 0, 0.0);
+            return new SliceConfig("infinite", 0, 0, 0, 0.0, 0.0, 0);
+        }
+
+        /**
+         * Build a BackendSimulation from this config.
+         */
+        public BackendSimulation buildSimulation() {
+            var hasLatency = baseLatencyMs > 0 || jitterMs > 0;
+            var hasFailure = failureRate > 0;
+
+            if (!hasLatency && !hasFailure) {
+                return BackendSimulation.NoOp.INSTANCE;
+            }
+
+            if (hasLatency && hasFailure) {
+                return BackendSimulation.Composite.of(
+                    new BackendSimulation.LatencySimulation(baseLatencyMs, jitterMs, spikeChance, spikeLatencyMs),
+                    BackendSimulation.FailureInjection.withRate(
+                        failureRate,
+                        new BackendSimulation.SimulatedError.ServiceUnavailable("backend"),
+                        new BackendSimulation.SimulatedError.Timeout("operation", 5000)
+                    )
+                );
+            }
+
+            if (hasLatency) {
+                return new BackendSimulation.LatencySimulation(baseLatencyMs, jitterMs, spikeChance, spikeLatencyMs);
+            }
+
+            return BackendSimulation.FailureInjection.withRate(
+                failureRate,
+                new BackendSimulation.SimulatedError.ServiceUnavailable("backend"),
+                new BackendSimulation.SimulatedError.Timeout("operation", 5000)
+            );
         }
 
         public String toJson() {
             return String.format(
-                "{\"stockMode\":\"%s\",\"refillRate\":%d,\"baseLatencyMs\":%d,\"jitterMs\":%d,\"failureRate\":%.4f}",
-                stockMode, refillRate, baseLatencyMs, jitterMs, failureRate
+                "{\"stockMode\":\"%s\",\"refillRate\":%d,\"baseLatencyMs\":%d,\"jitterMs\":%d,\"failureRate\":%.4f,\"spikeChance\":%.4f,\"spikeLatencyMs\":%d}",
+                stockMode, refillRate, baseLatencyMs, jitterMs, failureRate, spikeChance, spikeLatencyMs
             );
         }
     }

@@ -90,8 +90,7 @@ class BlueprintServiceTest {
             var artifact = Artifact.artifact("org.example:slice:1.0.0").unwrap();
             var expanded = ExpandedBlueprint.expandedBlueprint(
                     blueprintId,
-                    List.of(ResolvedSlice.resolvedSlice(artifact, 1, false)),
-                    List.of()
+                    List.of(ResolvedSlice.resolvedSlice(artifact, 1, false))
                                                               );
 
             var key = AppBlueprintKey.appBlueprintKey(blueprintId);
@@ -124,13 +123,11 @@ class BlueprintServiceTest {
 
             var expanded1 = ExpandedBlueprint.expandedBlueprint(
                     id1,
-                    List.of(ResolvedSlice.resolvedSlice(artifact, 1, false)),
-                    List.of()
+                    List.of(ResolvedSlice.resolvedSlice(artifact, 1, false))
                                                                );
             var expanded2 = ExpandedBlueprint.expandedBlueprint(
                     id2,
-                    List.of(ResolvedSlice.resolvedSlice(artifact, 2, false)),
-                    List.of()
+                    List.of(ResolvedSlice.resolvedSlice(artifact, 2, false))
                                                                );
 
             store.process(new KVCommand.Put<>(AppBlueprintKey.appBlueprintKey(id1), new AppBlueprintValue(expanded1)));
@@ -151,8 +148,7 @@ class BlueprintServiceTest {
             var artifact = Artifact.artifact("org.example:slice:1.0.0").unwrap();
             var expanded = ExpandedBlueprint.expandedBlueprint(
                     blueprintId,
-                    List.of(ResolvedSlice.resolvedSlice(artifact, 1, false)),
-                    List.of()
+                    List.of(ResolvedSlice.resolvedSlice(artifact, 1, false))
                                                               );
 
             var key = AppBlueprintKey.appBlueprintKey(blueprintId);

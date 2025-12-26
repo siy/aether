@@ -27,7 +27,8 @@ intelligent orchestration, and seamless multi-cloud deployment without requiring
 - **cluster/** - Consensus layer (Rabia protocol, `KVStore`, `LeaderManager`)
 - **common/** - Shared utilities and types
 - **example-slice/** - Reference implementation (`StringProcessorSlice`)
-- **demo-order/** - Complete order domain demo (5 slices)
+- **forge/** - Aether Forge: Standalone simulator CLI with visual dashboard for load/chaos testing
+- **examples/order-demo/** - Complete order domain demo (5 slices)
 - **cli/** - Command-line interface for cluster management
 - **mcp/** - (deprecated) Model Context Protocol - replaced by direct agent API
 
@@ -797,6 +798,9 @@ cd example-slice && mvn test
 - **AetherCli**: `cli/src/main/java/org/pragmatica/aether/cli/AetherCli.java`
 - **Rabia Consensus**: `cluster/src/main/java/org/pragmatica/cluster/consensus/rabia/`
 - **KVStore**: `cluster/src/main/java/org/pragmatica/cluster/state/kvstore/`
+- **ForgeServer**: `forge/src/main/java/org/pragmatica/aether/forge/ForgeServer.java` - Aether Forge main entry
+- **ForgeCluster**: `forge/src/main/java/org/pragmatica/aether/forge/ForgeCluster.java` - Forge cluster management
+- **ForgeApiHandler**: `forge/src/main/java/org/pragmatica/aether/forge/ForgeApiHandler.java` - Forge REST API
 
 ### Documentation
 

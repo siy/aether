@@ -2,7 +2,6 @@ package org.pragmatica.aether.node;
 
 import org.pragmatica.aether.http.RouterConfig;
 import org.pragmatica.aether.slice.SliceActionConfig;
-import org.pragmatica.aether.slice.routing.RoutingSection;
 import org.pragmatica.aether.slice.serialization.FurySerializerFactoryProvider;
 import org.pragmatica.cluster.consensus.rabia.ProtocolConfig;
 import org.pragmatica.cluster.net.NodeId;
@@ -29,26 +28,11 @@ public record AetherNodeConfig(
         ProtocolConfig protocol,
         SliceActionConfig sliceAction,
         int managementPort,
-        Option<HttpRouterSetup> httpRouter
+        Option<RouterConfig> httpRouter
 ) {
     public static final int DEFAULT_MANAGEMENT_PORT = 8080;
     public static final int MANAGEMENT_DISABLED = 0;
 
-    /**
-     * HTTP router setup including configuration and routing sections.
-     */
-    public record HttpRouterSetup(
-            RouterConfig config,
-            List<RoutingSection> routingSections
-    ) {
-        public static HttpRouterSetup httpRouterSetup(int port, List<RoutingSection> routingSections) {
-            return new HttpRouterSetup(RouterConfig.routerConfig(port), routingSections);
-        }
-
-        public static HttpRouterSetup httpRouterSetup(RouterConfig config, List<RoutingSection> routingSections) {
-            return new HttpRouterSetup(config, routingSections);
-        }
-    }
     private static SliceActionConfig defaultSliceConfig() {
         return SliceActionConfig.defaultConfiguration(furySerializerFactoryProvider());
     }
@@ -79,7 +63,7 @@ public record AetherNodeConfig(
                                                     List<NodeInfo> coreNodes,
                                                     SliceActionConfig sliceActionConfig,
                                                     int managementPort,
-                                                    Option<HttpRouterSetup> httpRouter) {
+                                                    Option<RouterConfig> httpRouter) {
         var topology = new TopologyConfig(
                 self,
                 timeSpan(5).seconds(),  // reconciliation interval

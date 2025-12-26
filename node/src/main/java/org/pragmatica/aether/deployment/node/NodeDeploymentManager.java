@@ -1,12 +1,16 @@
 package org.pragmatica.aether.deployment.node;
 
+import org.pragmatica.aether.http.RouteRegistry;
 import org.pragmatica.aether.invoke.InvocationHandler;
 import org.pragmatica.aether.slice.InternalSlice;
 import org.pragmatica.aether.slice.InternalSlice.InternalMethod;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.SliceActionConfig;
+import org.pragmatica.aether.slice.SliceRoute;
 import org.pragmatica.aether.slice.SliceState;
 import org.pragmatica.aether.slice.SliceStore;
+import org.pragmatica.aether.slice.routing.Binding;
+import org.pragmatica.aether.slice.routing.BindingSource;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherKey.EndpointKey;
 import org.pragmatica.aether.slice.kvstore.AetherKey.SliceNodeKey;
@@ -16,6 +20,7 @@ import org.pragmatica.aether.slice.kvstore.AetherValue.SliceNodeValue;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.node.ClusterNode;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
+import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValuePut;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValueRemove;
 import org.pragmatica.cluster.topology.QuorumStateNotification;
@@ -62,7 +67,9 @@ public interface NodeDeploymentManager {
                 SliceStore sliceStore,
                 SliceActionConfig configuration,
                 ClusterNode<KVCommand<AetherKey>> cluster,
+                KVStore<AetherKey, AetherValue> kvStore,
                 InvocationHandler invocationHandler,
+                RouteRegistry routeRegistry,
                 ConcurrentHashMap<SliceNodeKey, SliceDeployment> deployments
         ) implements NodeDeploymentState {
 
@@ -189,6 +196,50 @@ public interface NodeDeploymentManager {
                 registerSliceForInvocation(sliceKey);
                 // 2. Publish endpoints to KV-Store
                 publishEndpoints(sliceKey);
+                // 3. Register HTTP routes declared by slice
+                registerRoutes(sliceKey);
+            }
+
+            private void registerRoutes(SliceNodeKey sliceKey) {
+                var artifact = sliceKey.artifact();
+                var loadedSlice = sliceStore.loaded().stream()
+                        .filter(ls -> ls.artifact().equals(artifact))
+                        .findFirst();
+
+                loadedSlice.ifPresent(ls -> {
+                    var slice = ls.slice();
+                    var routes = slice.routes();
+
+                    if (routes.isEmpty()) {
+                        return;
+                    }
+
+                    routes.forEach(route -> {
+                        var bindings = route.bindings().stream()
+                                .map(this::toBinding)
+                                .toList();
+
+                        routeRegistry.register(artifact, route.methodName(), route.httpMethod(),
+                                               route.pathPattern(), bindings)
+                                     .onSuccess(_ -> log.info("Registered route {} {} -> {}:{}",
+                                                              route.httpMethod(), route.pathPattern(),
+                                                              artifact.asString(), route.methodName()))
+                                     .onFailure(cause -> log.error("Failed to register route {} {} -> {}:{}: {}",
+                                                                   route.httpMethod(), route.pathPattern(),
+                                                                   artifact.asString(), route.methodName(),
+                                                                   cause.message()));
+                    });
+                });
+            }
+
+            private Binding toBinding(SliceRoute.RouteBinding binding) {
+                var source = switch (binding) {
+                    case SliceRoute.RouteBinding.Body(var _) -> new BindingSource.Body();
+                    case SliceRoute.RouteBinding.PathVar(var name) -> new BindingSource.PathVar(name);
+                    case SliceRoute.RouteBinding.QueryVar(var name) -> new BindingSource.QueryVar(name);
+                    case SliceRoute.RouteBinding.Header(var _, var headerName) -> new BindingSource.Header(headerName);
+                };
+                return new Binding(binding.paramName(), source);
             }
 
             private void registerSliceForInvocation(SliceNodeKey sliceKey) {
@@ -268,10 +319,12 @@ public interface NodeDeploymentManager {
                 // Correct order for graceful shutdown:
                 // 1. Unpublish endpoints first (stops new traffic from being routed here)
                 // 2. Then unregister from invocation handler
-                // 3. Then deactivate the slice
+                // 3. Check if this is the last instance and unregister routes if so
+                // 4. Then deactivate the slice
                 unpublishEndpoints(sliceKey)
                     .onResultRun(() -> {
                         unregisterSliceFromInvocation(sliceKey);
+                        unregisterRoutesIfLastInstance(sliceKey);
                         executeWithStateTransition(
                                 sliceKey,
                                 SliceState.DEACTIVATING,
@@ -280,6 +333,28 @@ public interface NodeDeploymentManager {
                                 SliceState.FAILED
                         );
                     });
+            }
+
+            private void unregisterRoutesIfLastInstance(SliceNodeKey sliceKey) {
+                var artifact = sliceKey.artifact();
+
+                // Count active instances of this artifact across all nodes
+                var activeCount = kvStore.snapshot().entrySet().stream()
+                        .filter(e -> e.getKey() instanceof SliceNodeKey snk && snk.artifact().equals(artifact))
+                        .filter(e -> e.getValue() instanceof SliceNodeValue snv && snv.state() == SliceState.ACTIVE)
+                        .filter(e -> !((SliceNodeKey) e.getKey()).nodeId().equals(self)) // Exclude ourselves
+                        .count();
+
+                if (activeCount == 0) {
+                    // This is the last active instance, unregister routes
+                    log.info("Last instance of {} deactivating, unregistering routes", artifact.asString());
+                    routeRegistry.unregister(artifact)
+                                 .onSuccess(_ -> log.debug("Routes unregistered for {}", artifact.asString()))
+                                 .onFailure(cause -> log.error("Failed to unregister routes for {}: {}",
+                                                               artifact.asString(), cause.message()));
+                } else {
+                    log.debug("Slice {} has {} other active instances, keeping routes", artifact.asString(), activeCount);
+                }
             }
 
             private Promise<Unit> unpublishEndpoints(SliceNodeKey sliceKey) {
@@ -396,21 +471,27 @@ public interface NodeDeploymentManager {
                                                        MessageRouter router,
                                                        SliceStore sliceStore,
                                                        ClusterNode<KVCommand<AetherKey>> cluster,
-                                                       InvocationHandler invocationHandler) {
-        return nodeDeploymentManager(self, router, sliceStore, cluster, invocationHandler, SliceActionConfig.defaultConfiguration());
+                                                       KVStore<AetherKey, AetherValue> kvStore,
+                                                       InvocationHandler invocationHandler,
+                                                       RouteRegistry routeRegistry) {
+        return nodeDeploymentManager(self, router, sliceStore, cluster, kvStore, invocationHandler, routeRegistry, SliceActionConfig.defaultConfiguration());
     }
 
     static NodeDeploymentManager nodeDeploymentManager(NodeId self,
                                                        MessageRouter router,
                                                        SliceStore sliceStore,
                                                        ClusterNode<KVCommand<AetherKey>> cluster,
+                                                       KVStore<AetherKey, AetherValue> kvStore,
                                                        InvocationHandler invocationHandler,
+                                                       RouteRegistry routeRegistry,
                                                        SliceActionConfig configuration) {
         record deploymentManager(
                 NodeId self,
                 SliceStore sliceStore,
                 ClusterNode<KVCommand<AetherKey>> cluster,
+                KVStore<AetherKey, AetherValue> kvStore,
                 InvocationHandler invocationHandler,
+                RouteRegistry routeRegistry,
                 SliceActionConfig configuration,
                 MessageRouter router,
                 AtomicReference<NodeDeploymentState> state
@@ -434,7 +515,9 @@ public interface NodeDeploymentManager {
                             sliceStore(),
                             configuration(),
                             cluster(),
+                            kvStore(),
                             invocationHandler(),
+                            routeRegistry(),
                             new ConcurrentHashMap<>()
                     ));
                     case DISAPPEARED -> {
@@ -450,7 +533,9 @@ public interface NodeDeploymentManager {
                 self,
                 sliceStore,
                 cluster,
+                kvStore,
                 invocationHandler,
+                routeRegistry,
                 configuration,
                 router,
                 new AtomicReference<>(new NodeDeploymentState.DormantNodeDeploymentState())

@@ -10,11 +10,13 @@ import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherKey.SliceNodeKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.aether.slice.kvstore.AetherValue.SliceNodeValue;
+import org.pragmatica.aether.http.RouteRegistry;
 import org.pragmatica.aether.invoke.InvocationHandler;
 import org.pragmatica.aether.slice.InternalSlice;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.node.ClusterNode;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
+import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValuePut;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValueRemove;
 import org.pragmatica.cluster.topology.QuorumStateNotification;
@@ -35,7 +37,9 @@ class NodeDeploymentManagerTest {
     private MessageRouter.MutableRouter router;
     private TestSliceStore sliceStore;
     private TestClusterNode clusterNode;
+    private TestKVStore kvStore;
     private TestInvocationHandler invocationHandler;
+    private TestRouteRegistry routeRegistry;
     private NodeDeploymentManager manager;
 
     @BeforeEach
@@ -44,9 +48,11 @@ class NodeDeploymentManagerTest {
         router = MessageRouter.mutable();
         sliceStore = new TestSliceStore();
         clusterNode = new TestClusterNode(self);
+        kvStore = new TestKVStore();
         invocationHandler = new TestInvocationHandler();
+        routeRegistry = new TestRouteRegistry();
         manager = NodeDeploymentManager.nodeDeploymentManager(
-                self, router, sliceStore, clusterNode, invocationHandler
+                self, router, sliceStore, clusterNode, kvStore, invocationHandler, routeRegistry
                                                              );
     }
 
@@ -462,6 +468,70 @@ class NodeDeploymentManagerTest {
         @Override
         public Option<org.pragmatica.aether.metrics.invocation.InvocationMetricsCollector> metricsCollector() {
             return Option.none();
+        }
+    }
+
+    static class TestRouteRegistry implements RouteRegistry {
+        final List<String> registeredRoutes = new CopyOnWriteArrayList<>();
+        final List<Artifact> unregisteredArtifacts = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void onValuePut(org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValuePut<AetherKey, AetherValue> valuePut) {
+            // Not used in these tests
+        }
+
+        @Override
+        public void onValueRemove(org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValueRemove<AetherKey, AetherValue> valueRemove) {
+            // Not used in these tests
+        }
+
+        @Override
+        public Promise<Unit> register(Artifact artifact, String methodName, String httpMethod,
+                                       String pathPattern, java.util.List<org.pragmatica.aether.slice.routing.Binding> bindings) {
+            registeredRoutes.add(httpMethod + " " + pathPattern + " -> " + artifact.asString() + ":" + methodName);
+            return Promise.success(Unit.unit());
+        }
+
+        @Override
+        public Promise<Unit> unregister(Artifact artifact) {
+            unregisteredArtifacts.add(artifact);
+            return Promise.success(Unit.unit());
+        }
+
+        @Override
+        public Option<org.pragmatica.aether.http.MatchResult> match(org.pragmatica.aether.http.HttpMethod method, String path) {
+            return Option.none();
+        }
+
+        @Override
+        public java.util.List<RegisteredRoute> allRoutes() {
+            return java.util.List.of();
+        }
+    }
+
+    static class TestKVStore extends KVStore<AetherKey, AetherValue> {
+        private final java.util.Map<AetherKey, AetherValue> storage = new java.util.concurrent.ConcurrentHashMap<>();
+
+        public TestKVStore() {
+            super(null, null, null);
+        }
+
+        @Override
+        public java.util.Map<AetherKey, AetherValue> snapshot() {
+            return new java.util.HashMap<>(storage);
+        }
+
+        @Override
+        public Option<AetherValue> get(AetherKey key) {
+            return Option.option(storage.get(key));
+        }
+
+        public void put(AetherKey key, AetherValue value) {
+            storage.put(key, value);
+        }
+
+        public void remove(AetherKey key) {
+            storage.remove(key);
         }
     }
 }

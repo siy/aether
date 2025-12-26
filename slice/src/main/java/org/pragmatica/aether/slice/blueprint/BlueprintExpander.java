@@ -62,9 +62,7 @@ public interface BlueprintExpander {
                                                                      Map<Artifact, Set<Artifact>> allDeps) {
         var graph = buildDependencyGraph(allDeps);
         return checkCycles(graph).map(_ -> buildLoadOrder(explicitSlices, allDeps, graph))
-                                 .map(loadOrder -> ExpandedBlueprint.expandedBlueprint(blueprint.id(),
-                                                                                       loadOrder,
-                                                                                       blueprint.routing()))
+                                 .map(loadOrder -> ExpandedBlueprint.expandedBlueprint(blueprint.id(), loadOrder))
                                  .async();
     }
 

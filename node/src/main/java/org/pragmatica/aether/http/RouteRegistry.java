@@ -65,6 +65,12 @@ public interface RouteRegistry {
     );
 
     /**
+     * Unregister all routes for a given artifact.
+     * Called when the last instance of a slice is deactivated.
+     */
+    Promise<Unit> unregister(Artifact artifact);
+
+    /**
      * Match an HTTP request to a registered route.
      */
     Option<MatchResult> match(HttpMethod method, String path);
@@ -207,6 +213,30 @@ class RouteRegistryImpl implements RouteRegistry {
 
         return cluster.apply(List.of(command))
             .mapToUnit();
+    }
+
+    @Override
+    public Promise<Unit> unregister(Artifact artifact) {
+        // Find all routes belonging to this artifact
+        var routesToRemove = routes.values().stream()
+            .filter(r -> r.value().artifact().equals(artifact))
+            .toList();
+
+        if (routesToRemove.isEmpty()) {
+            return Promise.success(Unit.unit());
+        }
+
+        log.info("Unregistering {} routes for artifact {}", routesToRemove.size(), artifact.asString());
+
+        List<KVCommand<AetherKey>> commands = routesToRemove.stream()
+            .<KVCommand<AetherKey>>map(r -> new KVCommand.Remove<>(r.key()))
+            .toList();
+
+        return cluster.apply(commands)
+            .map(_ -> {
+                log.info("Unregistered {} routes for artifact {}", routesToRemove.size(), artifact.asString());
+                return Unit.unit();
+            });
     }
 
     private void addRoute(RouteKey key, RouteValue value) {

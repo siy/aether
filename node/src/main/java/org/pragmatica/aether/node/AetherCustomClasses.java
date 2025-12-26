@@ -13,7 +13,6 @@ import org.pragmatica.aether.slice.routing.Binding;
 import org.pragmatica.aether.slice.routing.BindingSource;
 import org.pragmatica.aether.slice.routing.Route;
 import org.pragmatica.aether.slice.routing.RouteTarget;
-import org.pragmatica.aether.slice.routing.RoutingSection;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.aether.invoke.InvocationMessage;
@@ -52,7 +51,6 @@ public interface AetherCustomClasses {
         consumer.accept(BlueprintId.class);
         consumer.accept(ExpandedBlueprint.class);
         consumer.accept(ResolvedSlice.class);
-        consumer.accept(RoutingSection.class);
         consumer.accept(Route.class);
         consumer.accept(RouteTarget.class);
         consumer.accept(Binding.class);

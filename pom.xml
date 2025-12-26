@@ -18,8 +18,8 @@
         <module>cluster</module>
         <module>common</module>
         <module>cli</module>
-        <module>demo-order</module>
-        <module>demo</module>
+        <module>examples/order-demo</module>
+        <module>forge</module>
         <module>infra-services</module>
     </modules>
 

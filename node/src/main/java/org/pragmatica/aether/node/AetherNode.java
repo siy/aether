@@ -8,6 +8,7 @@ import org.pragmatica.aether.deployment.cluster.ClusterDeploymentManager;
 import org.pragmatica.aether.deployment.node.NodeDeploymentManager;
 import org.pragmatica.aether.endpoint.EndpointRegistry;
 import org.pragmatica.aether.http.HttpRouter;
+import org.pragmatica.aether.http.RouteRegistry;
 import org.pragmatica.aether.http.SliceDispatcher;
 import org.pragmatica.aether.invoke.InvocationHandler;
 import org.pragmatica.aether.invoke.InvocationMessage;
@@ -171,9 +172,12 @@ public interface AetherNode {
         // Create invocation handler BEFORE deployment manager (needed for slice registration)
         var invocationHandler = InvocationHandler.invocationHandler(config.self(), clusterNode.network());
 
+        // Create route registry for dynamic route registration (before node deployment manager)
+        var routeRegistry = RouteRegistry.routeRegistry(clusterNode, kvStore);
+
         // Create deployment managers
         var nodeDeploymentManager = NodeDeploymentManager.nodeDeploymentManager(
-                config.self(), router, sliceStore, clusterNode, invocationHandler, config.sliceAction()
+                config.self(), router, sliceStore, clusterNode, kvStore, invocationHandler, routeRegistry, config.sliceAction()
         );
 
         var clusterDeploymentManager = ClusterDeploymentManager.clusterDeploymentManager(
@@ -202,19 +206,19 @@ public interface AetherNode {
 
         // Wire up message routing
         configureRoutes(router, kvStore, nodeDeploymentManager, clusterDeploymentManager,
-                        endpointRegistry, metricsCollector, metricsScheduler, controlLoop,
+                        endpointRegistry, routeRegistry, metricsCollector, metricsScheduler, controlLoop,
                         sliceInvoker, invocationHandler);
 
         // Create HTTP router if configured
-        Option<HttpRouter> httpRouter = config.httpRouter().map(setup -> {
+        Option<HttpRouter> httpRouter = config.httpRouter().map(routerConfig -> {
             // Create artifact resolver that parses slice ID strings to Artifact
             SliceDispatcher.ArtifactResolver artifactResolver = sliceId ->
                     Artifact.artifact(sliceId)
                             .fold(cause -> null, artifact -> artifact);
 
             return HttpRouter.httpRouter(
-                    setup.config(),
-                    setup.routingSections(),
+                    routerConfig,
+                    routeRegistry,
                     sliceInvoker,
                     artifactResolver,
                     serializer,
@@ -249,6 +253,7 @@ public interface AetherNode {
                                         NodeDeploymentManager nodeDeploymentManager,
                                         ClusterDeploymentManager clusterDeploymentManager,
                                         EndpointRegistry endpointRegistry,
+                                        RouteRegistry routeRegistry,
                                         MetricsCollector metricsCollector,
                                         MetricsScheduler metricsScheduler,
                                         ControlLoop controlLoop,
@@ -258,10 +263,12 @@ public interface AetherNode {
         router.addRoute(KVStoreNotification.ValuePut.class, nodeDeploymentManager::onValuePut);
         router.addRoute(KVStoreNotification.ValuePut.class, clusterDeploymentManager::onValuePut);
         router.addRoute(KVStoreNotification.ValuePut.class, endpointRegistry::onValuePut);
+        router.addRoute(KVStoreNotification.ValuePut.class, routeRegistry::onValuePut);
 
         router.addRoute(KVStoreNotification.ValueRemove.class, nodeDeploymentManager::onValueRemove);
         router.addRoute(KVStoreNotification.ValueRemove.class, clusterDeploymentManager::onValueRemove);
         router.addRoute(KVStoreNotification.ValueRemove.class, endpointRegistry::onValueRemove);
+        router.addRoute(KVStoreNotification.ValueRemove.class, routeRegistry::onValueRemove);
 
         // Quorum state notifications
         router.addRoute(QuorumStateNotification.class, nodeDeploymentManager::onQuorumStateChange);

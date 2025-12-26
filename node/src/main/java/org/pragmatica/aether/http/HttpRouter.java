@@ -14,9 +14,7 @@ import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.QueryStringDecoder;
-import io.netty.util.CharsetUtil;
 import org.pragmatica.aether.invoke.SliceInvoker;
-import org.pragmatica.aether.slice.routing.RoutingSection;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
@@ -26,14 +24,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.pragmatica.lang.Unit.unit;
 
 /**
  * HTTP router that handles incoming requests and dispatches them to slices.
+ * Routes are dynamically registered via RouteRegistry when slices activate.
  */
 public interface HttpRouter {
 
@@ -48,32 +44,17 @@ public interface HttpRouter {
     Promise<Unit> stop();
 
     /**
-     * Create an HTTP router with static routes only (legacy, for backward compatibility).
+     * Create an HTTP router with dynamic route registry.
      */
     static HttpRouter httpRouter(
             RouterConfig config,
-            List<RoutingSection> routingSections,
-            SliceInvoker invoker,
-            SliceDispatcher.ArtifactResolver artifactResolver,
-            Serializer serializer,
-            Deserializer deserializer
-    ) {
-        return new HttpRouterImpl(config, routingSections, null, invoker, artifactResolver, serializer, deserializer);
-    }
-
-    /**
-     * Create an HTTP router with dynamic route registry and static fallback routes.
-     */
-    static HttpRouter httpRouter(
-            RouterConfig config,
-            List<RoutingSection> routingSections,
             RouteRegistry routeRegistry,
             SliceInvoker invoker,
             SliceDispatcher.ArtifactResolver artifactResolver,
             Serializer serializer,
             Deserializer deserializer
     ) {
-        return new HttpRouterImpl(config, routingSections, routeRegistry, invoker, artifactResolver, serializer, deserializer);
+        return new HttpRouterImpl(config, routeRegistry, invoker, artifactResolver, serializer, deserializer);
     }
 }
 
@@ -82,7 +63,6 @@ class HttpRouterImpl implements HttpRouter {
     private static final Logger log = LoggerFactory.getLogger(HttpRouterImpl.class);
 
     private final RouterConfig config;
-    private final RouteMatcher staticRouteMatcher;
     private final RouteRegistry routeRegistry;
     private final BindingResolver bindingResolver;
     private final SliceDispatcher dispatcher;
@@ -93,7 +73,6 @@ class HttpRouterImpl implements HttpRouter {
 
     HttpRouterImpl(
             RouterConfig config,
-            List<RoutingSection> routingSections,
             RouteRegistry routeRegistry,
             SliceInvoker invoker,
             SliceDispatcher.ArtifactResolver artifactResolver,
@@ -101,7 +80,6 @@ class HttpRouterImpl implements HttpRouter {
             Deserializer deserializer
     ) {
         this.config = config;
-        this.staticRouteMatcher = RouteMatcher.routeMatcher(routingSections);
         this.routeRegistry = routeRegistry;
         this.bindingResolver = BindingResolver.bindingResolver(deserializer);
         this.dispatcher = SliceDispatcher.sliceDispatcher(invoker, artifactResolver);
@@ -123,7 +101,7 @@ class HttpRouterImpl implements HttpRouter {
                             p.addLast(new HttpServerCodec());
                             p.addLast(new HttpObjectAggregator(config.maxContentLength()));
                             p.addLast(new HttpRequestHandler(
-                                    staticRouteMatcher, routeRegistry, bindingResolver, dispatcher, responseWriter
+                                    routeRegistry, bindingResolver, dispatcher, responseWriter
                             ));
                         }
                     });
@@ -164,20 +142,17 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     private static final Logger log = LoggerFactory.getLogger(HttpRequestHandler.class);
 
-    private final RouteMatcher staticRouteMatcher;
     private final RouteRegistry routeRegistry;
     private final BindingResolver bindingResolver;
     private final SliceDispatcher dispatcher;
     private final ResponseWriter responseWriter;
 
     HttpRequestHandler(
-            RouteMatcher staticRouteMatcher,
             RouteRegistry routeRegistry,
             BindingResolver bindingResolver,
             SliceDispatcher dispatcher,
             ResponseWriter responseWriter
     ) {
-        this.staticRouteMatcher = staticRouteMatcher;
         this.routeRegistry = routeRegistry;
         this.bindingResolver = bindingResolver;
         this.dispatcher = dispatcher;
@@ -198,37 +173,17 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
         log.debug("Received {} {}", method, path);
 
-        // Try dynamic routes first (from RouteRegistry), then fall back to static routes
-        var match = matchRoute(method, path);
-        match.fold(
+        routeRegistry.match(method, path).fold(
             () -> {
                 responseWriter.writeError(ctx, HttpResponseStatus.NOT_FOUND,
                         new HttpRouterError.RouteNotFound(path));
                 return null;
             },
-            m -> {
-                handleMatchedRoute(ctx, method, path, decoder, request, m);
+            match -> {
+                handleMatchedRoute(ctx, method, path, decoder, request, match);
                 return null;
             }
         );
-    }
-
-    private org.pragmatica.lang.Option<MatchResult> matchRoute(HttpMethod method, String path) {
-        // Try dynamic routes first
-        if (routeRegistry != null) {
-            var dynamicMatch = routeRegistry.match(method, path);
-            if (dynamicMatch.isPresent()) {
-                log.debug("Matched dynamic route: {} {}", method, path);
-                return dynamicMatch;
-            }
-        }
-
-        // Fall back to static routes
-        var staticMatch = staticRouteMatcher.match(method, path);
-        if (staticMatch.isPresent()) {
-            log.debug("Matched static route: {} {}", method, path);
-        }
-        return staticMatch;
     }
 
     private void handleMatchedRoute(ChannelHandlerContext ctx, HttpMethod method, String path,

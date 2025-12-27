@@ -55,7 +55,7 @@ The fastest way to see Aether in action:
 ```bash
 cd forge
 mvn package
-java -jar target/forge-0.6.0.jar
+java -jar target/forge-0.6.1.jar
 ```
 
 This starts a 5-node cluster with a visual dashboard at `http://localhost:8888`.

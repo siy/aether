@@ -1,8 +1,8 @@
-# Aether Project - Development Guide
+# Pragmatica Aether Distributed Runtime - Development Guide
 
 ## Project Overview
 
-**Aether** (v0.6.0) is an AI-driven distributed runtime environment for Java that enables predictive scaling,
+**Pragmatica Aether Distributed Runtime** (v0.6.0) is an AI-driven distributed runtime environment for Java that enables predictive scaling,
 intelligent orchestration, and seamless multi-cloud deployment without requiring changes to business logic.
 
 **See [docs/vision-and-goals.md](docs/vision-and-goals.md) for complete vision and design principles.**
@@ -74,7 +74,7 @@ Single-purpose components handling one use case or event type.
 
 - Single `SliceMethod<?, ?>` entry
 - Encapsulates complete business use case (DDD-style) or event handler
-- Written using JBCT patterns (see docs/jbct-coder.md)
+- Written using JBCT patterns (use `/jbct` skill for guidance)
 - Example: "RegisterUser" use case, "OrderPaymentProcessed" event handler
 
 **From runtime perspective**: Both types are identical - same lifecycle, same atomic communication, same management.
@@ -810,7 +810,7 @@ cd example-slice && mvn test
 - **Slice lifecycle**: `docs/slice-lifecycle.md` - Detailed lifecycle documentation
 - **Cluster manager**: `docs/cluster-deployment-manager.md` - ClusterDeploymentManager design
 - **Invocation metrics**: `docs/invocation-metrics.md` - Per-method metrics and slow call capture
-- **JBCT Guide**: `docs/jbct-coder.md` - Java Backend Coding Technology patterns
+- **Slice Developer Guide**: `docs/slice-developer-guide.md` - How to write slices
 - **Rabia**: `cluster/README.md` - Consensus algorithm documentation
 
 ### Common Type Conversions
@@ -844,7 +844,7 @@ Result.unitResult()               // → Result<Unit>
 When implementing new features:
 
 1. **Ask questions first** if requirements are unclear
-2. **Follow JBCT patterns** strictly (see `docs/jbct-coder.md`)
+2. **Follow JBCT patterns** (use `/jbct` skill for guidance)
 3. **Write tests** following established patterns
 4. **Use sealed interfaces** for error hierarchies
 5. **Prefer adapter leaves** for all I/O operations

@@ -17,6 +17,10 @@
             <artifactId>core</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.pragmatica-lite</groupId>
+            <artifactId>toml</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.pragmatica-lite.aether</groupId>
             <artifactId>common</artifactId>
         </dependency>

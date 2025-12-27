@@ -408,7 +408,7 @@ public record OrderProcessorSlice(
 
 ### 5. Follow JBCT Patterns
 
-See [docs/jbct-coder.md](jbct-coder.md) for detailed patterns:
+Use the `/jbct` skill for detailed guidance on:
 
 - Four return kinds (T, Option<T>, Result<T>, Promise<T>)
 - Parse, don't validate
@@ -530,5 +530,4 @@ public record UserService(
 ## See Also
 
 - [Slice Lifecycle](slice-lifecycle.md) - Runtime perspective
-- [JBCT Coder Guide](jbct-coder.md) - Coding patterns
 - [Architecture Overview](architecture-overview.md) - System design

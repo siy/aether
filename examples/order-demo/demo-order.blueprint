@@ -1,21 +1,22 @@
-# Blueprint: demo-order:0.1.0
+# Aether Blueprint - Order Demo
+id = "demo-order:0.1.0"
 
-[slices]
-org.pragmatica-lite.aether.demo:inventory-service:0.1.0 = 2
-org.pragmatica-lite.aether.demo:pricing-service:0.1.0 = 2
-org.pragmatica-lite.aether.demo:place-order:0.1.0 = 3
-org.pragmatica-lite.aether.demo:get-order-status:0.1.0 = 2
-org.pragmatica-lite.aether.demo:cancel-order:0.1.0 = 2
+[slices.inventory_service]
+artifact = "org.pragmatica-lite.aether.demo:inventory-service:0.1.0"
+instances = 2
 
-[routing:http]
-# Place order - creates new order
-POST:/api/orders => place-order:placeOrder(body)
+[slices.pricing_service]
+artifact = "org.pragmatica-lite.aether.demo:pricing-service:0.1.0"
+instances = 2
 
-# Get order status
-GET:/api/orders/{orderId} => get-order-status:getOrderStatus(orderId)
+[slices.place_order]
+artifact = "org.pragmatica-lite.aether.demo:place-order:0.1.0"
+instances = 3
 
-# Cancel order
-DELETE:/api/orders/{orderId} => cancel-order:cancelOrder(orderId)
+[slices.get_order_status]
+artifact = "org.pragmatica-lite.aether.demo:get-order-status:0.1.0"
+instances = 2
 
-# Health check endpoint
-GET:/health => inventory-service:healthCheck()
+[slices.cancel_order]
+artifact = "org.pragmatica-lite.aether.demo:cancel-order:0.1.0"
+instances = 2

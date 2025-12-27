@@ -1,34 +1,39 @@
-# Aether Demos
+# Aether Forge & Demos
 
-This document covers the demonstration applications included with Aether, providing step-by-step instructions for
-running various demo scenarios.
+This document covers Aether Forge (the cluster simulator) and demonstration applications included with Aether.
 
 ## Overview
 
-Aether includes two demo applications:
+Aether includes:
 
-| Demo | Purpose | Audience |
-|------|---------|----------|
-| **Resilience Demo** (`demo/`) | Visual dashboard showcasing cluster fault tolerance | C-level executives, stakeholders |
-| **Order Domain Demo** (`demo-order/`) | Multi-slice business domain example | Developers, architects |
+| Component | Purpose | Audience |
+|-----------|---------|----------|
+| **Aether Forge** (`forge/`) | Cluster simulator with visual dashboard for resilience testing | Developers, DevOps, executives |
+| **Order Domain Demo** (`examples/order-demo/`) | Multi-slice business domain example | Developers, architects |
 
 ---
 
-## Demo 1: Resilience Demo
+## Aether Forge
 
-A single-JVM demonstration with a visual web dashboard that showcases Aether's cluster resilience capabilities. Designed
-for executive presentations and stakeholder demonstrations.
+**Aether Forge** is a single-JVM cluster simulator with a visual web dashboard for testing and demonstrating
+Aether's distributed capabilities. It provides:
+
+- **Multi-node simulation**: Run multiple Aether nodes in a single JVM
+- **Chaos engineering**: Kill nodes, crash nodes, simulate network partitions
+- **Load testing**: Generate configurable request loads
+- **Real-time dashboard**: Visualize cluster health, metrics, and events
+- **API control**: Full REST API for automation and integration
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        DemoServer                                │
+│                        ForgeServer                               │
 │                     (HTTP port 8888)                             │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐         │
-│  │  DemoCluster │   │LoadGenerator │   │ DemoMetrics  │         │
+│  │ ForgeCluster │   │LoadGenerator │   │ ForgeMetrics │         │
 │  │              │   │              │   │              │         │
 │  │ ┌────┬────┐  │   │ Continuous   │   │ Success rate │         │
 │  │ │N1  │N2  │  │◄──│ KV-Store     │──►│ Latency      │         │
@@ -40,7 +45,7 @@ for executive presentations and stakeholder demonstrations.
 │  └──────────────┘                                                │
 │                                                                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  DemoApiHandler           │  StaticFileHandler                   │
+│  ForgeApiHandler          │  StaticFileHandler                   │
 │  /api/status              │  /index.html                         │
 │  /api/kill/{nodeId}       │  /dashboard.js                       │
 │  /api/crash/{nodeId}      │  /style.css                          │
@@ -57,12 +62,12 @@ for executive presentations and stakeholder demonstrations.
 
 | Component | File | Description |
 |-----------|------|-------------|
-| `DemoServer` | `demo/src/.../DemoServer.java` | Main entry point, starts HTTP server and cluster |
-| `DemoCluster` | `demo/src/.../DemoCluster.java` | Manages multiple AetherNodes in-process |
-| `LoadGenerator` | `demo/src/.../LoadGenerator.java` | Generates continuous KV-Store operations |
-| `DemoMetrics` | `demo/src/.../DemoMetrics.java` | Aggregates success/failure/latency metrics |
-| `DemoApiHandler` | `demo/src/.../DemoApiHandler.java` | REST API for dashboard interactions |
-| `StaticFileHandler` | `demo/src/.../StaticFileHandler.java` | Serves web dashboard files |
+| `ForgeServer` | `forge/src/.../ForgeServer.java` | Main entry point, starts HTTP server and cluster |
+| `ForgeCluster` | `forge/src/.../ForgeCluster.java` | Manages multiple AetherNodes in-process |
+| `LoadGenerator` | `forge/src/.../LoadGenerator.java` | Generates continuous KV-Store operations |
+| `ForgeMetrics` | `forge/src/.../ForgeMetrics.java` | Aggregates success/failure/latency metrics |
+| `ForgeApiHandler` | `forge/src/.../ForgeApiHandler.java` | REST API for dashboard interactions |
+| `StaticFileHandler` | `forge/src/.../StaticFileHandler.java` | Serves web dashboard files |
 
 ### Dashboard Features
 
@@ -86,15 +91,15 @@ The web dashboard (`index.html`) provides:
 ### Running Locally
 
 ```bash
-# Build the demo
-cd demo
+# Build Forge
+cd forge
 mvn package
 
 # Run with defaults (5 nodes, 1000 req/sec)
-java -jar target/demo-0.5.0.jar
+java -jar target/forge-0.6.0.jar
 
 # Or with custom settings
-CLUSTER_SIZE=7 LOAD_RATE=2000 java -jar target/demo-0.5.0.jar
+CLUSTER_SIZE=7 LOAD_RATE=2000 java -jar target/forge-0.6.0.jar
 ```
 
 The dashboard opens automatically at `http://localhost:8888`.
@@ -103,23 +108,23 @@ The dashboard opens automatically at `http://localhost:8888`.
 
 ```bash
 # Build image
-cd demo
-docker build -t aether-demo .
+cd forge
+docker build -t aether-forge .
 
 # Run container
-docker run -p 8888:8888 aether-demo
+docker run -p 8888:8888 aether-forge
 
 # Or with custom settings
 docker run -p 8888:8888 \
   -e CLUSTER_SIZE=7 \
   -e LOAD_RATE=2000 \
-  aether-demo
+  aether-forge
 ```
 
 ### Running with Docker Compose
 
 ```bash
-cd demo
+cd forge
 docker-compose up
 ```
 
@@ -127,14 +132,14 @@ docker-compose up
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEMO_PORT` | 8888 | HTTP server port |
+| `FORGE_PORT` | 8888 | HTTP server port |
 | `CLUSTER_SIZE` | 5 | Initial number of nodes |
 | `LOAD_RATE` | 1000 | Initial requests per second |
 | `JAVA_OPTS` | (see Dockerfile) | JVM options |
 
 ---
 
-## Demo Scenarios
+## Forge Demo Scenarios
 
 ### Scenario 1: Basic Cluster Formation
 
@@ -291,7 +296,7 @@ docker-compose up
 
 ---
 
-## Demo 2: Order Domain Demo
+## Order Domain Demo
 
 A multi-module demonstration of slice-based microservices architecture using the Aether runtime.
 
@@ -333,7 +338,7 @@ A multi-module demonstration of slice-based microservices architecture using the
 ### Module Structure
 
 ```
-demo-order/
+examples/order-demo/
 ├── order-domain/           # Shared domain types (no slice)
 │   └── OrderId, ProductId, CustomerId, Money, OrderStatus
 ├── inventory-service/      # Service Slice: stock management
@@ -346,7 +351,7 @@ demo-order/
 │   └── getOrderStatus
 ├── cancel-order/           # Lean Slice: cancellation use case
 │   └── cancelOrder
-└── demo-order.blueprint    # Deployment configuration
+└── demo-order.blueprint    # Deployment configuration (TOML format)
 ```
 
 ### Slice Types
@@ -364,22 +369,34 @@ demo-order/
 
 ### Blueprint Configuration
 
-The `demo-order.blueprint` file defines the deployment:
+The `demo-order.blueprint` file defines the deployment using TOML format:
 
-```
-# Slice instances
-org.pragmatica-lite.aether.demo:inventory-service:0.1.0 = 2
-org.pragmatica-lite.aether.demo:pricing-service:0.1.0 = 2
-org.pragmatica-lite.aether.demo:place-order:0.1.0 = 3
-org.pragmatica-lite.aether.demo:get-order-status:0.1.0 = 2
-org.pragmatica-lite.aether.demo:cancel-order:0.1.0 = 2
+```toml
+# Aether Blueprint - Order Demo
+id = "demo-order:0.1.0"
 
-# HTTP routing
-POST:/api/orders => place-order:placeOrder(body)
-GET:/api/orders/{orderId} => get-order-status:getOrderStatus(orderId)
-DELETE:/api/orders/{orderId} => cancel-order:cancelOrder(orderId)
-GET:/health => inventory-service:healthCheck()
+[slices.inventory_service]
+artifact = "org.pragmatica-lite.aether.demo:inventory-service:0.1.0"
+instances = 2
+
+[slices.pricing_service]
+artifact = "org.pragmatica-lite.aether.demo:pricing-service:0.1.0"
+instances = 2
+
+[slices.place_order]
+artifact = "org.pragmatica-lite.aether.demo:place-order:0.1.0"
+instances = 3
+
+[slices.get_order_status]
+artifact = "org.pragmatica-lite.aether.demo:get-order-status:0.1.0"
+instances = 2
+
+[slices.cancel_order]
+artifact = "org.pragmatica-lite.aether.demo:cancel-order:0.1.0"
+instances = 2
 ```
+
+**Note**: Routes are self-registered by slices during activation via RouteRegistry.
 
 ### PlaceOrder Flow
 
@@ -404,7 +421,7 @@ The `PlaceOrderSlice` demonstrates orchestrated inter-slice calls:
 ### Building the Demo
 
 ```bash
-cd demo-order
+cd examples/order-demo
 mvn clean install
 ```
 
@@ -424,7 +441,7 @@ This produces 6 slice JARs:
 aether cluster start --nodes 3
 
 # Deploy blueprint
-aether blueprint apply demo-order/demo-order.blueprint
+aether blueprint apply examples/order-demo/demo-order.blueprint
 
 # Check status
 aether slice list
@@ -480,7 +497,7 @@ return Promise.allOf(stockChecks)...
 
 ## API Reference
 
-### Resilience Demo API
+### Forge API
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|

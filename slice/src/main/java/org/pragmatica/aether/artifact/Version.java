@@ -57,7 +57,7 @@ public record Version(int major, int minor, int patch, String qualifier) {
 
     public String withQualifier() {
         return qualifier.isEmpty()
-               ? bareVersion() + qualifier
+               ? bareVersion()
                : bareVersion() + "-" + qualifier;
     }
 

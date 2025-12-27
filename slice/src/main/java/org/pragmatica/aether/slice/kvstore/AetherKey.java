@@ -244,28 +244,28 @@ public sealed interface AetherKey extends StructuredKey {
         /// Pattern for blueprint keys: blueprint/*
         record BlueprintPattern() implements AetherKeyPattern {
             public boolean matches(BlueprintKey key) {
-                return false;
+                return true;
             }
         }
 
         /// Pattern for app-blueprint keys: app-blueprint/*
         record AppBlueprintPattern() implements AetherKeyPattern {
             public boolean matches(AppBlueprintKey key) {
-                return false;
+                return true;
             }
         }
 
         /// Pattern for slice-node keys: slices/*/*
         record SliceNodePattern() implements AetherKeyPattern {
             public boolean matches(SliceNodeKey key) {
-                return false;
+                return true;
             }
         }
 
         /// Pattern for endpoint keys: endpoints/*/*
         record EndpointPattern() implements AetherKeyPattern {
             public boolean matches(EndpointKey key) {
-                return false;
+                return true;
             }
         }
 

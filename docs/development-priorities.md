@@ -1,6 +1,6 @@
 # Development Priorities
 
-## Current Status (v0.4.0)
+## Current Status (v0.6.0)
 
 Most foundational work is complete. Priorities have shifted to polish and AI integration.
 
@@ -11,10 +11,13 @@ Most foundational work is complete. Priorities have shifted to polish and AI int
 - **ClusterDeploymentManager** - Cluster orchestration
 - **EndpointRegistry** - Service discovery
 - **NodeDeploymentManager** - Node-level slice management
-- **HTTP Router** - External request routing
+- **HTTP Router** - External request routing with route self-registration
 - **Management API** - Cluster control endpoints
 - **CLI** - REPL and batch modes
-- **Demo App** - 5-slice order domain
+- **Order Domain Demo** - 5-slice order domain example
+- **Aether Forge** - Cluster simulator with visual dashboard
+- **TOML Blueprint Parser** - Standard TOML format for blueprints
+- **Automatic Route Cleanup** - Routes removed on last slice instance deactivation
 
 ## Current Priorities
 

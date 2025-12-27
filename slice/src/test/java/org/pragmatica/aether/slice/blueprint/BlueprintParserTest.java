@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for BlueprintParser.
+ * Tests for BlueprintParser using TOML format.
  *
  * <p>Note: Routing is no longer parsed in blueprints - routes are self-registered
  * by slices during activation via RouteRegistry.
@@ -24,12 +24,18 @@ class BlueprintParserTest {
         @Test
         void parse_succeeds_withCompleteValidDsl() {
             var dsl = """
-                    # Blueprint: my-app:1.0.0
+                    id = "my-app:1.0.0"
 
-                    [slices]
-                    org.example:user-service:1.0.0 = 2
-                    org.example:order-service:1.0.0 = 3
-                    org.example:payment-service:1.0.0
+                    [slices.user_service]
+                    artifact = "org.example:user-service:1.0.0"
+                    instances = 2
+
+                    [slices.order_service]
+                    artifact = "org.example:order-service:1.0.0"
+                    instances = 3
+
+                    [slices.payment_service]
+                    artifact = "org.example:payment-service:1.0.0"
                     """;
 
             BlueprintParser.parse(dsl)
@@ -38,15 +44,20 @@ class BlueprintParserTest {
                                assertThat(blueprint.id().asString()).isEqualTo("my-app:1.0.0");
                                assertThat(blueprint.slices()).hasSize(3);
 
-                               var userService = blueprint.slices().get(0);
+                               // Find slices by artifact (order is not guaranteed in TOML)
+                               var userService = blueprint.slices().stream()
+                                   .filter(s -> s.artifact().asString().contains("user-service"))
+                                   .findFirst().orElseThrow();
                                assertThat(userService.instances()).isEqualTo(2);
-                               assertThat(userService.artifact()
-                                                     .asString()).isEqualTo("org.example:user-service:1.0.0");
 
-                               var orderService = blueprint.slices().get(1);
+                               var orderService = blueprint.slices().stream()
+                                   .filter(s -> s.artifact().asString().contains("order-service"))
+                                   .findFirst().orElseThrow();
                                assertThat(orderService.instances()).isEqualTo(3);
 
-                               var paymentService = blueprint.slices().get(2);
+                               var paymentService = blueprint.slices().stream()
+                                   .filter(s -> s.artifact().asString().contains("payment-service"))
+                                   .findFirst().orElseThrow();
                                assertThat(paymentService.instances()).isEqualTo(1);
                            });
         }
@@ -54,10 +65,10 @@ class BlueprintParserTest {
         @Test
         void parse_succeeds_withMinimalDsl() {
             var dsl = """
-                    # Blueprint: minimal:1.0.0
+                    id = "minimal:1.0.0"
 
-                    [slices]
-                    org.example:service:1.0.0
+                    [slices.service]
+                    artifact = "org.example:service:1.0.0"
                     """;
 
             BlueprintParser.parse(dsl)
@@ -71,55 +82,77 @@ class BlueprintParserTest {
         @Test
         void parse_succeeds_withCommentsAndBlankLines() {
             var dsl = """
-                    # Blueprint: with-comments:1.0.0
+                    # Application blueprint
+                    id = "with-comments:1.0.0"
 
-                    # Slice definitions
-                    [slices]
-                    org.example:service-a:1.0.0 = 2  # Two instances
+                    # First service
+                    [slices.service_a]
+                    artifact = "org.example:service-a:1.0.0"
+                    instances = 2  # Two instances
 
-                    # Another service
-                    org.example:service-b:1.0.0
+                    # Second service
+                    [slices.service_b]
+                    artifact = "org.example:service-b:1.0.0"
                     """;
 
             BlueprintParser.parse(dsl)
                            .onFailureRun(Assertions::fail)
                            .onSuccess(blueprint -> {
                                assertThat(blueprint.slices()).hasSize(2);
-                               assertThat(blueprint.slices().get(0).instances()).isEqualTo(2);
-                               assertThat(blueprint.slices().get(1).instances()).isEqualTo(1);
+
+                               var serviceA = blueprint.slices().stream()
+                                   .filter(s -> s.artifact().asString().contains("service-a"))
+                                   .findFirst().orElseThrow();
+                               assertThat(serviceA.instances()).isEqualTo(2);
+
+                               var serviceB = blueprint.slices().stream()
+                                   .filter(s -> s.artifact().asString().contains("service-b"))
+                                   .findFirst().orElseThrow();
+                               assertThat(serviceB.instances()).isEqualTo(1);
                            });
         }
 
         @Test
         void parse_succeeds_withQualifiedVersions() {
             var dsl = """
-                    # Blueprint: qualified:1.0.0
+                    id = "qualified:1.0.0"
 
-                    [slices]
-                    org.example:service:1.0.0-SNAPSHOT = 2
-                    org.example:other:2.0.0-alpha1
+                    [slices.service]
+                    artifact = "org.example:service:1.0.0-SNAPSHOT"
+                    instances = 2
+
+                    [slices.other]
+                    artifact = "org.example:other:2.0.0-alpha1"
                     """;
 
             BlueprintParser.parse(dsl)
                            .onFailureRun(Assertions::fail)
                            .onSuccess(blueprint -> {
                                assertThat(blueprint.slices()).hasSize(2);
-                               assertThat(blueprint.slices().get(0).artifact().asString())
+
+                               var service = blueprint.slices().stream()
+                                   .filter(s -> s.artifact().asString().contains("service:1.0.0-SNAPSHOT"))
+                                   .findFirst().orElseThrow();
+                               assertThat(service.artifact().asString())
                                        .isEqualTo("org.example:service:1.0.0-SNAPSHOT");
-                               assertThat(blueprint.slices().get(1).artifact().asString())
+
+                               var other = blueprint.slices().stream()
+                                   .filter(s -> s.artifact().asString().contains("other"))
+                                   .findFirst().orElseThrow();
+                               assertThat(other.artifact().asString())
                                        .isEqualTo("org.example:other:2.0.0-alpha1");
                            });
         }
 
         @Test
         void parseFile_succeeds_withValidFile() throws IOException {
-            var tempFile = Files.createTempFile("blueprint", ".dsl");
+            var tempFile = Files.createTempFile("blueprint", ".toml");
             try {
                 var dsl = """
-                        # Blueprint: from-file:1.0.0
+                        id = "from-file:1.0.0"
 
-                        [slices]
-                        org.example:service:1.0.0
+                        [slices.service]
+                        artifact = "org.example:service:1.0.0"
                         """;
                 Files.writeString(tempFile, dsl);
 
@@ -137,13 +170,14 @@ class BlueprintParserTest {
         @Test
         void parse_ignoresUnknownSections() {
             var dsl = """
-                    # Blueprint: with-unknown:1.0.0
+                    id = "with-unknown:1.0.0"
 
-                    [slices]
-                    org.example:service:1.0.0
+                    [slices.service]
+                    artifact = "org.example:service:1.0.0"
 
-                    [routing:http]
-                    GET:/api/test => service:test(body)
+                    [metadata]
+                    author = "test"
+                    version = "1.0"
                     """;
 
             BlueprintParser.parse(dsl)
@@ -151,7 +185,21 @@ class BlueprintParserTest {
                            .onSuccess(blueprint -> {
                                assertThat(blueprint.id().asString()).isEqualTo("with-unknown:1.0.0");
                                assertThat(blueprint.slices()).hasSize(1);
-                               // Routing section is ignored
+                               // Metadata section is ignored
+                           });
+        }
+
+        @Test
+        void parse_succeeds_withNoSlices() {
+            var dsl = """
+                    id = "empty:1.0.0"
+                    """;
+
+            BlueprintParser.parse(dsl)
+                           .onFailureRun(Assertions::fail)
+                           .onSuccess(blueprint -> {
+                               assertThat(blueprint.id().asString()).isEqualTo("empty:1.0.0");
+                               assertThat(blueprint.slices()).isEmpty();
                            });
         }
     }
@@ -160,26 +208,26 @@ class BlueprintParserTest {
     class FailureCases {
 
         @Test
-        void parse_fails_whenMissingHeader() {
+        void parse_fails_whenMissingId() {
             var dsl = """
-                    [slices]
-                    org.example:service:1.0.0
+                    [slices.service]
+                    artifact = "org.example:service:1.0.0"
                     """;
 
             BlueprintParser.parse(dsl)
                            .onSuccessRun(Assertions::fail)
                            .onFailure(cause ->
-                                              assertThat(cause.message()).contains("Missing blueprint header")
+                                              assertThat(cause.message()).contains("Missing blueprint id")
                                      );
         }
 
         @Test
         void parse_fails_whenInvalidBlueprintId() {
             var dsl = """
-                    # Blueprint: INVALID_ID
+                    id = "INVALID_ID"
 
-                    [slices]
-                    org.example:service:1.0.0
+                    [slices.service]
+                    artifact = "org.example:service:1.0.0"
                     """;
 
             BlueprintParser.parse(dsl)
@@ -190,28 +238,45 @@ class BlueprintParserTest {
         }
 
         @Test
-        void parse_fails_whenInvalidSliceFormat() {
+        void parse_fails_whenMissingArtifact() {
             var dsl = """
-                    # Blueprint: test:1.0.0
+                    id = "test:1.0.0"
 
-                    [slices]
-                    not-an-artifact
+                    [slices.service]
+                    instances = 2
                     """;
 
             BlueprintParser.parse(dsl)
                            .onSuccessRun(Assertions::fail)
                            .onFailure(cause ->
-                                              assertThat(cause.message()).contains("Invalid")
+                                              assertThat(cause.message()).contains("Missing artifact")
+                                     );
+        }
+
+        @Test
+        void parse_fails_whenInvalidArtifactFormat() {
+            var dsl = """
+                    id = "test:1.0.0"
+
+                    [slices.service]
+                    artifact = "not-a-valid-artifact"
+                    """;
+
+            BlueprintParser.parse(dsl)
+                           .onSuccessRun(Assertions::fail)
+                           .onFailure(cause ->
+                                              assertThat(cause.message()).contains("Invalid artifact")
                                      );
         }
 
         @Test
         void parse_fails_whenInvalidInstanceCount() {
             var dsl = """
-                    # Blueprint: test:1.0.0
+                    id = "test:1.0.0"
 
-                    [slices]
-                    org.example:service:1.0.0 = -1
+                    [slices.service]
+                    artifact = "org.example:service:1.0.0"
+                    instances = -1
                     """;
 
             BlueprintParser.parse(dsl)
@@ -223,12 +288,30 @@ class BlueprintParserTest {
 
         @Test
         void parseFile_fails_whenFileDoesNotExist() {
-            var nonExistentFile = Path.of("/nonexistent/blueprint.dsl");
+            var nonExistentFile = Path.of("/nonexistent/blueprint.toml");
 
             BlueprintParser.parseFile(nonExistentFile)
                            .onSuccessRun(Assertions::fail)
                            .onFailure(cause ->
                                               assertThat(cause.message()).contains("Failed to read file")
+                                     );
+        }
+
+        @Test
+        void parse_fails_whenEmptyContent() {
+            BlueprintParser.parse("")
+                           .onSuccessRun(Assertions::fail)
+                           .onFailure(cause ->
+                                              assertThat(cause.message()).contains("Missing blueprint id")
+                                     );
+        }
+
+        @Test
+        void parse_fails_whenNullContent() {
+            BlueprintParser.parse(null)
+                           .onSuccessRun(Assertions::fail)
+                           .onFailure(cause ->
+                                              assertThat(cause.message()).contains("Missing blueprint id")
                                      );
         }
     }

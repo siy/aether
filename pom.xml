@@ -8,6 +8,16 @@
     <artifactId>aether</artifactId>
     <version>0.6.0</version>
     <packaging>pom</packaging>
+    <name>Pragmatica Aether Distributed Runtime</name>
+    <description>AI-driven distributed runtime environment for Java applications</description>
+
+    <licenses>
+        <license>
+            <name>Business Source License 1.1</name>
+            <url>https://mariadb.com/bsl11/</url>
+            <comments>Converts to Apache License 2.0 on January 1, 2030</comments>
+        </license>
+    </licenses>
     <modules>
         <module>http-server</module>
         <module>node</module>
@@ -32,7 +42,7 @@
         <junit.version>5.13.4</junit.version>
         <assertj-core.version>3.26.3</assertj-core.version>
         <mockito.version>5.14.2</mockito.version>
-        <pragmatica.version>0.8.4</pragmatica.version>
+        <pragmatica.version>0.9.0</pragmatica.version>
         <awaitility.version>4.2.1</awaitility.version>
         <tinylog.version>2.7.0</tinylog.version>
         <netty.version>4.2.0.Final</netty.version>
@@ -45,6 +55,11 @@
             <dependency>
                 <groupId>org.pragmatica-lite</groupId>
                 <artifactId>core</artifactId>
+                <version>${pragmatica.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.pragmatica-lite</groupId>
+                <artifactId>toml</artifactId>
                 <version>${pragmatica.version}</version>
             </dependency>
 

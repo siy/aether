@@ -6,6 +6,7 @@ import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.NodeInfo;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.io.TimeSpan;
 import org.slf4j.Logger;
@@ -203,29 +204,15 @@ public final class ForgeCluster {
 
         return node.stop()
                    .timeout(NODE_TIMEOUT)
+                   .flatMap(_ -> Promise.promise(TimeSpan.timeSpan(300).millis(), () -> Result.success(Unit.unit())))
                    .flatMap(_ -> {
-                       // Brief delay before restart
-                       try {
-                           Thread.sleep(300);
-                       } catch (InterruptedException e) {
-                           Thread.currentThread().interrupt();
-                       }
-
                        var port = nodeInfo.address().port();
                        var newNode = createNode(nodeInfo.id(), port, topology);
                        nodes.put(nodeIdStr, newNode);
 
                        return newNode.start();
                    })
-                   .flatMap(_ -> {
-                       // Wait for node to stabilize
-                       try {
-                           Thread.sleep(500);
-                       } catch (InterruptedException e) {
-                           Thread.currentThread().interrupt();
-                       }
-                       return Promise.success(Unit.unit());
-                   })
+                   .flatMap(_ -> Promise.promise(TimeSpan.timeSpan(500).millis(), () -> Result.success(Unit.unit())))
                    .onSuccess(_ -> log.info("Node {} restarted", nodeIdStr));
     }
 

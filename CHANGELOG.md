@@ -5,10 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0] - 2025-12-25
+## [0.6.0] - 2025-12-27
+
+### Added
+- **BackendSimulation framework** - Latency and failure injection for testing
+- **DataGenerator framework** - Configurable test data generation
+- **Invocation metrics system** - Per-entry-point metrics with adaptive thresholds
+- **Automatic route cleanup** - Routes removed when last slice instance deactivates
+- **Realistic inventory mode** - Stock depletion and refill simulation
+- **SimulatorConfig** - Configuration API for Forge simulator
+- **OrderRepository** - Cross-slice order visibility in demos
 
 ### Changed
-- **Major overhaul** - Architecture and implementation improvements
+- Updated to Pragmatica Lite 0.9.0
+- Replaced `Causes.forValue` with `forOneValue` pattern
+- Improved memory handling and resource cleanup in invocation layer
+- Enhanced LoadGenerator with per-entry-point rate control
+- Project renamed to "Pragmatica Aether Distributed Runtime"
+- License changed to Business Source License 1.1
+
+### Fixed
+- Memory leaks in invocation layer
+- Allow hyphens in GroupId validation
+- Endpoint publishing for remote slice invocation
+- Simulator code polish for production readiness
+
+### Removed
+- JBCT documentation (use `/jbct` skill instead)
 
 ## [0.5.0] - 2025-12-25
 

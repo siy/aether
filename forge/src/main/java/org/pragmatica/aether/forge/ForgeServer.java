@@ -27,6 +27,7 @@ public final class ForgeServer {
     private static final int DEFAULT_PORT = 8888;
     private static final int DEFAULT_CLUSTER_SIZE = 5;
     private static final int DEFAULT_LOAD_RATE = 1000;
+    private static final int MAX_CONTENT_LENGTH = 65536; // 64KB
 
     private final int port;
     private final int clusterSize;
@@ -171,7 +172,7 @@ public final class ForgeServer {
                      protected void initChannel(SocketChannel ch) {
                          var pipeline = ch.pipeline();
                          pipeline.addLast(new HttpServerCodec());
-                         pipeline.addLast(new HttpObjectAggregator(65536));
+                         pipeline.addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
                          pipeline.addLast(new ChunkedWriteHandler());
                          pipeline.addLast(new ForgeHttpHandler(apiHandler, staticHandler));
                      }

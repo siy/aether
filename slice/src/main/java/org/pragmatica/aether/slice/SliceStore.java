@@ -25,20 +25,6 @@ public interface SliceStore {
         return SliceStoreImpl.sliceStore(registry, repositories, sharedLibraryLoader);
     }
 
-    /**
-     * Create a new SliceStore instance without shared library classloader.
-     *
-     * @param registry     Registry for tracking loaded slices
-     * @param repositories Repositories to search for slice JARs
-     *
-     * @return SliceStore implementation
-     * @deprecated Use {@link #sliceStore(SliceRegistry, List, SharedLibraryClassLoader)} instead
-     */
-    @Deprecated
-    static SliceStore sliceStore(SliceRegistry registry, List<Repository> repositories) {
-        return SliceStoreImpl.sliceStore(registry, repositories);
-    }
-
     interface LoadedSlice {
         Artifact artifact();
 

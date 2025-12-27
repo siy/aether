@@ -20,11 +20,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SliceStoreImplTest {
 
     private SliceRegistry registry;
+    private SharedLibraryClassLoader sharedLoader;
     private Artifact artifact;
 
     @BeforeEach
     void setUp() {
         registry = SliceRegistry.create();
+        sharedLoader = new SharedLibraryClassLoader(getClass().getClassLoader());
         artifact = Artifact.artifact("org.example:test-slice:1.0.0").unwrap();
     }
 
@@ -66,7 +68,7 @@ class SliceStoreImplTest {
 
     @Test
     void slice_store_factory_creates_instance() {
-        var store = SliceStore.sliceStore(registry, List.of());
+        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader);
 
         assertThat(store).isNotNull();
         assertThat(store.loaded()).isEmpty();
@@ -125,7 +127,7 @@ class SliceStoreImplTest {
 
     @Test
     void activate_not_loaded_fails() {
-        var store = SliceStore.sliceStore(registry, List.of());
+        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader);
 
         store.activateSlice(artifact)
              .await()
@@ -190,7 +192,7 @@ class SliceStoreImplTest {
 
     @Test
     void deactivate_not_loaded_fails() {
-        var store = SliceStore.sliceStore(registry, List.of());
+        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader);
 
         store.deactivateSlice(artifact)
              .await()
@@ -254,7 +256,7 @@ class SliceStoreImplTest {
 
     @Test
     void unload_nonexistent_succeeds() {
-        var store = SliceStore.sliceStore(registry, List.of());
+        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader);
 
         store.unloadSlice(artifact)
              .await()
@@ -270,7 +272,7 @@ class SliceStoreImplTest {
         var artifact1 = Artifact.artifact("org.example:slice1:1.0.0").unwrap();
         var artifact2 = Artifact.artifact("org.example:slice2:1.0.0").unwrap();
 
-        var store = SliceStoreImpl.sliceStore(registry, List.of());
+        var store = SliceStoreImpl.sliceStore(registry, List.of(), sharedLoader);
         addPreloadedSlice(store, artifact1, slice1, EntryState.LOADED);
         addPreloadedSlice(store, artifact2, slice2, EntryState.ACTIVE);
 
@@ -313,7 +315,7 @@ class SliceStoreImplTest {
     }
 
     private SliceStore createStoreWithPreloadedSlice(Slice slice, EntryState state) {
-        var store = SliceStoreImpl.sliceStore(registry, List.of());
+        var store = SliceStoreImpl.sliceStore(registry, List.of(), sharedLoader);
         addPreloadedSlice(store, artifact, slice, state);
         return store;
     }

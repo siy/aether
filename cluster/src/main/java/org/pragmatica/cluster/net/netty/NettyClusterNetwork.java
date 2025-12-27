@@ -152,7 +152,7 @@ public class NettyClusterNetwork implements ClusterNetwork {
         topologyManager.reverseLookup(channel.remoteAddress())
                        .onPresent(peerLinks::remove)
                        .onPresent(nodeId -> processViewChange(REMOVE, nodeId))
-                       .onPresent(nodeId -> log.debug("Node {} diconnected", nodeId));
+                       .onPresent(nodeId -> log.debug("Node {} disconnected", nodeId));
     }
 
     @Override

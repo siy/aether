@@ -64,6 +64,7 @@ public interface ManagementServer {
 class ManagementServerImpl implements ManagementServer {
 
     private static final Logger log = LoggerFactory.getLogger(ManagementServerImpl.class);
+    private static final int MAX_CONTENT_LENGTH = 65536; // 64KB
 
     private final int port;
     private final Supplier<AetherNode> nodeSupplier;
@@ -89,7 +90,7 @@ class ManagementServerImpl implements ManagementServer {
                         protected void initChannel(SocketChannel ch) {
                             ChannelPipeline p = ch.pipeline();
                             p.addLast(new HttpServerCodec());
-                            p.addLast(new HttpObjectAggregator(65536));
+                            p.addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
                             p.addLast(new HttpRequestHandler(nodeSupplier));
                         }
                     });

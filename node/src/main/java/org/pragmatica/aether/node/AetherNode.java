@@ -15,6 +15,7 @@ import org.pragmatica.aether.invoke.InvocationMessage;
 import org.pragmatica.aether.invoke.SliceInvoker;
 import org.pragmatica.aether.metrics.MetricsCollector;
 import org.pragmatica.aether.metrics.MetricsScheduler;
+import org.pragmatica.aether.slice.FrameworkClassLoader;
 import org.pragmatica.aether.slice.SharedLibraryClassLoader;
 import org.pragmatica.aether.slice.SliceRuntime;
 import org.pragmatica.aether.slice.SliceStore;
@@ -162,7 +163,7 @@ public interface AetherNode {
 
         // Create slice management components
         var sliceRegistry = SliceRegistry.create();
-        var sharedLibraryLoader = new SharedLibraryClassLoader(AetherNode.class.getClassLoader());
+        var sharedLibraryLoader = createSharedLibraryLoader(config);
         var sliceStore = SliceStore.sliceStore(sliceRegistry, config.sliceAction().repositories(), sharedLibraryLoader);
 
         // Create Rabia cluster node
@@ -293,5 +294,38 @@ public interface AetherNode {
 
         // KVStore local operations
         kvStore.configure(router);
+    }
+
+    /**
+     * Create SharedLibraryClassLoader with appropriate parent based on configuration.
+     * <p>
+     * If frameworkJarsPath is configured, creates a FrameworkClassLoader with isolated
+     * framework classes. Otherwise, falls back to Application ClassLoader (no isolation).
+     */
+    private static SharedLibraryClassLoader createSharedLibraryLoader(AetherNodeConfig config) {
+        var log = LoggerFactory.getLogger(AetherNode.class);
+
+        return config.sliceAction().frameworkJarsPath()
+                .fold(
+                        // No framework path configured - use Application ClassLoader
+                        () -> {
+                            log.debug("No framework JARs path configured, using Application ClassLoader as parent");
+                            return new SharedLibraryClassLoader(AetherNode.class.getClassLoader());
+                        },
+                        // Framework path configured - try to create FrameworkClassLoader
+                        path -> FrameworkClassLoader.fromDirectory(path)
+                                .fold(
+                                        cause -> {
+                                            log.warn("Failed to create FrameworkClassLoader from {}: {}. " +
+                                                     "Falling back to Application ClassLoader.", path, cause.message());
+                                            return new SharedLibraryClassLoader(AetherNode.class.getClassLoader());
+                                        },
+                                        frameworkLoader -> {
+                                            log.info("Using FrameworkClassLoader with {} JARs as parent",
+                                                     frameworkLoader.getLoadedJars().size());
+                                            return new SharedLibraryClassLoader(frameworkLoader);
+                                        }
+                                )
+                );
     }
 }

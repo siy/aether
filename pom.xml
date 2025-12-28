@@ -25,7 +25,6 @@
         <module>slice-api</module>
         <module>slice</module>
         <module>example-slice</module>
-        <module>mcp</module>
         <module>cluster</module>
         <module>common</module>
         <module>cli</module>

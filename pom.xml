@@ -19,6 +19,7 @@
         </license>
     </licenses>
     <modules>
+        <module>slice-annotations</module>
         <module>http-server</module>
         <module>node</module>
         <module>slice-api</module>
@@ -64,6 +65,12 @@
             </dependency>
 
             <!-- Internal -->
+            <dependency>
+                <groupId>org.pragmatica-lite.aether</groupId>
+                <artifactId>slice-annotations</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <dependency>
                 <groupId>org.pragmatica-lite.aether</groupId>
                 <artifactId>slice-api</artifactId>

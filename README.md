@@ -52,13 +52,13 @@ Aether deploys it, scales it when needed, and handles failures — all transpare
 
 Start with [JBCT](https://github.com/siy/pragmatica-lite) patterns. Each use case becomes a slice. Scale from day one.
 
-→ [Getting Started Guide](docs/getting-started.md)
+→ [Getting Started Guide](docs/guide/getting-started.md)
 
 ### Existing Monoliths
 
 Extract hot paths into slices gradually. No big bang rewrite.
 
-→ [Migration Guide](docs/migration-guide.md)
+→ [Migration Guide](docs/guide/migration-guide.md)
 
 ## Quick Start
 
@@ -97,29 +97,29 @@ java -jar target/forge-0.6.1.jar
 
 Kill nodes, inject latency, watch recovery — all from the dashboard.
 
-→ [Forge Guide](docs/forge-guide.md)
+→ [Forge Guide](docs/guide/forge-guide.md)
 
 ## Documentation
 
 ### Start Here
 | Document | Description |
 |----------|-------------|
-| **[Introduction](docs/introduction.md)** | What Aether is and why it exists |
-| **[Getting Started](docs/getting-started.md)** | Create your first project |
-| **[Migration Guide](docs/migration-guide.md)** | Extract slices from existing code |
+| **[Introduction](docs/guide/introduction.md)** | What Aether is and why it exists |
+| **[Getting Started](docs/guide/getting-started.md)** | Create your first project |
+| **[Migration Guide](docs/guide/migration-guide.md)** | Extract slices from existing code |
 
 ### Core Concepts
 | Document | Description |
 |----------|-------------|
-| [Scaling](docs/scaling.md) | How and when scaling happens |
+| [Scaling](docs/guide/scaling.md) | How and when scaling happens |
 | [Slice Lifecycle](docs/slice-lifecycle.md) | Slice states and transitions |
 | [Architecture](docs/architecture-overview.md) | System internals |
 
 ### Reference
 | Document | Description |
 |----------|-------------|
-| [CLI Reference](docs/cli-reference.md) | All commands |
-| [Forge Guide](docs/forge-guide.md) | Chaos testing |
+| [CLI Reference](docs/guide/cli-reference.md) | All commands |
+| [Forge Guide](docs/guide/forge-guide.md) | Chaos testing |
 | [Slice Developer Guide](docs/slice-developer-guide.md) | Writing slices |
 
 ### Design Documents

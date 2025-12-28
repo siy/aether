@@ -52,7 +52,7 @@ import java.lang.annotation.Target;
  * }
  * }</pre>
  *
- * @see <a href="https://github.com/pragmatica-lite/aetherx/docs/typed-slice-api-design.md">Typed Slice API Design</a>
+ * @see <a href="https://github.com/siy/aether/blob/main/docs/typed-slice-api-design.md">Typed Slice API Design</a>
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)

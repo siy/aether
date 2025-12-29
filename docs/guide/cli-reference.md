@@ -6,7 +6,7 @@ Aether provides three command-line tools:
 
 | Tool | Purpose | Script |
 |------|---------|--------|
-| `aether-cli` | Cluster management CLI | `script/aether-cli.sh` |
+| `aether` | Cluster management CLI | `script/aether.sh` |
 | `aether-node` | Run a cluster node | `script/aether-node.sh` |
 | `aether-forge` | Testing simulator | `script/aether-forge.sh` |
 
@@ -25,14 +25,14 @@ mvn package -DskipTests
 After building, use the scripts in the `script/` directory:
 
 ```bash
-./script/aether-cli.sh status
+./script/aether.sh status
 ./script/aether-node.sh --port=8091
 ./script/aether-forge.sh
 ```
 
 ---
 
-## aether-cli: Cluster Management
+## aether: Cluster Management
 
 Interactive CLI for managing Aether clusters.
 
@@ -40,10 +40,10 @@ Interactive CLI for managing Aether clusters.
 
 ```bash
 # Batch mode - execute single command
-./script/aether-cli.sh [options] <command>
+./script/aether.sh [options] <command>
 
 # REPL mode - interactive shell
-./script/aether-cli.sh [options]
+./script/aether.sh [options]
 ```
 
 ### Options
@@ -61,7 +61,7 @@ Interactive CLI for managing Aether clusters.
 Show cluster status:
 
 ```bash
-aether-cli status
+aether status
 ```
 
 Output:
@@ -77,7 +77,7 @@ Cluster Status:
 List cluster nodes:
 
 ```bash
-aether-cli nodes
+aether nodes
 ```
 
 Output:
@@ -93,7 +93,7 @@ Nodes:
 List deployed slices:
 
 ```bash
-aether-cli slices
+aether slices
 ```
 
 Output:
@@ -108,7 +108,7 @@ Slices:
 Show cluster metrics:
 
 ```bash
-aether-cli metrics
+aether metrics
 ```
 
 Output:
@@ -127,7 +127,7 @@ Metrics:
 Health check:
 
 ```bash
-aether-cli health
+aether health
 ```
 
 #### deploy
@@ -135,11 +135,11 @@ aether-cli health
 Deploy a slice:
 
 ```bash
-aether-cli deploy <artifact> [instances]
+aether deploy <artifact> [instances]
 
 # Examples
-aether-cli deploy org.example:order:1.0.0
-aether-cli deploy org.example:order:1.0.0 3
+aether deploy org.example:order:1.0.0
+aether deploy org.example:order:1.0.0 3
 ```
 
 #### scale
@@ -147,10 +147,10 @@ aether-cli deploy org.example:order:1.0.0 3
 Scale a slice:
 
 ```bash
-aether-cli scale <artifact> <instances>
+aether scale <artifact> <instances>
 
 # Example
-aether-cli scale org.example:order:1.0.0 5
+aether scale org.example:order:1.0.0 5
 ```
 
 #### undeploy
@@ -158,19 +158,57 @@ aether-cli scale org.example:order:1.0.0 5
 Remove a slice:
 
 ```bash
-aether-cli undeploy <artifact>
+aether undeploy <artifact>
 
 # Example
-aether-cli undeploy org.example:order:1.0.0
+aether undeploy org.example:order:1.0.0
 ```
 
 #### artifact
 
-Artifact operations (resolve, info):
+Artifact repository operations:
 
 ```bash
-aether-cli artifact resolve <coordinate>
-aether-cli artifact info <coordinate>
+# Deploy JAR to repository
+aether artifact deploy <jar-path> -g <groupId> -a <artifactId> -v <version>
+
+# List artifacts
+aether artifact list
+
+# List versions
+aether artifact versions <group:artifact>
+```
+
+Example:
+```bash
+aether artifact deploy target/my-slice.jar -g com.example -a my-slice -v 1.0.0
+```
+
+#### blueprint
+
+Blueprint management:
+
+```bash
+# Apply a blueprint file
+aether blueprint apply <file.toml>
+```
+
+Example blueprint file (`order-system.toml`):
+```toml
+id = "order-system:1.0.0"
+
+[slices.order_processor]
+artifact = "org.example:order-processor:1.0.0"
+instances = 3
+
+[slices.inventory]
+artifact = "org.example:inventory:1.0.0"
+instances = 2
+```
+
+Apply it:
+```bash
+aether blueprint apply order-system.toml
 ```
 
 ### REPL Mode
@@ -178,9 +216,9 @@ aether-cli artifact info <coordinate>
 Start interactive mode by omitting the command:
 
 ```bash
-./script/aether-cli.sh --connect localhost:8080
+./script/aether.sh --connect localhost:8080
 
-Aether CLI v0.6.2 - Connected to localhost:8080
+Aether v0.6.2 - Connected to localhost:8080
 Type 'help' for available commands, 'exit' to quit.
 
 aether> status
@@ -199,16 +237,16 @@ aether> exit
 
 ```bash
 # Check cluster status
-./script/aether-cli.sh status
+./script/aether.sh status
 
 # Connect to specific node
-./script/aether-cli.sh --connect node1.example.com:8080 status
+./script/aether.sh --connect node1.example.com:8080 status
 
 # Deploy a slice with 3 instances
-./script/aether-cli.sh deploy org.example:my-slice:1.0.0 3
+./script/aether.sh deploy org.example:my-slice:1.0.0 3
 
 # Interactive mode
-./script/aether-cli.sh --connect localhost:8080
+./script/aether.sh --connect localhost:8080
 ```
 
 ---

@@ -57,14 +57,14 @@ Start a 3-node cluster (each in a separate terminal):
 Check cluster status:
 
 ```bash
-./script/aether-cli.sh --connect localhost:8080 status
-./script/aether-cli.sh --connect localhost:8080 nodes
+./script/aether.sh --connect localhost:8080 status
+./script/aether.sh --connect localhost:8080 nodes
 ```
 
 Or use interactive mode:
 
 ```bash
-./script/aether-cli.sh --connect localhost:8080
+./script/aether.sh --connect localhost:8080
 
 aether> status
 aether> nodes
@@ -77,7 +77,7 @@ aether> exit
 ```
 aether/
 ├── script/                    # Run scripts
-│   ├── aether-cli.sh         # CLI tool
+│   ├── aether.sh             # CLI tool
 │   ├── aether-node.sh        # Node runner
 │   └── aether-forge.sh       # Forge simulator
 ├── cli/                       # CLI module
@@ -180,7 +180,7 @@ public class HelloWorld implements Slice {
 
 ```bash
 mvn install
-./script/aether-cli.sh deploy com.example:hello-world:1.0.0
+./script/aether.sh deploy com.example:hello-world:1.0.0
 ```
 
 ## Running the Order Demo

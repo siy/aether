@@ -23,6 +23,7 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.CharsetUtil;
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.node.AetherNode;
+import org.pragmatica.aether.slice.blueprint.BlueprintParser;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.cluster.net.NodeId;
@@ -186,6 +187,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             case "/deploy" -> handleDeploy(ctx, node, body);
             case "/scale" -> handleScale(ctx, node, body);
             case "/undeploy" -> handleUndeploy(ctx, node, body);
+            case "/blueprint" -> handleBlueprint(ctx, node, body);
             default -> sendError(ctx, HttpResponseStatus.NOT_FOUND);
         }
     }
@@ -271,6 +273,30 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                         .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, cause.message()));
                 })
                 .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, cause.message()));
+    }
+
+    private void handleBlueprint(ChannelHandlerContext ctx, AetherNode node, String body) {
+        BlueprintParser.parse(body)
+                       .onSuccess(blueprint -> {
+                           // Build commands for all slices in blueprint
+                           var commands = blueprint.slices().stream()
+                                                   .map(spec -> {
+                                                       AetherKey key = new AetherKey.BlueprintKey(spec.artifact());
+                                                       AetherValue value = new AetherValue.BlueprintValue(spec.instances());
+                                                       return (KVCommand<AetherKey>) new KVCommand.Put<>(key, value);
+                                                   })
+                                                   .toList();
+
+                           if (commands.isEmpty()) {
+                               sendJson(ctx, "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id().asString() + "\",\"slices\":0}");
+                               return;
+                           }
+
+                           node.apply(commands)
+                               .onSuccess(_ -> sendJson(ctx, "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id().asString() + "\",\"slices\":" + commands.size() + "}"))
+                               .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, cause.message()));
+                       })
+                       .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, cause.message()));
     }
 
     private String buildStatusResponse(AetherNode node) {

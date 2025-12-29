@@ -48,6 +48,7 @@
         <netty.version>4.2.0.Final</netty.version>
         <kryo.version>5.6.2</kryo.version>
         <fury-core.version>0.10.2</fury-core.version>
+        <jbct.version>0.3.12</jbct.version>
     </properties>
 
     <dependencyManagement>
@@ -236,6 +237,21 @@
                     </executions>
                 </plugin>
                 <plugin>
+                    <groupId>org.pragmatica-lite</groupId>
+                    <artifactId>jbct-maven-plugin</artifactId>
+                    <version>${jbct.version}</version>
+                    <configuration>
+                        <skip>true</skip> <!-- TODO: enable after fixing enum formatting bug -->
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>format</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
                     <artifactId>maven-shade-plugin</artifactId>
                     <version>3.6.0</version>
                     <configuration>
@@ -265,6 +281,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.pragmatica-lite</groupId>
+                <artifactId>jbct-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>

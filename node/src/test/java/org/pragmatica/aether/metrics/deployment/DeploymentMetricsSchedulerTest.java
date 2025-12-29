@@ -20,10 +20,9 @@ import org.pragmatica.message.MessageRouter;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 class DeploymentMetricsSchedulerTest {
 
@@ -61,8 +60,7 @@ class DeploymentMetricsSchedulerTest {
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(self), true));
 
         // Wait for ping to be sent
-        await().atMost(500, TimeUnit.MILLISECONDS)
-               .until(() -> !network.sentMessages.isEmpty());
+        waitUntil(() -> !network.sentMessages.isEmpty(), 500);
 
         assertThat(network.sentMessages).isNotEmpty();
         var sentMessage = network.sentMessages.getFirst();
@@ -77,21 +75,14 @@ class DeploymentMetricsSchedulerTest {
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(self), true));
 
         // Wait for initial ping
-        await().atMost(500, TimeUnit.MILLISECONDS)
-               .until(() -> !network.sentMessages.isEmpty());
+        waitUntil(() -> !network.sentMessages.isEmpty(), 500);
 
         // Lose leadership
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(node2), false));
 
         // Clear and wait - no new pings should arrive
         network.sentMessages.clear();
-
-        // Wait a bit longer than the interval
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        sleep(100);
 
         assertThat(network.sentMessages).isEmpty();
     }
@@ -101,12 +92,7 @@ class DeploymentMetricsSchedulerTest {
         // Setup topology but don't become leader
         scheduler.onTopologyChange(TopologyChangeNotification.nodeAdded(node2, List.of(self, node2)));
 
-        // Wait a bit
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        sleep(100);
 
         assertThat(network.sentMessages).isEmpty();
     }
@@ -123,8 +109,7 @@ class DeploymentMetricsSchedulerTest {
         scheduler.onTopologyChange(TopologyChangeNotification.nodeAdded(node3, List.of(self, node2, node3)));
 
         // Wait for pings
-        await().atMost(500, TimeUnit.MILLISECONDS)
-               .until(() -> network.sentMessages.size() >= 2);
+        waitUntil(() -> network.sentMessages.size() >= 2, 500);
 
         // Should have pinged both nodes
         var targets = network.sentMessages.stream()
@@ -142,8 +127,7 @@ class DeploymentMetricsSchedulerTest {
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(self), true));
 
         // Wait for initial pings
-        await().atMost(500, TimeUnit.MILLISECONDS)
-               .until(() -> network.sentMessages.size() >= 2);
+        waitUntil(() -> network.sentMessages.size() >= 2, 500);
 
         // Clear messages
         network.sentMessages.clear();
@@ -152,8 +136,7 @@ class DeploymentMetricsSchedulerTest {
         scheduler.onTopologyChange(TopologyChangeNotification.nodeRemoved(node3, List.of(self, node2)));
 
         // Wait for next ping round
-        await().atMost(500, TimeUnit.MILLISECONDS)
-               .until(() -> !network.sentMessages.isEmpty());
+        waitUntil(() -> !network.sentMessages.isEmpty(), 500);
 
         // Should only ping node2 (not node3)
         var targets = network.sentMessages.stream()
@@ -169,12 +152,7 @@ class DeploymentMetricsSchedulerTest {
         scheduler.onTopologyChange(TopologyChangeNotification.nodeAdded(self, List.of(self)));
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(self), true));
 
-        // Wait a bit
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        sleep(100);
 
         // Should not have sent any pings (only self in topology)
         assertThat(network.sentMessages).isEmpty();
@@ -185,12 +163,7 @@ class DeploymentMetricsSchedulerTest {
         // Become leader without adding topology
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(self), true));
 
-        // Wait a bit
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        sleep(100);
 
         // Should not have sent any pings (empty topology)
         assertThat(network.sentMessages).isEmpty();
@@ -207,31 +180,40 @@ class DeploymentMetricsSchedulerTest {
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(self), true));
 
         // Wait for ping
-        await().atMost(500, TimeUnit.MILLISECONDS)
-               .until(() -> !network.sentMessages.isEmpty());
-
-        var firstPingCount = network.sentMessages.size();
+        waitUntil(() -> !network.sentMessages.isEmpty(), 500);
 
         // Lose leadership
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(node2), false));
 
         // Clear and verify no pings
         network.sentMessages.clear();
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        sleep(100);
         assertThat(network.sentMessages).isEmpty();
 
         // Regain leadership
         scheduler.onLeaderChange(LeaderNotification.leaderChange(Option.option(self), true));
 
         // Wait for new pings
-        await().atMost(500, TimeUnit.MILLISECONDS)
-               .until(() -> !network.sentMessages.isEmpty());
+        waitUntil(() -> !network.sentMessages.isEmpty(), 500);
 
         assertThat(network.sentMessages).isNotEmpty();
+    }
+
+    // === Utilities ===
+
+    private void waitUntil(BooleanSupplier condition, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (!condition.getAsBoolean() && System.currentTimeMillis() < deadline) {
+            sleep(10);
+        }
+    }
+
+    private void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     // === Test Doubles ===

@@ -12,6 +12,8 @@ import org.pragmatica.aether.endpoint.EndpointRegistry;
 import org.pragmatica.aether.http.HttpRouter;
 import org.pragmatica.aether.http.RouteRegistry;
 import org.pragmatica.aether.http.SliceDispatcher;
+import org.pragmatica.aether.infra.artifact.ArtifactStore;
+import org.pragmatica.aether.infra.artifact.MavenProtocolHandler;
 import org.pragmatica.aether.invoke.InvocationHandler;
 import org.pragmatica.aether.invoke.InvocationMessage;
 import org.pragmatica.aether.invoke.SliceInvoker;
@@ -25,9 +27,9 @@ import org.pragmatica.aether.slice.SharedLibraryClassLoader;
 import org.pragmatica.aether.slice.SliceRuntime;
 import org.pragmatica.aether.slice.SliceStore;
 import org.pragmatica.aether.slice.dependency.SliceRegistry;
-import org.pragmatica.aether.slice.repository.Repository;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
+import org.pragmatica.aether.slice.repository.Repository;
 import org.pragmatica.cluster.leader.LeaderNotification;
 import org.pragmatica.cluster.metrics.DeploymentMetricsMessage;
 import org.pragmatica.cluster.metrics.MetricsMessage;
@@ -39,6 +41,10 @@ import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification;
 import org.pragmatica.cluster.topology.QuorumStateNotification;
 import org.pragmatica.cluster.topology.TopologyChangeNotification;
+import org.pragmatica.dht.ConsistentHashRing;
+import org.pragmatica.dht.DHTNode;
+import org.pragmatica.dht.LocalDHTClient;
+import org.pragmatica.dht.storage.MemoryStorageEngine;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
@@ -83,6 +89,8 @@ public interface AetherNode {
 
     BlueprintService blueprintService();
 
+    MavenProtocolHandler mavenProtocolHandler();
+
     /**
      * Apply commands to the cluster via consensus.
      */
@@ -118,6 +126,7 @@ public interface AetherNode {
                 SliceInvoker sliceInvoker,
                 InvocationHandler invocationHandler,
                 BlueprintService blueprintService,
+                MavenProtocolHandler mavenProtocolHandler,
                 Option<ManagementServer> managementServer,
                 Option<HttpRouter> httpRouter
         ) implements AetherNode {
@@ -233,6 +242,15 @@ public interface AetherNode {
                 clusterNode, kvStore, compositeRepository(config.sliceAction().repositories())
         );
 
+        // Create DHT and artifact repository
+        var dhtStorage = MemoryStorageEngine.create();
+        var dhtRing = ConsistentHashRing.<String>create();
+        dhtRing.addNode(config.self().id());
+        var dhtNode = DHTNode.create(config.self().id(), dhtStorage, dhtRing, config.artifactRepo());
+        var dhtClient = LocalDHTClient.create(dhtNode);
+        var artifactStore = ArtifactStore.artifactStore(dhtClient);
+        var mavenProtocolHandler = MavenProtocolHandler.mavenProtocolHandler(artifactStore);
+
         // Wire up message routing
         configureRoutes(router, kvStore, nodeDeploymentManager, clusterDeploymentManager,
                         endpointRegistry, routeRegistry, metricsCollector, metricsScheduler,
@@ -262,7 +280,7 @@ public interface AetherNode {
                 clusterNode, nodeDeploymentManager, clusterDeploymentManager, endpointRegistry,
                 metricsCollector, metricsScheduler, deploymentMetricsCollector, deploymentMetricsScheduler,
                 controlLoop, sliceInvoker, invocationHandler,
-                blueprintService, Option.empty(), httpRouter
+                blueprintService, mavenProtocolHandler, Option.empty(), httpRouter
         );
 
         // Create management server if enabled
@@ -273,7 +291,7 @@ public interface AetherNode {
                     clusterNode, nodeDeploymentManager, clusterDeploymentManager, endpointRegistry,
                     metricsCollector, metricsScheduler, deploymentMetricsCollector, deploymentMetricsScheduler,
                     controlLoop, sliceInvoker, invocationHandler,
-                    blueprintService, Option.some(managementServer), httpRouter
+                    blueprintService, mavenProtocolHandler, Option.some(managementServer), httpRouter
             );
         }
 

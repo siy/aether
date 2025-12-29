@@ -65,7 +65,7 @@ public interface ManagementServer {
 class ManagementServerImpl implements ManagementServer {
 
     private static final Logger log = LoggerFactory.getLogger(ManagementServerImpl.class);
-    private static final int MAX_CONTENT_LENGTH = 65536; // 64KB
+    private static final int MAX_CONTENT_LENGTH = 64 * 1024 * 1024; // 64MB for artifact uploads
 
     private final int port;
     private final Supplier<AetherNode> nodeSupplier;
@@ -153,9 +153,9 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
         if (method == HttpMethod.GET) {
             handleGet(ctx, uri);
-        } else if (method == HttpMethod.POST) {
-            var body = request.content().toString(CharsetUtil.UTF_8);
-            handlePost(ctx, uri, body);
+        } else if (method == HttpMethod.POST || method == HttpMethod.PUT) {
+            // Handle both POST and PUT for repository uploads (Maven uses PUT)
+            handlePost(ctx, uri, request);
         } else {
             sendError(ctx, HttpResponseStatus.METHOD_NOT_ALLOWED);
         }
@@ -163,6 +163,12 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     private void handleGet(ChannelHandlerContext ctx, String uri) {
         var node = nodeSupplier.get();
+
+        // Handle repository requests
+        if (uri.startsWith("/repository/")) {
+            handleRepositoryGet(ctx, node, uri);
+            return;
+        }
 
         var response = switch (uri) {
             case "/status" -> buildStatusResponse(node);
@@ -180,9 +186,32 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         }
     }
 
-    private void handlePost(ChannelHandlerContext ctx, String uri, String body) {
+    private void handleRepositoryGet(ChannelHandlerContext ctx, AetherNode node, String uri) {
+        node.mavenProtocolHandler().handleGet(uri)
+            .onSuccess(response -> {
+                var httpStatus = HttpResponseStatus.valueOf(response.statusCode());
+                var httpResponse = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1, httpStatus,
+                        Unpooled.wrappedBuffer(response.content())
+                );
+                httpResponse.headers().set(HttpHeaderNames.CONTENT_TYPE, response.contentType());
+                httpResponse.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().length);
+                ctx.writeAndFlush(httpResponse).addListener(ChannelFutureListener.CLOSE);
+            })
+            .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, cause.message()));
+    }
+
+    private void handlePost(ChannelHandlerContext ctx, String uri, FullHttpRequest request) {
         var node = nodeSupplier.get();
 
+        // Handle repository PUT requests (binary content)
+        if (uri.startsWith("/repository/")) {
+            handleRepositoryPut(ctx, node, uri, request);
+            return;
+        }
+
+        // For other endpoints, read as string
+        var body = request.content().toString(CharsetUtil.UTF_8);
         switch (uri) {
             case "/deploy" -> handleDeploy(ctx, node, body);
             case "/scale" -> handleScale(ctx, node, body);
@@ -190,6 +219,26 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             case "/blueprint" -> handleBlueprint(ctx, node, body);
             default -> sendError(ctx, HttpResponseStatus.NOT_FOUND);
         }
+    }
+
+    private void handleRepositoryPut(ChannelHandlerContext ctx, AetherNode node, String uri, FullHttpRequest request) {
+        // Read binary content directly from ByteBuf
+        var byteBuf = request.content();
+        var content = new byte[byteBuf.readableBytes()];
+        byteBuf.readBytes(content);
+
+        node.mavenProtocolHandler().handlePut(uri, content)
+            .onSuccess(response -> {
+                var httpStatus = HttpResponseStatus.valueOf(response.statusCode());
+                var httpResponse = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1, httpStatus,
+                        Unpooled.wrappedBuffer(response.content())
+                );
+                httpResponse.headers().set(HttpHeaderNames.CONTENT_TYPE, response.contentType());
+                httpResponse.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().length);
+                ctx.writeAndFlush(httpResponse).addListener(ChannelFutureListener.CLOSE);
+            })
+            .onFailure(cause -> sendJsonError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, cause.message()));
     }
 
     // Simple JSON parsing helpers

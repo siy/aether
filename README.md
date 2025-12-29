@@ -91,7 +91,7 @@ See Aether's resilience in action:
 ```bash
 cd forge
 mvn package
-java -jar target/forge-0.6.1.jar
+java -jar target/forge-0.6.2.jar
 # Open http://localhost:8888
 ```
 

@@ -9,7 +9,7 @@ curl -sSL https://aether.pragmatica.dev/install.sh | bash
 # Or build from source
 git clone https://github.com/pragmatica-lite/aether.git
 cd aether && mvn install -DskipTests
-alias aether="java -jar cli/target/cli-0.6.1.jar"
+alias aether="java -jar cli/target/cli-0.6.2.jar"
 ```
 
 ## Commands Overview
@@ -316,8 +316,8 @@ Show version:
 
 ```bash
 aether version
-# Aether CLI 0.6.1
-# Runtime 0.6.1
+# Aether CLI 0.6.2
+# Runtime 0.6.2
 # Java 25
 ```
 

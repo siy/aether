@@ -17,8 +17,8 @@ This guide walks you through creating your first Aether project, from zero to a 
 curl -sSL https://aether.pragmatica.dev/install.sh | bash
 
 # Or with Maven
-mvn dependency:get -Dartifact=org.pragmatica-lite.aether:cli:0.6.1
-alias aether="java -jar ~/.m2/repository/org/pragmatica-lite/aether/cli/0.6.1/cli-0.6.1.jar"
+mvn dependency:get -Dartifact=org.pragmatica-lite.aether:cli:0.6.2
+alias aether="java -jar ~/.m2/repository/org/pragmatica-lite/aether/cli/0.6.2/cli-0.6.2.jar"
 ```
 
 ### Create a New Project
@@ -107,7 +107,7 @@ Create a multi-module Maven project:
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <aether.version>0.6.1</aether.version>
+        <aether.version>0.6.2</aether.version>
         <pragmatica.version>0.9.0</pragmatica.version>
     </properties>
 

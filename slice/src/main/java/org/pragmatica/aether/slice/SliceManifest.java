@@ -36,9 +36,8 @@ public interface SliceManifest {
      * @return SliceManifestInfo or error if manifest is missing/invalid
      */
     static Result<SliceManifestInfo> read(URL jarUrl) {
-        return Result.lift(Causes::fromThrowable,
-                           () -> readManifest(jarUrl))
-                     .flatMap(SliceManifest::parseManifest);
+        return readManifest(jarUrl)
+               .flatMap(SliceManifest::parseManifest);
     }
 
     /**
@@ -57,7 +56,7 @@ public interface SliceManifest {
                      .flatMap(SliceManifest::parseManifest);
     }
 
-    private static Manifest readManifest(URL jarUrl) throws IOException {
+    private static Result<Manifest> readManifest(URL jarUrl) {
         var path = jarUrl.getPath();
         if (path.startsWith("file:")) {
             path = path.substring(5);
@@ -66,13 +65,21 @@ public interface SliceManifest {
         if (path.contains("!")) {
             path = path.substring(0, path.indexOf("!"));
         }
-        try (var jarFile = new JarFile(path)) {
-            var manifest = jarFile.getManifest();
-            if (manifest == null) {
-                throw new IOException("JAR has no manifest: " + jarUrl);
-            }
-            return manifest;
-        }
+        var jarPath = path;
+        return Result.lift(Causes::fromThrowable,
+                           () -> new JarFile(jarPath))
+                     .flatMap(jarFile -> {
+                                  try (jarFile) {
+                                  var manifest = jarFile.getManifest();
+                                  return manifest == null
+                                         ? MANIFEST_NOT_FOUND_FN.apply(jarUrl.toString())
+                                                                .result()
+                                         : Result.success(manifest);
+                              } catch (IOException e) {
+                                  return Causes.fromThrowable(e)
+                                               .result();
+                              }
+                              });
     }
 
     private static Result<Manifest> readManifestFromUrl(URL manifestUrl) {

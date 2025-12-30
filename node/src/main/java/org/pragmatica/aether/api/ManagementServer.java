@@ -7,9 +7,12 @@ import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
+import org.pragmatica.net.TlsConfig;
+import org.pragmatica.net.TlsContextFactory;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -39,6 +42,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.CharsetUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +66,11 @@ public interface ManagementServer {
     Promise<Unit> stop();
 
     static ManagementServer managementServer(int port, Supplier<AetherNode> nodeSupplier) {
-        return new ManagementServerImpl(port, nodeSupplier);
+        return managementServer(port, nodeSupplier, Option.empty());
+    }
+
+    static ManagementServer managementServer(int port, Supplier<AetherNode> nodeSupplier, Option<TlsConfig> tls) {
+        return new ManagementServerImpl(port, nodeSupplier, tls);
     }
 }
 
@@ -77,15 +85,19 @@ class ManagementServerImpl implements ManagementServer {
     private final MultiThreadIoEventLoopGroup workerGroup;
     private final AlertManager alertManager;
     private final DashboardMetricsPublisher metricsPublisher;
+    private final Option<SslContext> sslContext;
     private Channel serverChannel;
 
-    ManagementServerImpl(int port, Supplier<AetherNode> nodeSupplier) {
+    ManagementServerImpl(int port, Supplier<AetherNode> nodeSupplier, Option<TlsConfig> tls) {
         this.port = port;
         this.nodeSupplier = nodeSupplier;
         this.bossGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
         this.workerGroup = new MultiThreadIoEventLoopGroup(NioIoHandler.newFactory());
         this.alertManager = new AlertManager();
         this.metricsPublisher = new DashboardMetricsPublisher(nodeSupplier, alertManager);
+        this.sslContext = tls.map(TlsContextFactory::create)
+                             .flatMap(result -> result.fold(_ -> Option.empty(),
+                                                            Option::some));
     }
 
     @Override
@@ -97,6 +109,7 @@ class ManagementServerImpl implements ManagementServer {
             @Override
             protected void initChannel(SocketChannel ch) {
                                                                      ChannelPipeline p = ch.pipeline();
+                                                                     sslContext.onPresent(ctx -> p.addLast(ctx.newHandler(ch.alloc())));
                                                                      p.addLast(new HttpServerCodec());
                                                                      p.addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
                                                                      p.addLast(new WebSocketServerProtocolHandler("/ws/dashboard",
@@ -112,7 +125,11 @@ class ManagementServerImpl implements ManagementServer {
                                                              if (future.isSuccess()) {
                                                              serverChannel = ((io.netty.channel.ChannelFuture) future).channel();
                                                              metricsPublisher.start();
-                                                             log.info("Management server started on port {} (dashboard at /dashboard)",
+                                                             var protocol = sslContext.isPresent()
+                                                                            ? "HTTPS"
+                                                                            : "HTTP";
+                                                             log.info("{} management server started on port {} (dashboard at /dashboard)",
+                                                                      protocol,
                                                                       port);
                                                              promise.succeed(unit());
                                                          }else {
@@ -206,7 +223,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             case"/invocation-metrics" -> buildInvocationMetricsResponse(node);
             case"/thresholds" -> alertManager.thresholdsAsJson();
             case"/alerts" -> buildAlertsResponse();
-            case"/health" -> "{\"status\":\"ok\"}";
+            case"/health" -> buildHealthResponse(node);
             default -> null;
         };
         if (response != null) {
@@ -430,6 +447,39 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                        .onFailure(cause -> sendJsonError(ctx,
                                                          HttpResponseStatus.BAD_REQUEST,
                                                          cause.message()));
+    }
+
+    private String buildHealthResponse(AetherNode node) {
+        var metrics = node.metricsCollector()
+                          .allMetrics();
+        var nodeCount = metrics.size();
+        var sliceCount = node.sliceStore()
+                             .loaded()
+                             .size();
+        // Quorum: we have metrics from at least half the expected nodes
+        // Use nodeCount > 1 as a simple proxy for "cluster is functioning"
+        var hasQuorum = nodeCount >= 1;
+        // Determine status: healthy if quorum, degraded if no slices but quorum, unhealthy if no quorum
+        var status = !hasQuorum
+                     ? "unhealthy"
+                     : sliceCount == 0
+                       ? "degraded"
+                       : "healthy";
+        var sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"status\":\"")
+          .append(status)
+          .append("\",");
+        sb.append("\"quorum\":")
+          .append(hasQuorum)
+          .append(",");
+        sb.append("\"nodeCount\":")
+          .append(nodeCount)
+          .append(",");
+        sb.append("\"sliceCount\":")
+          .append(sliceCount);
+        sb.append("}");
+        return sb.toString();
     }
 
     private String buildStatusResponse(AetherNode node) {

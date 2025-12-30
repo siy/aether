@@ -9,6 +9,7 @@ import org.pragmatica.cluster.net.NodeInfo;
 import org.pragmatica.cluster.topology.ip.TopologyConfig;
 import org.pragmatica.dht.DHTConfig;
 import org.pragmatica.lang.Option;
+import org.pragmatica.net.TlsConfig;
 
 import java.util.List;
 
@@ -24,6 +25,7 @@ import static org.pragmatica.lang.io.TimeSpan.timeSpan;
  * @param managementPort  Port for HTTP management API (0 to disable)
  * @param httpRouter      HTTP router configuration (empty to disable)
  * @param artifactRepo    DHT configuration for artifact repository (replication factor, 0 = full)
+ * @param tls             TLS configuration for secure connections (empty for plain TCP/HTTP)
  */
 public record AetherNodeConfig(
  TopologyConfig topology,
@@ -31,7 +33,8 @@ public record AetherNodeConfig(
  SliceActionConfig sliceAction,
  int managementPort,
  Option<RouterConfig> httpRouter,
- DHTConfig artifactRepo) {
+ DHTConfig artifactRepo,
+ Option<TlsConfig> tls) {
     public static final int DEFAULT_MANAGEMENT_PORT = 8080;
     public static final int MANAGEMENT_DISABLED = 0;
 
@@ -103,7 +106,8 @@ public record AetherNodeConfig(
                                     sliceActionConfig,
                                     managementPort,
                                     httpRouter,
-                                    artifactRepoConfig);
+                                    artifactRepoConfig,
+                                    Option.empty());
     }
 
     public static AetherNodeConfig testConfig(NodeId self, int port, List<NodeInfo> coreNodes) {
@@ -117,7 +121,25 @@ public record AetherNodeConfig(
                                     defaultSliceConfig(),
                                     MANAGEMENT_DISABLED,
                                     Option.empty(),
-                                    DHTConfig.FULL);
+                                    DHTConfig.FULL,
+                                    Option.empty());
+    }
+
+    /**
+     * Create a new configuration with TLS enabled for all components (HTTP and cluster).
+     */
+    public AetherNodeConfig withTls(TlsConfig tlsConfig) {
+        var tlsOption = Option.some(tlsConfig);
+        // Update TopologyConfig with TLS for cluster communication
+        var newTopology = new TopologyConfig(
+        topology.self(), topology.reconciliationInterval(), topology.pingInterval(), topology.coreNodes(), tlsOption);
+        return new AetherNodeConfig(newTopology,
+                                    protocol,
+                                    sliceAction,
+                                    managementPort,
+                                    httpRouter,
+                                    artifactRepo,
+                                    tlsOption);
     }
 
     public NodeId self() {

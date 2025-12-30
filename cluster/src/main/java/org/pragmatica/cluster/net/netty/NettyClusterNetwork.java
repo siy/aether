@@ -19,6 +19,7 @@ import org.pragmatica.lang.utils.SharedScheduler;
 import org.pragmatica.message.Message;
 import org.pragmatica.message.MessageRouter;
 import org.pragmatica.net.Server;
+import org.pragmatica.net.ServerConfig;
 import org.pragmatica.net.serialization.Deserializer;
 import org.pragmatica.net.serialization.Serializer;
 
@@ -163,10 +164,14 @@ public class NettyClusterNetwork implements ClusterNetwork {
     @Override
     public Promise<Unit> start() {
         if (isRunning.compareAndSet(false, true)) {
-            return Server.server("NettyClusterNetwork",
-                                 self.address()
-                                     .port(),
-                                 handlers)
+            var serverConfig = ServerConfig.serverConfig("NettyClusterNetwork",
+                                                         self.address()
+                                                             .port());
+            // Apply TLS if configured
+            var effectiveConfig = topologyManager.tls()
+                                                 .map(serverConfig::withTls)
+                                                 .or(serverConfig);
+            return Server.server(effectiveConfig, handlers)
                          .onSuccess(NettyClusterNetwork.this.server::set)
                          .onFailure(_ -> isRunning.set(false))
                          .mapToUnit();

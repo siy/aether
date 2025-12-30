@@ -1,9 +1,11 @@
 package org.pragmatica.aether.http;
 
 import org.pragmatica.aether.invoke.SliceInvoker;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
+import org.pragmatica.net.TlsContextFactory;
 import org.pragmatica.net.serialization.Deserializer;
 import org.pragmatica.net.serialization.Serializer;
 
@@ -24,6 +26,7 @@ import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.QueryStringDecoder;
+import io.netty.handler.ssl.SslContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +70,7 @@ class HttpRouterImpl implements HttpRouter {
     private final ResponseWriter responseWriter;
     private final MultiThreadIoEventLoopGroup bossGroup;
     private final MultiThreadIoEventLoopGroup workerGroup;
+    private final Option<SslContext> sslContext;
     private Channel serverChannel;
 
     HttpRouterImpl(RouterConfig config,
@@ -82,6 +86,10 @@ class HttpRouterImpl implements HttpRouter {
         this.responseWriter = ResponseWriter.responseWriter(serializer);
         this.bossGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
         this.workerGroup = new MultiThreadIoEventLoopGroup(NioIoHandler.newFactory());
+        this.sslContext = config.tls()
+                                .map(TlsContextFactory::create)
+                                .flatMap(result -> result.fold(_ -> Option.empty(),
+                                                               Option::some));
     }
 
     @Override
@@ -93,6 +101,7 @@ class HttpRouterImpl implements HttpRouter {
             @Override
             protected void initChannel(SocketChannel ch) {
                                                                      ChannelPipeline p = ch.pipeline();
+                                                                     sslContext.onPresent(ctx -> p.addLast(ctx.newHandler(ch.alloc())));
                                                                      p.addLast(new HttpServerCodec());
                                                                      p.addLast(new HttpObjectAggregator(config.maxContentLength()));
                                                                      p.addLast(new HttpRequestHandler(
@@ -103,7 +112,11 @@ class HttpRouterImpl implements HttpRouter {
                                             .addListener(future -> {
                                                              if (future.isSuccess()) {
                                                              serverChannel = ((io.netty.channel.ChannelFuture) future).channel();
-                                                             log.info("HTTP router started on port {}",
+                                                             var protocol = sslContext.isPresent()
+                                                                            ? "HTTPS"
+                                                                            : "HTTP";
+                                                             log.info("{} router started on port {}",
+                                                                      protocol,
                                                                       config.port());
                                                              promise.succeed(unit());
                                                          }else {
@@ -161,22 +174,28 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             responseWriter.writeError(ctx, HttpResponseStatus.BAD_REQUEST, Causes.cause("Invalid HTTP request"));
             return;
         }
-        var method = HttpMethod.fromString(request.method()
-                                                  .name());
         var decoder = new QueryStringDecoder(request.uri());
         var path = decoder.path();
-        log.debug("Received {} {}", method, path);
-        routeRegistry.match(method, path)
-                     .fold(() -> {
-                               responseWriter.writeError(ctx,
-                                                         HttpResponseStatus.NOT_FOUND,
-                                                         new HttpRouterError.RouteNotFound(path));
-                               return null;
-                           },
-                           match -> {
-                               handleMatchedRoute(ctx, method, path, decoder, request, match);
-                               return null;
-                           });
+        HttpMethod.fromString(request.method()
+                                     .name())
+                  .onEmpty(() -> responseWriter.writeError(ctx,
+                                                           HttpResponseStatus.METHOD_NOT_ALLOWED,
+                                                           Causes.cause("Unsupported HTTP method: " + request.method()
+                                                                                                             .name())))
+                  .onPresent(method -> {
+                                 log.debug("Received {} {}", method, path);
+                                 routeRegistry.match(method, path)
+                                              .fold(() -> {
+                                                        responseWriter.writeError(ctx,
+                                                                                  HttpResponseStatus.NOT_FOUND,
+                                                                                  new HttpRouterError.RouteNotFound(path));
+                                                        return null;
+                                                    },
+                                                    match -> {
+                                                        handleMatchedRoute(ctx, method, path, decoder, request, match);
+                                                        return null;
+                                                    });
+                             });
     }
 
     private void handleMatchedRoute(ChannelHandlerContext ctx,

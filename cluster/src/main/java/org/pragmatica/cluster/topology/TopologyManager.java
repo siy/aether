@@ -4,6 +4,7 @@ import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.cluster.net.NodeInfo;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.io.TimeSpan;
+import org.pragmatica.net.TlsConfig;
 
 import java.net.SocketAddress;
 
@@ -37,4 +38,9 @@ public interface TopologyManager {
     void stop();
 
     TimeSpan pingInterval();
+
+    /// TLS configuration for cluster communication (empty for plain TCP).
+    default Option<TlsConfig> tls() {
+        return Option.empty();
+    }
 }

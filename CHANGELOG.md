@@ -13,8 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Alert management** - Configurable thresholds with in-memory alert tracking
 - **Dashboard tabs** - Metrics, Slices, History, and Alerts views
 - **New API endpoints** - `/slices/status`, `/invocation-metrics`, `/thresholds`, `/alerts`
+- **TLS support** - Added `withTls()` to AetherNodeConfig, propagated to ManagementServer, HttpRouter, and cluster network
+- **Enhanced /health endpoint** - Returns status (healthy/degraded/unhealthy), quorum, nodeCount, sliceCount
+- **RingBuffer utility** - Thread-safe ring buffer with O(1) add and fixed memory footprint
+- **Operational runbooks** - Added docs/runbooks/ with incident-response, scaling, troubleshooting, deployment guides
 
 ### Changed
+- **MetricsCollector** - Use RingBuffer instead of CopyOnWriteArrayList for historical metrics (7200 capacity)
+- **HttpMethod.fromString()** - Returns `Option<HttpMethod>` instead of throwing
+- **PathPattern.compile()** - Returns `Result<PathPattern>` instead of throwing
+- **SliceManifest.readManifest()** - Returns `Result<Manifest>` instead of throwing
+- **Main.parsePeerAddress()** - Returns `Optional<NodeInfo>` instead of throwing
+- **DHTNode.create()** - Renamed to `DHTNode.dhtNode()` (JBCT naming convention)
+- **SliceRegistry.create()** - Renamed to `SliceRegistry.sliceRegistry()` (JBCT naming convention)
 
 ### Fixed
 

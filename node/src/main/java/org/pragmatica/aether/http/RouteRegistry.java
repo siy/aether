@@ -225,20 +225,22 @@ class RouteRegistryImpl implements RouteRegistry {
     }
 
     private void addRoute(RouteKey key, RouteValue value) {
-        try{
-            // Create the pattern from "METHOD:path"
-            var pattern = PathPattern.compile(value.httpMethod() + ":" + value.pathPattern());
-            var registered = new RegisteredRoute(key, value, pattern);
-            routes.put(key, registered);
-            log.debug("Added route: {} {} -> {}:{}",
-                      value.httpMethod(),
-                      value.pathPattern(),
-                      value.artifact()
-                           .asString(),
-                      value.methodName());
-        } catch (Exception e) {
-            log.error("Failed to compile route pattern: {} {}", value.httpMethod(), value.pathPattern(), e);
-        }
+        // Create the pattern from "METHOD:path"
+        PathPattern.compile(value.httpMethod() + ":" + value.pathPattern())
+                   .onSuccess(pattern -> {
+                                  var registered = new RegisteredRoute(key, value, pattern);
+                                  routes.put(key, registered);
+                                  log.debug("Added route: {} {} -> {}:{}",
+                                            value.httpMethod(),
+                                            value.pathPattern(),
+                                            value.artifact()
+                                                 .asString(),
+                                            value.methodName());
+                              })
+                   .onFailure(cause -> log.error("Failed to compile route pattern: {} {} - {}",
+                                                 value.httpMethod(),
+                                                 value.pathPattern(),
+                                                 cause.message()));
     }
 
     @Override

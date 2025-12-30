@@ -26,7 +26,7 @@ public interface SliceRegistry {
     /**
      * Create a new empty registry.
      */
-    static SliceRegistry create() {
+    static SliceRegistry sliceRegistry() {
         return new SliceRegistryImpl(new ConcurrentHashMap<>());
     }
 

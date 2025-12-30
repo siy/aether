@@ -33,10 +33,10 @@ public final class DHTNode<N extends Comparable<N>> {
      * @param ring    consistent hash ring for routing
      * @param config  DHT configuration
      */
-    public static <N extends Comparable<N>> DHTNode<N> create(N nodeId,
-                                                              StorageEngine storage,
-                                                              ConsistentHashRing<N> ring,
-                                                              DHTConfig config) {
+    public static <N extends Comparable<N>> DHTNode<N> dhtNode(N nodeId,
+                                                               StorageEngine storage,
+                                                               ConsistentHashRing<N> ring,
+                                                               DHTConfig config) {
         return new DHTNode<>(nodeId, storage, ring, config);
     }
 

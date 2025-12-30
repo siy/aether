@@ -177,7 +177,7 @@ public interface AetherNode {
         // Create KVStore (state machine for consensus)
         var kvStore = new KVStore<AetherKey, AetherValue>(router, serializer, deserializer);
         // Create slice management components
-        var sliceRegistry = SliceRegistry.create();
+        var sliceRegistry = SliceRegistry.sliceRegistry();
         var sharedLibraryLoader = createSharedLibraryLoader(config);
         var sliceStore = SliceStore.sliceStore(sliceRegistry,
                                                config.sliceAction()
@@ -224,11 +224,11 @@ public interface AetherNode {
         var dhtRing = ConsistentHashRing.<String>create();
         dhtRing.addNode(config.self()
                               .id());
-        var dhtNode = DHTNode.create(config.self()
-                                           .id(),
-                                     dhtStorage,
-                                     dhtRing,
-                                     config.artifactRepo());
+        var dhtNode = DHTNode.dhtNode(config.self()
+                                            .id(),
+                                      dhtStorage,
+                                      dhtRing,
+                                      config.artifactRepo());
         var dhtClient = LocalDHTClient.create(dhtNode);
         var artifactStore = ArtifactStore.artifactStore(dhtClient);
         var mavenProtocolHandler = MavenProtocolHandler.mavenProtocolHandler(artifactStore);
@@ -249,11 +249,19 @@ public interface AetherNode {
         // Create HTTP router if configured
         Option<HttpRouter> httpRouter = config.httpRouter()
                                               .map(routerConfig -> {
+                                                       // Apply TLS from main config if RouterConfig doesn't have its own TLS
+        var effectiveConfig = routerConfig.tls()
+                                          .isEmpty() && config.tls()
+                                                              .isPresent()
+                              ? config.tls()
+                                      .map(routerConfig::withTls)
+                                      .or(routerConfig)
+                              : routerConfig;
                                                        // Create artifact resolver that parses slice ID strings to Artifact
         SliceDispatcher.ArtifactResolver artifactResolver = sliceId -> Artifact.artifact(sliceId)
                                                                                .fold(cause -> null, artifact -> artifact);
                                                        return HttpRouter.httpRouter(
-        routerConfig, routeRegistry, sliceInvoker, artifactResolver, serializer, deserializer);
+        effectiveConfig, routeRegistry, sliceInvoker, artifactResolver, serializer, deserializer);
                                                    });
         // Create the node first (without management server reference)
         var node = new aetherNode(
@@ -279,7 +287,7 @@ public interface AetherNode {
         httpRouter);
         // Create management server if enabled
         if (config.managementPort() > 0) {
-            var managementServer = ManagementServer.managementServer(config.managementPort(), () -> node);
+            var managementServer = ManagementServer.managementServer(config.managementPort(), () -> node, config.tls());
             return new aetherNode(
             config,
             router,

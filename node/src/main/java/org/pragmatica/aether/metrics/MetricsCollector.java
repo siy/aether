@@ -6,13 +6,13 @@ import org.pragmatica.cluster.metrics.MetricsMessage.MetricsPong;
 import org.pragmatica.cluster.net.ClusterNetwork;
 import org.pragmatica.cluster.net.NodeId;
 import org.pragmatica.message.MessageReceiver;
+import org.pragmatica.utility.RingBuffer;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.DoubleAdder;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -95,6 +95,9 @@ class MetricsCollectorImpl implements MetricsCollector {
     // Sliding window duration: 2 hours in milliseconds
     private static final long SLIDING_WINDOW_MS = 2 * 60 * 60 * 1000L;
 
+    // Ring buffer capacity: 2 hours at 1 sample/second = 7200 samples
+    private static final int RING_BUFFER_CAPACITY = 7200;
+
     private final NodeId self;
     private final ClusterNetwork network;
 
@@ -111,8 +114,8 @@ class MetricsCollectorImpl implements MetricsCollector {
     // Metrics received from other nodes
     private final ConcurrentHashMap<NodeId, Map<String, Double>> remoteMetrics = new ConcurrentHashMap<>();
 
-    // Sliding window for historical metrics - list of snapshots per node, oldest first
-    private final ConcurrentHashMap<NodeId, java.util.concurrent.CopyOnWriteArrayList<MetricsSnapshot>> historicalMetricsMap = new ConcurrentHashMap<>();
+    // Ring buffer for historical metrics - fixed capacity, O(1) add, oldest elements auto-evicted
+    private final ConcurrentHashMap<NodeId, RingBuffer<MetricsSnapshot>> historicalMetricsMap = new ConcurrentHashMap<>();
 
     MetricsCollectorImpl(NodeId self, ClusterNetwork network) {
         this.self = self;
@@ -184,11 +187,9 @@ class MetricsCollectorImpl implements MetricsCollector {
     public Map<NodeId, java.util.List<MetricsSnapshot>> historicalMetrics() {
         var cutoff = System.currentTimeMillis() - SLIDING_WINDOW_MS;
         var result = new ConcurrentHashMap<NodeId, java.util.List<MetricsSnapshot>>();
-        historicalMetricsMap.forEach((nodeId, snapshots) -> {
+        historicalMetricsMap.forEach((nodeId, ringBuffer) -> {
                                          // Filter to only include snapshots within the window
-        var filtered = snapshots.stream()
-                                .filter(s -> s.timestamp() >= cutoff)
-                                .toList();
+        var filtered = ringBuffer.filter(s -> s.timestamp() >= cutoff);
                                          if (!filtered.isEmpty()) {
                                          result.put(nodeId, filtered);
                                      }
@@ -219,16 +220,13 @@ class MetricsCollectorImpl implements MetricsCollector {
     }
 
     /**
-     * Add metrics snapshot to historical window and cleanup old entries.
+     * Add metrics snapshot to historical ring buffer.
+     * Old entries are automatically evicted when buffer is full.
      */
     private void addToHistory(NodeId nodeId, Map<String, Double> metrics) {
-        var snapshots = historicalMetricsMap.computeIfAbsent(
-        nodeId, _ -> new java.util.concurrent.CopyOnWriteArrayList<>());
-        var now = System.currentTimeMillis();
-        snapshots.add(new MetricsSnapshot(now, metrics));
-        // Cleanup old entries outside the sliding window
-        var cutoff = now - SLIDING_WINDOW_MS;
-        snapshots.removeIf(s -> s.timestamp() < cutoff);
+        var ringBuffer = historicalMetricsMap.computeIfAbsent(
+        nodeId, _ -> RingBuffer.ringBuffer(RING_BUFFER_CAPACITY));
+        ringBuffer.add(new MetricsSnapshot(System.currentTimeMillis(), metrics));
     }
 
     /**

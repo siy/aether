@@ -1,6 +1,10 @@
 package org.pragmatica.aether.http;
 
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.utils.Causes;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,15 +24,25 @@ public record PathPattern(
  List<String> variableNames) {
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{([^}]+)}");
 
-    public static PathPattern compile(String routePattern) {
+    private static final Fn1<Cause, String>MISSING_METHOD = Causes.forOneValue("Route pattern must include method: {}");
+
+    private static final Fn1<Cause, String>UNKNOWN_METHOD = Causes.forOneValue("Unknown HTTP method: {}");
+
+    public static Result<PathPattern> compile(String routePattern) {
         // Parse "GET:/api/users/{userId}" format
         var colonIndex = routePattern.indexOf(':');
         if (colonIndex == - 1) {
-            throw new IllegalArgumentException("Route pattern must include method: " + routePattern);
+            return MISSING_METHOD.apply(routePattern)
+                                 .result();
         }
         var methodStr = routePattern.substring(0, colonIndex);
         var pathPattern = routePattern.substring(colonIndex + 1);
-        var method = HttpMethod.fromString(methodStr);
+        return HttpMethod.fromString(methodStr)
+                         .toResult(UNKNOWN_METHOD.apply(methodStr))
+                         .map(method -> buildPattern(method, routePattern, pathPattern));
+    }
+
+    private static PathPattern buildPattern(HttpMethod method, String routePattern, String pathPattern) {
         var variableNames = new ArrayList<String>();
         // Convert path pattern to regex
         var regexBuilder = new StringBuilder("^");

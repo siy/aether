@@ -86,7 +86,8 @@ public record Main(String[] args) {
                .map(peersStr -> Arrays.stream(peersStr.split(","))
                                       .map(String::trim)
                                       .filter(s -> !s.isEmpty())
-                                      .map(this::parsePeerAddress)
+                                      .flatMap(peerStr -> parsePeerAddress(peerStr)
+                                                          .stream())
                                       .toList())
                .map(peers -> {
                         // Include self in the peer list if not already there
@@ -102,23 +103,23 @@ public record Main(String[] args) {
                .orElse(List.of(selfInfo));
     }
 
-    private NodeInfo parsePeerAddress(String peerStr) {
+    private java.util.Optional<NodeInfo> parsePeerAddress(String peerStr) {
         var parts = peerStr.split(":");
         if (parts.length == 2) {
             var host = parts[0];
             var port = Integer.parseInt(parts[1]);
             // Generate node ID from address for discovery
             var nodeId = NodeId.nodeId("node-" + host + "-" + port);
-            return nodeInfo(nodeId, nodeAddress(host, port));
+            return java.util.Optional.of(nodeInfo(nodeId, nodeAddress(host, port)));
         }else if (parts.length == 3) {
             // Format: nodeId:host:port
             var nodeId = NodeId.nodeId(parts[0]);
             var host = parts[1];
             var port = Integer.parseInt(parts[2]);
-            return nodeInfo(nodeId, nodeAddress(host, port));
+            return java.util.Optional.of(nodeInfo(nodeId, nodeAddress(host, port)));
         }
-        throw new IllegalArgumentException("Invalid peer format: " + peerStr
-                                           + ". Expected host:port or nodeId:host:port");
+        log.warn("Invalid peer format: {}. Expected host:port or nodeId:host:port", peerStr);
+        return java.util.Optional.empty();
     }
 
     private java.util.Optional<String> findArg(String prefix) {

@@ -11,6 +11,7 @@ import org.pragmatica.lang.utils.SharedScheduler;
 import org.pragmatica.message.MessageReceiver;
 import org.pragmatica.message.MessageRouter;
 import org.pragmatica.net.NodeAddress;
+import org.pragmatica.net.TlsConfig;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -184,6 +185,12 @@ public interface TcpTopologyManager extends TopologyManager {
             public TimeSpan pingInterval() {
                 return config()
                        .pingInterval();
+            }
+
+            @Override
+            public Option<TlsConfig> tls() {
+                return config()
+                       .tls();
             }
         }
         return new Manager(new ConcurrentHashMap<>(),

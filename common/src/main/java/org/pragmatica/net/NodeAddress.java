@@ -10,7 +10,6 @@ public interface NodeAddress {
 
     static NodeAddress nodeAddress(String host, int port) {
         record nodeAddress(String host, int port) implements NodeAddress {}
-
         return new nodeAddress(host, port);
     }
 

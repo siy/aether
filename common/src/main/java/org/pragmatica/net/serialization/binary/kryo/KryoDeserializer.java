@@ -1,12 +1,13 @@
 package org.pragmatica.net.serialization.binary.kryo;
 
+import org.pragmatica.net.serialization.Deserializer;
+import org.pragmatica.net.serialization.binary.ClassRegistrator;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.util.Pool;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
-import org.pragmatica.net.serialization.Deserializer;
-import org.pragmatica.net.serialization.binary.ClassRegistrator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,19 +20,18 @@ public interface KryoDeserializer extends Deserializer {
             @Override
             public <T> T read(ByteBuf byteBuf) {
                 var kryo = pool.obtain();
-
                 try (var byteBufInputStream = new ByteBufInputStream(byteBuf);
-                     var input = new Input(byteBufInputStream)) {
+                var input = new Input(byteBufInputStream)) {
                     return (T) kryo.readClassAndObject(input);
                 } catch (Exception e) {
                     log.error("Error deserializing object", e);
                     throw new RuntimeException(e);
-                } finally {
-                    pool().free(kryo);
+                } finally{
+                    pool()
+                    .free(kryo);
                 }
             }
         }
-
         return new kryoDeserializer(KryoPoolFactory.kryoPool(registrators));
     }
 }

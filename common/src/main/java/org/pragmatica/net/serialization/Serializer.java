@@ -7,11 +7,10 @@ import io.netty.buffer.Unpooled;
 public interface Serializer {
     default <T> byte[] encode(T object) {
         var byteBuf = Unpooled.buffer();
-
-        try {
+        try{
             write(byteBuf, object);
             return byteBuf.array();
-        } finally {
+        } finally{
             byteBuf.release();
         }
     }

@@ -48,7 +48,7 @@
         <netty.version>4.2.0.Final</netty.version>
         <kryo.version>5.6.2</kryo.version>
         <fury-core.version>0.10.2</fury-core.version>
-        <jbct.version>0.3.12</jbct.version>
+        <jbct.version>0.4.0</jbct.version>
     </properties>
 
     <dependencyManagement>
@@ -241,7 +241,7 @@
                     <artifactId>jbct-maven-plugin</artifactId>
                     <version>${jbct.version}</version>
                     <configuration>
-                        <skip>true</skip> <!-- TODO: enable after fixing enum formatting bug -->
+                        <skip>true</skip> <!-- TODO: parse errors on FrameworkClassLoader.java and SharedDependencyLoader.java -->
                     </configuration>
                     <executions>
                         <execution>

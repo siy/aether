@@ -9,14 +9,13 @@ import org.pragmatica.lang.Unit;
  * Implementations may use in-memory storage, off-heap memory, or persistent storage.
  */
 public interface StorageEngine {
-
     /**
      * Get a value by key.
      *
      * @param key the key to look up
      * @return the value if present, or empty option
      */
-    Promise<Option<byte[]>> get(byte[] key);
+    Promise<Option<byte[] >> get(byte[] key);
 
     /**
      * Store a value.

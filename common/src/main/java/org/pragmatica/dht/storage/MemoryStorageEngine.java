@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Data is not persisted across restarts.
  */
 public final class MemoryStorageEngine implements StorageEngine {
-    private final ConcurrentHashMap<ByteArrayKey, byte[]> data = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ByteArrayKey, byte[] > data = new ConcurrentHashMap<>();
 
     private MemoryStorageEngine() {}
 
@@ -22,9 +22,11 @@ public final class MemoryStorageEngine implements StorageEngine {
     }
 
     @Override
-    public Promise<Option<byte[]>> get(byte[] key) {
+    public Promise<Option<byte[] >> get(byte[] key) {
         byte[] value = data.get(new ByteArrayKey(key));
-        return Promise.success(value != null ? Option.some(value.clone()) : Option.none());
+        return Promise.success(value != null
+                               ? Option.some(value.clone())
+                               : Option.none());
     }
 
     @Override
@@ -68,7 +70,7 @@ public final class MemoryStorageEngine implements StorageEngine {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof ByteArrayKey that)) return false;
+            if (! (o instanceof ByteArrayKey that)) return false;
             return Arrays.equals(data, that.data);
         }
 

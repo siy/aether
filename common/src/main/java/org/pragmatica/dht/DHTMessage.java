@@ -7,7 +7,6 @@ import org.pragmatica.message.Message;
  * Messages for DHT operations between nodes.
  */
 public sealed interface DHTMessage extends Message.Wired {
-
     /**
      * Request to get a value.
      */
@@ -16,7 +15,7 @@ public sealed interface DHTMessage extends Message.Wired {
     /**
      * Response to a get request.
      */
-    record GetResponse(String requestId, Option<byte[]> value) implements DHTMessage {}
+    record GetResponse(String requestId, Option<byte[] > value) implements DHTMessage {}
 
     /**
      * Request to put a value.

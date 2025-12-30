@@ -11,7 +11,6 @@ public interface NodeInfo {
     /// Create new node information.
     static NodeInfo nodeInfo(NodeId id, NodeAddress address) {
         record nodeInfo(NodeId id, NodeAddress address) implements NodeInfo {}
-
         return new nodeInfo(id, address);
     }
 }

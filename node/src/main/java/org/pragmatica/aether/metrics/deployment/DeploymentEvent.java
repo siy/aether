@@ -10,7 +10,6 @@ import org.pragmatica.message.Message;
  * These events are dispatched locally via MessageRouter.
  */
 public sealed interface DeploymentEvent extends Message.Local {
-
     /**
      * Emitted when a deployment is initiated (blueprint change triggers LOAD command).
      */
@@ -20,12 +19,11 @@ public sealed interface DeploymentEvent extends Message.Local {
      * Emitted on each state transition during deployment.
      */
     record StateTransition(
-        Artifact artifact,
-        NodeId nodeId,
-        SliceState from,
-        SliceState to,
-        long timestamp
-    ) implements DeploymentEvent {}
+    Artifact artifact,
+    NodeId nodeId,
+    SliceState from,
+    SliceState to,
+    long timestamp) implements DeploymentEvent {}
 
     /**
      * Emitted when deployment completes (reaches ACTIVE state).

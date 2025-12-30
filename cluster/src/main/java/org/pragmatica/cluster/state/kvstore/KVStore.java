@@ -44,46 +44,40 @@ public class KVStore<K extends StructuredKey, V> implements StateMachine<KVComma
     @Override
     public Option<V> process(KVCommand command) {
         return switch (command) {
-            case Get<?> get -> handleGet((Get<K>) get);
-            case Put<?, ?> put -> handlePut((Put<K, V>) put);
-            case Remove<?> remove -> handleRemove((Remove<K>) remove);
+            case Get< ? > get -> handleGet((Get<K>) get);
+            case Put< ? , ? > put -> handlePut((Put<K, V>) put);
+            case Remove< ? > remove -> handleRemove((Remove<K>) remove);
         };
     }
 
     private Option<V> handleGet(Get<K> get) {
         var value = Option.option(storage.get(get.key()));
-
         router.route(new ValueGet<>(get, value));
-
         return value;
     }
 
     private Option<V> handlePut(Put<K, V> put) {
         var oldValue = Option.option(storage.put(put.key(), put.value()));
-
         router.route(new ValuePut<>(put, oldValue));
-
         return oldValue;
     }
 
     private Option<V> handleRemove(Remove<K> remove) {
         var oldValue = Option.option(storage.remove(remove.key()));
-
         router.route(new ValueRemove<>(remove, oldValue));
-
         return oldValue;
     }
 
     @Override
-    public Result<byte[]> makeSnapshot() {
-        return Result.lift(Causes::fromThrowable,
-                           () -> serializer.encode(new HashMap<>(storage)));
+    public Result<byte[] > makeSnapshot() {
+        return Result.lift(Causes::fromThrowable, () -> serializer.encode(new HashMap<>(storage)));
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public Result<Unit> restoreSnapshot(byte[] snapshot) {
-        return Result.lift(Causes::fromThrowable, () -> deserializer.decode(snapshot))
+        return Result.lift(Causes::fromThrowable,
+                           () -> deserializer.decode(snapshot))
                      .map(map -> (Map<K, V>) map)
                      .onSuccessRun(this::notifyRemoveAll)
                      .onSuccessRun(storage::clear)

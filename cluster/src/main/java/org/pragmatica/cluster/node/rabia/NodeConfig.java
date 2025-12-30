@@ -10,7 +10,6 @@ public interface NodeConfig {
 
     static NodeConfig nodeConfig(ProtocolConfig protocol, TopologyConfig topology) {
         record nodeConfig(ProtocolConfig protocol, TopologyConfig topology) implements NodeConfig {}
-
         return new nodeConfig(protocol, topology);
     }
 }

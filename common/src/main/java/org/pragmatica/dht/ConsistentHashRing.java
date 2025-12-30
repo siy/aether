@@ -43,11 +43,10 @@ public final class ConsistentHashRing<N extends Comparable<N>> {
      */
     public synchronized void addNode(N node) {
         if (nodeToVirtualNodes.containsKey(node)) {
-            return; // Already present
+            return;
         }
-
         List<Integer> virtualNodes = new ArrayList<>(virtualNodesPerPhysical);
-        for (int i = 0; i < virtualNodesPerPhysical; i++) {
+        for (int i = 0; i < virtualNodesPerPhysical; i++ ) {
             int hash = hash(node.toString() + "#" + i);
             ring.put(hash, node);
             virtualNodes.add(hash);
@@ -110,26 +109,21 @@ public final class ConsistentHashRing<N extends Comparable<N>> {
         if (replicaCount <= 0) {
             return List.of();
         }
-
         int hash = hash(key);
         Set<N> seen = new LinkedHashSet<>();
-
         // Start from the hash position and walk clockwise
         Integer current = ring.ceilingKey(hash);
         if (current == null) {
             current = ring.firstKey();
         }
-
         while (seen.size() < replicaCount && seen.size() < nodeToVirtualNodes.size()) {
             N node = ring.get(current);
             seen.add(node);
-
             current = ring.higherKey(current);
             if (current == null) {
                 current = ring.firstKey();
             }
         }
-
         return new ArrayList<>(seen);
     }
 
@@ -180,11 +174,11 @@ public final class ConsistentHashRing<N extends Comparable<N>> {
             h *= 0x01000193;
         }
         // Final mix
-        h ^= h >>> 16;
+        h ^= h>>> 16;
         h *= 0x85ebca6b;
-        h ^= h >>> 13;
+        h ^= h>>> 13;
         h *= 0xc2b2ae35;
-        h ^= h >>> 16;
+        h ^= h>>> 16;
         return h;
     }
 

@@ -11,8 +11,7 @@ import org.pragmatica.lang.utils.Causes;
 public record Partition(int value) implements Comparable<Partition> {
     public static final int MAX_PARTITIONS = 1024;
 
-    private static final Cause INVALID_PARTITION =
-        Causes.cause("Partition must be between 0 and " + (MAX_PARTITIONS - 1));
+    private static final Cause INVALID_PARTITION = Causes.cause("Partition must be between 0 and " + (MAX_PARTITIONS - 1));
 
     public Partition {
         if (value < 0 || value >= MAX_PARTITIONS) {

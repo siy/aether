@@ -9,7 +9,8 @@ public sealed interface KVStoreLocalIO extends Message.Local {
     sealed interface Request extends KVStoreLocalIO {
         record Find(StructuredPattern pattern) implements Request {
             public <K extends StructuredKey, V> boolean matches(Map.Entry<K, V> entry) {
-                return entry.getKey().matches(pattern);
+                return entry.getKey()
+                            .matches(pattern);
             }
         }
     }

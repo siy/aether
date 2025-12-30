@@ -1,5 +1,4 @@
 package org.pragmatica.cluster.consensus.rabia;
-
 /// Represents a protocol phase as defined in the Rabia formal specification.
 public record Phase(long value) implements Comparable<Phase> {
     public static final Phase ZERO = new Phase(0);

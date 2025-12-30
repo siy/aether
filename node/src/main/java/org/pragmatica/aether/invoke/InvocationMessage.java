@@ -15,7 +15,6 @@ import org.pragmatica.cluster.net.NodeId;
  * </ul>
  */
 public sealed interface InvocationMessage extends ProtocolMessage {
-
     /**
      * Request to invoke a method on a remote slice.
      *
@@ -27,13 +26,12 @@ public sealed interface InvocationMessage extends ProtocolMessage {
      * @param expectResponse Whether caller expects a response
      */
     record InvokeRequest(
-            NodeId sender,
-            String correlationId,
-            Artifact targetSlice,
-            MethodName method,
-            byte[] payload,
-            boolean expectResponse
-    ) implements InvocationMessage {}
+    NodeId sender,
+    String correlationId,
+    Artifact targetSlice,
+    MethodName method,
+    byte[] payload,
+    boolean expectResponse) implements InvocationMessage {}
 
     /**
      * Response from a remote slice invocation.
@@ -44,9 +42,8 @@ public sealed interface InvocationMessage extends ProtocolMessage {
      * @param payload       Serialized response (if success) or error message (if failure)
      */
     record InvokeResponse(
-            NodeId sender,
-            String correlationId,
-            boolean success,
-            byte[] payload
-    ) implements InvocationMessage {}
+    NodeId sender,
+    String correlationId,
+    boolean success,
+    byte[] payload) implements InvocationMessage {}
 }

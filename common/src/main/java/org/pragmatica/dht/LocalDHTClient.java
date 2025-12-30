@@ -25,7 +25,7 @@ public final class LocalDHTClient<N extends Comparable<N>> implements DHTClient 
     }
 
     @Override
-    public Promise<Option<byte[]>> get(byte[] key) {
+    public Promise<Option<byte[] >> get(byte[] key) {
         return node.getLocal(key);
     }
 

@@ -17,7 +17,6 @@ import org.pragmatica.lang.Unit;
  * </ul>
  */
 public interface DHTClient {
-
     /**
      * Get a value by key.
      * Reads from readQuorum nodes and returns the value if found.
@@ -25,12 +24,12 @@ public interface DHTClient {
      * @param key the key to look up
      * @return the value if found, or empty if not present on any replica
      */
-    Promise<Option<byte[]>> get(byte[] key);
+    Promise<Option<byte[] >> get(byte[] key);
 
     /**
      * Get a value by string key.
      */
-    default Promise<Option<byte[]>> get(String key) {
+    default Promise<Option<byte[] >> get(String key) {
         return get(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 

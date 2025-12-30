@@ -12,7 +12,6 @@ import java.util.Set;
  * @param <N> Node identifier type
  */
 public interface PartitionMap<N> {
-
     /**
      * Get the nodes responsible for a partition.
      * Returns the primary node first, followed by replicas.
@@ -28,7 +27,9 @@ public interface PartitionMap<N> {
      */
     default Promise<N> primaryFor(Partition partition) {
         return nodesFor(partition, 1)
-            .map(nodes -> nodes.isEmpty() ? null : nodes.getFirst());
+               .map(nodes -> nodes.isEmpty()
+                             ? null
+                             : nodes.getFirst());
     }
 
     /**

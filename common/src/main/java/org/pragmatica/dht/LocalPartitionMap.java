@@ -38,14 +38,15 @@ public final class LocalPartitionMap<N extends Comparable<N>> implements Partiti
     @Override
     public Promise<Set<Partition>> partitionsFor(N node) {
         Set<Partition> partitions = new HashSet<>();
-        for (int i = 0; i < Partition.MAX_PARTITIONS; i++) {
+        for (int i = 0; i < Partition.MAX_PARTITIONS; i++ ) {
             Partition partition = Partition.partitionUnsafe(i);
             String partitionKey = "partition:" + i;
-            ring.primaryFor(partitionKey).ifPresent(primary -> {
-                if (primary.equals(node)) {
+            ring.primaryFor(partitionKey)
+                .ifPresent(primary -> {
+                    if (primary.equals(node)) {
                     partitions.add(partition);
                 }
-            });
+                });
         }
         return Promise.success(partitions);
     }
@@ -53,7 +54,7 @@ public final class LocalPartitionMap<N extends Comparable<N>> implements Partiti
     @Override
     public Promise<Set<Partition>> allPartitionsFor(N node, int replicaCount) {
         Set<Partition> partitions = new HashSet<>();
-        for (int i = 0; i < Partition.MAX_PARTITIONS; i++) {
+        for (int i = 0; i < Partition.MAX_PARTITIONS; i++ ) {
             Partition partition = Partition.partitionUnsafe(i);
             String partitionKey = "partition:" + i;
             List<N> nodes = ring.nodesFor(partitionKey, replicaCount);

@@ -16,7 +16,6 @@ import org.slf4j.LoggerFactory;
  * <p>Manages connected dashboard clients and broadcasts metrics updates.
  */
 public class DashboardWebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
-
     private static final Logger log = LoggerFactory.getLogger(DashboardWebSocketHandler.class);
     private static final ChannelGroup channels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
@@ -29,8 +28,9 @@ public class DashboardWebSocketHandler extends SimpleChannelInboundHandler<WebSo
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         channels.add(ctx.channel());
-        log.info("Dashboard client connected: {}", ctx.channel().remoteAddress());
-
+        log.info("Dashboard client connected: {}",
+                 ctx.channel()
+                    .remoteAddress());
         // Send initial state snapshot
         var initialState = metricsPublisher.buildInitialState();
         ctx.writeAndFlush(new TextWebSocketFrame(initialState));
@@ -39,7 +39,9 @@ public class DashboardWebSocketHandler extends SimpleChannelInboundHandler<WebSo
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {
         channels.remove(ctx.channel());
-        log.info("Dashboard client disconnected: {}", ctx.channel().remoteAddress());
+        log.info("Dashboard client disconnected: {}",
+                 ctx.channel()
+                    .remoteAddress());
     }
 
     @Override
@@ -51,14 +53,13 @@ public class DashboardWebSocketHandler extends SimpleChannelInboundHandler<WebSo
 
     private void handleClientMessage(ChannelHandlerContext ctx, String message) {
         log.debug("Received from dashboard client: {}", message);
-
         // Parse client messages (subscribe, set threshold, get history)
         if (message.contains("\"type\":\"SUBSCRIBE\"")) {
             // Client subscribing to streams - currently all clients get all updates
             log.debug("Client subscribed to streams");
-        } else if (message.contains("\"type\":\"SET_THRESHOLD\"")) {
+        }else if (message.contains("\"type\":\"SET_THRESHOLD\"")) {
             metricsPublisher.handleSetThreshold(message);
-        } else if (message.contains("\"type\":\"GET_HISTORY\"")) {
+        }else if (message.contains("\"type\":\"GET_HISTORY\"")) {
             var history = metricsPublisher.buildHistoryResponse(message);
             ctx.writeAndFlush(new TextWebSocketFrame(history));
         }
@@ -80,7 +81,10 @@ public class DashboardWebSocketHandler extends SimpleChannelInboundHandler<WebSo
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        log.error("WebSocket error for client {}", ctx.channel().remoteAddress(), cause);
+        log.error("WebSocket error for client {}",
+                  ctx.channel()
+                     .remoteAddress(),
+                  cause);
         ctx.close();
     }
 }

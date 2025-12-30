@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.LongAdder;
  * <p>Metrics are stored in-memory with a sliding window for historical data.
  */
 public interface MetricsCollector {
-
     // Standard metric names
     String CPU_USAGE = "cpu.usage";
     String HEAP_USED = "heap.used";
@@ -93,7 +92,6 @@ public interface MetricsCollector {
  * Implementation of MetricsCollector.
  */
 class MetricsCollectorImpl implements MetricsCollector {
-
     // Sliding window duration: 2 hours in milliseconds
     private static final long SLIDING_WINDOW_MS = 2 * 60 * 60 * 1000L;
 
@@ -126,41 +124,39 @@ class MetricsCollectorImpl implements MetricsCollector {
     @Override
     public Map<String, Double> collectLocal() {
         var metrics = new ConcurrentHashMap<String, Double>();
-
         // CPU usage (system load average normalized by processors)
         double systemLoad = osMxBean.getSystemLoadAverage();
         if (systemLoad >= 0) {
             int processors = osMxBean.getAvailableProcessors();
             metrics.put(CPU_USAGE, Math.min(1.0, systemLoad / processors));
         }
-
         // Heap memory
         var heapUsage = memoryMxBean.getHeapMemoryUsage();
         metrics.put(HEAP_USED, (double) heapUsage.getUsed());
         metrics.put(HEAP_MAX, (double) heapUsage.getMax());
         if (heapUsage.getMax() > 0) {
-            metrics.put(HEAP_USAGE, (double) heapUsage.getUsed() / heapUsage.getMax());
+            metrics.put(HEAP_USAGE,
+                        (double) heapUsage.getUsed() / heapUsage.getMax());
         }
-
         // Add call stats
         callStats.forEach((method, stats) -> {
-            var prefix = "method." + method.name() + ".";
-            metrics.put(prefix + "calls", (double) stats.count.sum());
-            metrics.put(prefix + "duration.total", stats.totalDuration.sum());
-            if (stats.count.sum() > 0) {
-                metrics.put(prefix + "duration.avg", stats.totalDuration.sum() / stats.count.sum());
-            }
-        });
-
+                              var prefix = "method." + method.name() + ".";
+                              metrics.put(prefix + "calls", (double) stats.count.sum());
+                              metrics.put(prefix + "duration.total", stats.totalDuration.sum());
+                              if (stats.count.sum() > 0) {
+                              metrics.put(prefix + "duration.avg",
+                                          stats.totalDuration.sum() / stats.count.sum());
+                          }
+                          });
         // Add custom metrics
         metrics.putAll(customMetrics);
-
         return metrics;
     }
 
     @Override
     public void recordCall(MethodName method, long durationMs) {
-        callStats.computeIfAbsent(method, _ -> new CallStats())
+        callStats.computeIfAbsent(method,
+                                  _ -> new CallStats())
                  .record(durationMs);
     }
 
@@ -188,28 +184,26 @@ class MetricsCollectorImpl implements MetricsCollector {
     public Map<NodeId, java.util.List<MetricsSnapshot>> historicalMetrics() {
         var cutoff = System.currentTimeMillis() - SLIDING_WINDOW_MS;
         var result = new ConcurrentHashMap<NodeId, java.util.List<MetricsSnapshot>>();
-
         historicalMetricsMap.forEach((nodeId, snapshots) -> {
-            // Filter to only include snapshots within the window
-            var filtered = snapshots.stream()
-                    .filter(s -> s.timestamp() >= cutoff)
-                    .toList();
-            if (!filtered.isEmpty()) {
-                result.put(nodeId, filtered);
-            }
-        });
-
+                                         // Filter to only include snapshots within the window
+        var filtered = snapshots.stream()
+                                .filter(s -> s.timestamp() >= cutoff)
+                                .toList();
+                                         if (!filtered.isEmpty()) {
+                                         result.put(nodeId, filtered);
+                                     }
+                                     });
         return result;
     }
 
     @Override
     public void onMetricsPing(MetricsPing ping) {
         // Store sender's metrics (but don't overwrite our own)
-        if (!ping.sender().equals(self)) {
+        if (!ping.sender()
+                 .equals(self)) {
             remoteMetrics.put(ping.sender(), ping.metrics());
             addToHistory(ping.sender(), ping.metrics());
         }
-
         // Respond with our metrics
         network.send(ping.sender(), new MetricsPong(self, collectLocal()));
     }
@@ -217,7 +211,8 @@ class MetricsCollectorImpl implements MetricsCollector {
     @Override
     public void onMetricsPong(MetricsPong pong) {
         // Store responder's metrics (but don't overwrite our own)
-        if (!pong.sender().equals(self)) {
+        if (!pong.sender()
+                 .equals(self)) {
             remoteMetrics.put(pong.sender(), pong.metrics());
             addToHistory(pong.sender(), pong.metrics());
         }
@@ -228,13 +223,9 @@ class MetricsCollectorImpl implements MetricsCollector {
      */
     private void addToHistory(NodeId nodeId, Map<String, Double> metrics) {
         var snapshots = historicalMetricsMap.computeIfAbsent(
-                nodeId,
-                _ -> new java.util.concurrent.CopyOnWriteArrayList<>()
-        );
-
+        nodeId, _ -> new java.util.concurrent.CopyOnWriteArrayList<>());
         var now = System.currentTimeMillis();
         snapshots.add(new MetricsSnapshot(now, metrics));
-
         // Cleanup old entries outside the sliding window
         var cutoff = now - SLIDING_WINDOW_MS;
         snapshots.removeIf(s -> s.timestamp() < cutoff);

@@ -9,5 +9,4 @@ import java.util.List;
 public record TopologyConfig(NodeId self,
                              TimeSpan reconciliationInterval,
                              TimeSpan pingInterval,
-                             List<NodeInfo> coreNodes) {
-}
+                             List<NodeInfo> coreNodes) {}

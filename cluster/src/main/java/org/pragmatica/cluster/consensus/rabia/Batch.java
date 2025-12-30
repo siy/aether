@@ -12,18 +12,15 @@ public record Batch<C extends Command>(BatchId id,
     @Override
     public int compareTo(Batch<C> o) {
         var timestampCompare = Long.compare(timestamp, o.timestamp);
-
         if (timestampCompare != 0) {
             return timestampCompare;
         }
-
         var idCompare = Integer.compare(id.hashCode(), o.id.hashCode());
-
         if (idCompare != 0) {
             return idCompare;
         }
-
-        return correlationId.id().compareTo(o.correlationId.id());
+        return correlationId.id()
+                            .compareTo(o.correlationId.id());
     }
 
     public static <C extends Command> Batch<C> batch(List<C> commands) {

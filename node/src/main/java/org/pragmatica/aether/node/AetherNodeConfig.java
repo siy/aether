@@ -26,13 +26,12 @@ import static org.pragmatica.lang.io.TimeSpan.timeSpan;
  * @param artifactRepo    DHT configuration for artifact repository (replication factor, 0 = full)
  */
 public record AetherNodeConfig(
-        TopologyConfig topology,
-        ProtocolConfig protocol,
-        SliceActionConfig sliceAction,
-        int managementPort,
-        Option<RouterConfig> httpRouter,
-        DHTConfig artifactRepo
-) {
+ TopologyConfig topology,
+ ProtocolConfig protocol,
+ SliceActionConfig sliceAction,
+ int managementPort,
+ Option<RouterConfig> httpRouter,
+ DHTConfig artifactRepo) {
     public static final int DEFAULT_MANAGEMENT_PORT = 8080;
     public static final int MANAGEMENT_DISABLED = 0;
 
@@ -43,14 +42,26 @@ public record AetherNodeConfig(
     public static AetherNodeConfig aetherNodeConfig(NodeId self,
                                                     int port,
                                                     List<NodeInfo> coreNodes) {
-        return aetherNodeConfig(self, port, coreNodes, defaultSliceConfig(), DEFAULT_MANAGEMENT_PORT, Option.empty(), DHTConfig.DEFAULT);
+        return aetherNodeConfig(self,
+                                port,
+                                coreNodes,
+                                defaultSliceConfig(),
+                                DEFAULT_MANAGEMENT_PORT,
+                                Option.empty(),
+                                DHTConfig.DEFAULT);
     }
 
     public static AetherNodeConfig aetherNodeConfig(NodeId self,
                                                     int port,
                                                     List<NodeInfo> coreNodes,
                                                     SliceActionConfig sliceActionConfig) {
-        return aetherNodeConfig(self, port, coreNodes, sliceActionConfig, DEFAULT_MANAGEMENT_PORT, Option.empty(), DHTConfig.DEFAULT);
+        return aetherNodeConfig(self,
+                                port,
+                                coreNodes,
+                                sliceActionConfig,
+                                DEFAULT_MANAGEMENT_PORT,
+                                Option.empty(),
+                                DHTConfig.DEFAULT);
     }
 
     public static AetherNodeConfig aetherNodeConfig(NodeId self,
@@ -58,7 +69,13 @@ public record AetherNodeConfig(
                                                     List<NodeInfo> coreNodes,
                                                     SliceActionConfig sliceActionConfig,
                                                     int managementPort) {
-        return aetherNodeConfig(self, port, coreNodes, sliceActionConfig, managementPort, Option.empty(), DHTConfig.DEFAULT);
+        return aetherNodeConfig(self,
+                                port,
+                                coreNodes,
+                                sliceActionConfig,
+                                managementPort,
+                                Option.empty(),
+                                DHTConfig.DEFAULT);
     }
 
     public static AetherNodeConfig aetherNodeConfig(NodeId self,
@@ -78,25 +95,29 @@ public record AetherNodeConfig(
                                                     Option<RouterConfig> httpRouter,
                                                     DHTConfig artifactRepoConfig) {
         var topology = new TopologyConfig(
-                self,
-                timeSpan(5).seconds(),  // reconciliation interval
-                timeSpan(1).seconds(),  // ping interval
-                coreNodes
-        );
-
-        return new AetherNodeConfig(topology, ProtocolConfig.defaultConfig(), sliceActionConfig, managementPort, httpRouter, artifactRepoConfig);
+        self, timeSpan(5)
+             .seconds(), timeSpan(1)
+                        .seconds(), coreNodes);
+        return new AetherNodeConfig(topology,
+                                    ProtocolConfig.defaultConfig(),
+                                    sliceActionConfig,
+                                    managementPort,
+                                    httpRouter,
+                                    artifactRepoConfig);
     }
 
     public static AetherNodeConfig testConfig(NodeId self, int port, List<NodeInfo> coreNodes) {
         var topology = new TopologyConfig(
-                self,
-                timeSpan(500).millis(),
-                timeSpan(100).millis(),
-                coreNodes
-        );
-
+        self, timeSpan(500)
+             .millis(), timeSpan(100)
+                       .millis(), coreNodes);
         // Use full replication for tests - simpler, and tests typically have few nodes
-        return new AetherNodeConfig(topology, ProtocolConfig.testConfig(), defaultSliceConfig(), MANAGEMENT_DISABLED, Option.empty(), DHTConfig.FULL);
+        return new AetherNodeConfig(topology,
+                                    ProtocolConfig.testConfig(),
+                                    defaultSliceConfig(),
+                                    MANAGEMENT_DISABLED,
+                                    Option.empty(),
+                                    DHTConfig.FULL);
     }
 
     public NodeId self() {

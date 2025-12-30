@@ -1,13 +1,14 @@
 package org.pragmatica.aether.api;
 
 import org.pragmatica.cluster.net.NodeId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Manages alert thresholds and tracks active alerts.
@@ -15,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>In-memory only - thresholds reset on node restart.
  */
 public class AlertManager {
-
     private static final Logger log = LoggerFactory.getLogger(AlertManager.class);
     private static final int MAX_ALERT_HISTORY = 100;
 
@@ -44,11 +44,9 @@ public class AlertManager {
         if (threshold == null) {
             return null;
         }
-
         var alertKey = metric + ":" + nodeId.id();
         var existing = activeAlerts.get(alertKey);
         var severity = threshold.severity(value);
-
         if (severity == null) {
             // Value is normal, clear any existing alert
             if (existing != null) {
@@ -57,39 +55,32 @@ public class AlertManager {
             }
             return null;
         }
-
         // Check if this is a new alert or severity change
         if (existing == null || !existing.severity.equals(severity)) {
-            var alert = new ActiveAlert(metric, nodeId, value, threshold.forSeverity(severity), severity, System.currentTimeMillis());
+            var alert = new ActiveAlert(metric,
+                                        nodeId,
+                                        value,
+                                        threshold.forSeverity(severity),
+                                        severity,
+                                        System.currentTimeMillis());
             activeAlerts.put(alertKey, alert);
             addToHistory(metric, nodeId, value, severity, "TRIGGERED");
-
             // Return alert message to broadcast
             return buildAlertMessage(alert);
         }
-
-        return null; // No change
+        return null;
     }
 
     private String buildAlertMessage(ActiveAlert alert) {
-        return "{\"type\":\"ALERT\",\"timestamp\":" + System.currentTimeMillis() + ",\"data\":{" +
-                "\"metric\":\"" + alert.metric + "\"," +
-                "\"nodeId\":\"" + alert.nodeId.id() + "\"," +
-                "\"value\":" + alert.value + "," +
-                "\"threshold\":" + alert.threshold + "," +
-                "\"severity\":\"" + alert.severity + "\"}}";
+        return "{\"type\":\"ALERT\",\"timestamp\":" + System.currentTimeMillis() + ",\"data\":{" + "\"metric\":\"" + alert.metric
+               + "\"," + "\"nodeId\":\"" + alert.nodeId.id() + "\"," + "\"value\":" + alert.value + ","
+               + "\"threshold\":" + alert.threshold + "," + "\"severity\":\"" + alert.severity + "\"}}";
     }
 
     private void addToHistory(String metric, NodeId nodeId, double value, String severity, String status) {
         synchronized (alertHistory) {
             alertHistory.add(new AlertHistoryEntry(
-                    System.currentTimeMillis(),
-                    metric,
-                    nodeId.id(),
-                    value,
-                    severity,
-                    status
-            ));
+            System.currentTimeMillis(), metric, nodeId.id(), value, severity, status));
             while (alertHistory.size() > MAX_ALERT_HISTORY) {
                 alertHistory.remove(0);
             }
@@ -105,9 +96,14 @@ public class AlertManager {
         boolean first = true;
         for (var entry : thresholds.entrySet()) {
             if (!first) sb.append(",");
-            sb.append("\"").append(entry.getKey()).append("\":{");
-            sb.append("\"warning\":").append(entry.getValue().warning).append(",");
-            sb.append("\"critical\":").append(entry.getValue().critical);
+            sb.append("\"")
+              .append(entry.getKey())
+              .append("\":{");
+            sb.append("\"warning\":")
+              .append(entry.getValue().warning)
+              .append(",");
+            sb.append("\"critical\":")
+              .append(entry.getValue().critical);
             sb.append("}");
             first = false;
         }
@@ -125,12 +121,23 @@ public class AlertManager {
         for (var alert : activeAlerts.values()) {
             if (!first) sb.append(",");
             sb.append("{");
-            sb.append("\"metric\":\"").append(alert.metric).append("\",");
-            sb.append("\"nodeId\":\"").append(alert.nodeId.id()).append("\",");
-            sb.append("\"value\":").append(alert.value).append(",");
-            sb.append("\"threshold\":").append(alert.threshold).append(",");
-            sb.append("\"severity\":\"").append(alert.severity).append("\",");
-            sb.append("\"triggeredAt\":").append(alert.triggeredAt);
+            sb.append("\"metric\":\"")
+              .append(alert.metric)
+              .append("\",");
+            sb.append("\"nodeId\":\"")
+              .append(alert.nodeId.id())
+              .append("\",");
+            sb.append("\"value\":")
+              .append(alert.value)
+              .append(",");
+            sb.append("\"threshold\":")
+              .append(alert.threshold)
+              .append(",");
+            sb.append("\"severity\":\"")
+              .append(alert.severity)
+              .append("\",");
+            sb.append("\"triggeredAt\":")
+              .append(alert.triggeredAt);
             sb.append("}");
             first = false;
         }
@@ -149,12 +156,24 @@ public class AlertManager {
             for (var entry : alertHistory) {
                 if (!first) sb.append(",");
                 sb.append("{");
-                sb.append("\"timestamp\":").append(entry.timestamp).append(",");
-                sb.append("\"metric\":\"").append(entry.metric).append("\",");
-                sb.append("\"nodeId\":\"").append(entry.nodeId).append("\",");
-                sb.append("\"value\":").append(entry.value).append(",");
-                sb.append("\"severity\":\"").append(entry.severity).append("\",");
-                sb.append("\"status\":\"").append(entry.status).append("\"");
+                sb.append("\"timestamp\":")
+                  .append(entry.timestamp)
+                  .append(",");
+                sb.append("\"metric\":\"")
+                  .append(entry.metric)
+                  .append("\",");
+                sb.append("\"nodeId\":\"")
+                  .append(entry.nodeId)
+                  .append("\",");
+                sb.append("\"value\":")
+                  .append(entry.value)
+                  .append(",");
+                sb.append("\"severity\":\"")
+                  .append(entry.severity)
+                  .append("\",");
+                sb.append("\"status\":\"")
+                  .append(entry.status)
+                  .append("\"");
                 sb.append("}");
                 first = false;
             }
@@ -171,11 +190,23 @@ public class AlertManager {
         }
 
         double forSeverity(String severity) {
-            return "CRITICAL".equals(severity) ? critical : warning;
+            return "CRITICAL".equals(severity)
+                   ? critical
+                   : warning;
         }
     }
 
-    private record ActiveAlert(String metric, NodeId nodeId, double value, double threshold, String severity, long triggeredAt) {}
+    private record ActiveAlert(String metric,
+                               NodeId nodeId,
+                               double value,
+                               double threshold,
+                               String severity,
+                               long triggeredAt) {}
 
-    private record AlertHistoryEntry(long timestamp, String metric, String nodeId, double value, String severity, String status) {}
+    private record AlertHistoryEntry(long timestamp,
+                                     String metric,
+                                     String nodeId,
+                                     double value,
+                                     String severity,
+                                     String status) {}
 }

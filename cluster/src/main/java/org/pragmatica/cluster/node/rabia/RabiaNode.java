@@ -25,7 +25,6 @@ import org.pragmatica.net.serialization.Serializer;
 import java.util.List;
 
 public interface RabiaNode<C extends Command> extends ClusterNode<C> {
-
     @SuppressWarnings("unused")
     MessageRouter router();
 
@@ -36,44 +35,48 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
                                                       StateMachine<C> stateMachine,
                                                       Serializer serializer,
                                                       Deserializer deserializer) {
-        record rabiaNode<C extends Command>(NodeConfig config,
-                                            MessageRouter router,
-                                            StateMachine<C> stateMachine,
-                                            ClusterNetwork network,
-                                            TopologyManager topologyManager,
-                                            RabiaEngine<C> consensus,
-                                            LeaderManager leaderManager) implements RabiaNode<C> {
+        record rabiaNode <C extends Command>(NodeConfig config,
+                                             MessageRouter router,
+                                             StateMachine<C> stateMachine,
+                                             ClusterNetwork network,
+                                             TopologyManager topologyManager,
+                                             RabiaEngine<C> consensus,
+                                             LeaderManager leaderManager) implements RabiaNode<C> {
             @Override
             public NodeId self() {
-                return config().topology().self();
+                return config()
+                       .topology()
+                       .self();
             }
 
             @Override
             public Promise<Unit> start() {
-                return network().start()
-                                .onSuccessRunAsync(topologyManager()::start)
-                                .flatMap(consensus()::start);
+                return network()
+                       .start()
+                       .onSuccessRunAsync(topologyManager()::start)
+                       .flatMap(consensus()::start);
             }
 
             @Override
             public Promise<Unit> stop() {
-                return consensus().stop()
-                                  .onResultRun(topologyManager()::stop)
-                                  .flatMap(network()::stop);
+                return consensus()
+                       .stop()
+                       .onResultRun(topologyManager()::stop)
+                       .flatMap(network()::stop);
             }
 
             @Override
             public <R> Promise<List<R>> apply(List<C> commands) {
-                return consensus().apply(commands);
+                return consensus()
+                       .apply(commands);
             }
         }
-
         var topologyManager = TcpTopologyManager.tcpTopologyManager(config.topology(), router);
-        var leaderManager = LeaderManager.leaderManager(config.topology().self(), router);
+        var leaderManager = LeaderManager.leaderManager(config.topology()
+                                                              .self(),
+                                                        router);
         var network = new NettyClusterNetwork(topologyManager, serializer, deserializer, router);
-        var consensus = new RabiaEngine<>(topologyManager, network, stateMachine,
-                                          config.protocol());
-
+        var consensus = new RabiaEngine<>(topologyManager, network, stateMachine, config.protocol());
         // TODO: Migrate to ImmutableRouter - all routes need centralized assembly
         router.addRoute(TopologyManagementMessage.AddNode.class, topologyManager::handleAddNodeMessage);
         router.addRoute(TopologyManagementMessage.RemoveNode.class, topologyManager::handleRemoveNodeMessage);
@@ -86,7 +89,6 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
         router.addRoute(QuorumStateNotification.class, leaderManager::watchQuorumState);
         network.configure(router);
         consensus.configure(router);
-
-        return new rabiaNode<>(config, router, stateMachine, network, topologyManager, consensus, leaderManager);
+        return new rabiaNode <>(config, router, stateMachine, network, topologyManager, consensus, leaderManager);
     }
 }

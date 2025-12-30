@@ -20,7 +20,6 @@
     </licenses>
     <modules>
         <module>slice-annotations</module>
-        <module>http-server</module>
         <module>node</module>
         <module>slice-api</module>
         <module>slice</module>

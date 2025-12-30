@@ -16,7 +16,8 @@ public interface StateMachine<T extends Command> {
 
     @SuppressWarnings("unchecked")
     default <R> List<R> process(List<T> commands) {
-        return commands.stream().map(command -> (R) process(command))
+        return commands.stream()
+                       .map(command -> (R) process(command))
                        .toList();
     }
 
@@ -24,7 +25,7 @@ public interface StateMachine<T extends Command> {
     /// The snapshot should be serializable and should capture the complete state.
     ///
     /// @return A Result containing the serialized state snapshot
-    Result<byte[]> makeSnapshot();
+    Result<byte[] > makeSnapshot();
 
     /// Restore the machine's state from a snapshot.
     /// This should completely replace the current state with the state from the snapshot.

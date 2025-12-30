@@ -11,7 +11,6 @@ import java.util.Map;
  * nodes respond with their metrics.
  */
 public sealed interface MetricsMessage extends ProtocolMessage {
-
     /**
      * Metrics ping sent by leader to all nodes.
      * Contains sender's metrics, nodes respond with their own.

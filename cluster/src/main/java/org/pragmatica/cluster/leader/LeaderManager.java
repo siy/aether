@@ -19,34 +19,40 @@ import static org.pragmatica.lang.Option.option;
 /// source of truth for the cluster management. The leader node can be used for this purpose.
 public interface LeaderManager {
     static LeaderManager leaderManager(NodeId self, MessageRouter router) {
-        record leaderManager(NodeId self, MessageRouter router, AtomicBoolean active,
+        record leaderManager(NodeId self,
+                             MessageRouter router,
+                             AtomicBoolean active,
                              AtomicReference<NodeId> currentLeader) implements LeaderManager {
             @Override
             public void nodeAdded(NodeAdded nodeAdded) {
-                tryElect(nodeAdded.topology().getFirst());
+                tryElect(nodeAdded.topology()
+                                  .getFirst());
             }
 
             @Override
             public void nodeRemoved(NodeRemoved nodeRemoved) {
                 // Should not happen, but better be safe than sorry.
-                if (nodeRemoved.topology().isEmpty()) {
+                if (nodeRemoved.topology()
+                               .isEmpty()) {
                     return;
                 }
-
-                tryElect(nodeRemoved.topology().getFirst());
+                tryElect(nodeRemoved.topology()
+                                    .getFirst());
             }
 
             @Override
             public void nodeDown(NodeDown nodeDown) {
-                currentLeader().set(null);
+                currentLeader()
+                .set(null);
                 stop();
             }
 
             private void tryElect(NodeId candidate) {
-                var oldLeader = currentLeader().get();
-
+                var oldLeader = currentLeader()
+                                .get();
                 // Potential leader change. Implicitly handles initial election.
-                if (currentLeader().compareAndSet(oldLeader, candidate)) {
+                if (currentLeader()
+                    .compareAndSet(oldLeader, candidate)) {
                     if (!candidate.equals(oldLeader)) {
                         notifyLeaderChange();
                     }
@@ -54,9 +60,13 @@ public interface LeaderManager {
             }
 
             private void notifyLeaderChange() {
-                if (active().get()) {
-                    var nodeId = currentLeader().get();
-                    router().route(leaderChange(option(nodeId), self.equals(nodeId)));
+                if (active()
+                    .get()) {
+                    var nodeId = currentLeader()
+                                 .get();
+                    router()
+                    .route(leaderChange(option(nodeId),
+                                        self.equals(nodeId)));
                 }
             }
 
@@ -76,12 +86,14 @@ public interface LeaderManager {
             private void stop() {
                 // Set inactive first to prevent new elections during shutdown
                 active.set(false);
-                currentLeader().set(null);
+                currentLeader()
+                .set(null);
                 // Send notification directly since active is now false
-                router().route(leaderChange(option(null), false));
+                router()
+                .route(leaderChange(option(null),
+                                    false));
             }
         }
-
         return new leaderManager(self, router, new AtomicBoolean(false), new AtomicReference<>());
     }
 

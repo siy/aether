@@ -6,7 +6,8 @@ import org.pragmatica.utility.IdGenerator;
 public record NodeId(String id) implements Comparable<NodeId> {
     @Override
     public int compareTo(NodeId o) {
-        return id().compareTo(o.id());
+        return id()
+               .compareTo(o.id());
     }
 
     /// Create new node ID from the given string.

@@ -25,7 +25,6 @@ import java.util.jar.Manifest;
  * Loading will fail if manifest is missing or invalid.
  */
 public interface SliceManifest {
-
     String SLICE_ARTIFACT_ATTR = "Slice-Artifact";
     String SLICE_CLASS_ATTR = "Slice-Class";
 
@@ -37,7 +36,9 @@ public interface SliceManifest {
      * @return SliceManifestInfo or error if manifest is missing/invalid
      */
     static Result<SliceManifestInfo> read(URL jarUrl) {
-        return Result.lift(Causes::fromThrowable, () -> readManifest(jarUrl)).flatMap(SliceManifest::parseManifest);
+        return Result.lift(Causes::fromThrowable,
+                           () -> readManifest(jarUrl))
+                     .flatMap(SliceManifest::parseManifest);
     }
 
     /**
@@ -48,7 +49,8 @@ public interface SliceManifest {
      * @return SliceManifestInfo or error if manifest is missing/invalid
      */
     static Result<SliceManifestInfo> readFromClassLoader(ClassLoader classLoader) {
-        return Result.lift(Causes::fromThrowable, () -> classLoader.getResource(JarFile.MANIFEST_NAME))
+        return Result.lift(Causes::fromThrowable,
+                           () -> classLoader.getResource(JarFile.MANIFEST_NAME))
                      .flatMap(url -> url == null
                                      ? MANIFEST_NOT_FOUND.result()
                                      : readManifestFromUrl(url))
@@ -64,7 +66,6 @@ public interface SliceManifest {
         if (path.contains("!")) {
             path = path.substring(0, path.indexOf("!"));
         }
-
         try (var jarFile = new JarFile(path)) {
             var manifest = jarFile.getManifest();
             if (manifest == null) {
@@ -75,27 +76,26 @@ public interface SliceManifest {
     }
 
     private static Result<Manifest> readManifestFromUrl(URL manifestUrl) {
-        return Result.lift(Causes::fromThrowable, () -> {
-            try (var is = manifestUrl.openStream()) {
-                return new Manifest(is);
-            }
-        });
+        return Result.lift(Causes::fromThrowable,
+                           () -> {
+                               try (var is = manifestUrl.openStream()) {
+                               return new Manifest(is);
+                           }
+                           });
     }
 
     private static Result<SliceManifestInfo> parseManifest(Manifest manifest) {
         var mainAttrs = manifest.getMainAttributes();
-
         var artifactStr = mainAttrs.getValue(SLICE_ARTIFACT_ATTR);
         if (artifactStr == null || artifactStr.isBlank()) {
             return MISSING_ARTIFACT_ATTR.result();
         }
-
         var sliceClass = mainAttrs.getValue(SLICE_CLASS_ATTR);
         if (sliceClass == null || sliceClass.isBlank()) {
             return MISSING_CLASS_ATTR.result();
         }
-
-        return Artifact.artifact(artifactStr).map(artifact -> new SliceManifestInfo(artifact, sliceClass));
+        return Artifact.artifact(artifactStr)
+                       .map(artifact -> new SliceManifestInfo(artifact, sliceClass));
     }
 
     /**
@@ -104,12 +104,10 @@ public interface SliceManifest {
     record SliceManifestInfo(Artifact artifact, String sliceClassName) {}
 
     // Error causes
-    Fn1<Cause, String> MANIFEST_NOT_FOUND_FN = Causes.forOneValue("Manifest not found in JAR: %s");
+    Fn1<Cause, String>MANIFEST_NOT_FOUND_FN = Causes.forOneValue("Manifest not found in JAR: %s");
     Cause MANIFEST_NOT_FOUND = Causes.cause("Manifest not found in ClassLoader resources");
-    Cause MISSING_ARTIFACT_ATTR = Causes.cause("Missing required manifest attribute: "
-                                               + SLICE_ARTIFACT_ATTR
+    Cause MISSING_ARTIFACT_ATTR = Causes.cause("Missing required manifest attribute: " + SLICE_ARTIFACT_ATTR
                                                + ". Slice JARs must declare artifact coordinates in manifest.");
-    Cause MISSING_CLASS_ATTR = Causes.cause("Missing required manifest attribute: "
-                                            + SLICE_CLASS_ATTR
+    Cause MISSING_CLASS_ATTR = Causes.cause("Missing required manifest attribute: " + SLICE_CLASS_ATTR
                                             + ". Slice JARs must declare the main slice class in manifest.");
 }

@@ -1,12 +1,12 @@
 package org.pragmatica.aether.metrics.deployment;
 
-import org.pragmatica.cluster.leader.LeaderNotification.LeaderChange;
+import org.pragmatica.consensus.leader.LeaderNotification.LeaderChange;
 import org.pragmatica.cluster.metrics.DeploymentMetricsMessage.DeploymentMetricsPing;
-import org.pragmatica.cluster.net.ClusterNetwork;
-import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.topology.TopologyChangeNotification;
-import org.pragmatica.cluster.topology.TopologyChangeNotification.NodeAdded;
-import org.pragmatica.cluster.topology.TopologyChangeNotification.NodeRemoved;
+import org.pragmatica.consensus.net.ClusterNetwork;
+import org.pragmatica.consensus.NodeId;
+import org.pragmatica.consensus.topology.TopologyChangeNotification;
+import org.pragmatica.consensus.topology.TopologyChangeNotification.NodeAdded;
+import org.pragmatica.consensus.topology.TopologyChangeNotification.NodeRemoved;
 import org.pragmatica.messaging.MessageReceiver;
 
 import java.util.List;

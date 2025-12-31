@@ -1,7 +1,7 @@
 package org.pragmatica.aether.http;
 
 import org.pragmatica.lang.Option;
-import org.pragmatica.net.TlsConfig;
+import org.pragmatica.net.tcp.TlsConfig;
 
 /**
  * Configuration for the HTTP router.

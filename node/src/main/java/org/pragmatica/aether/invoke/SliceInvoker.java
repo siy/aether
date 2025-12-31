@@ -7,8 +7,8 @@ import org.pragmatica.aether.invoke.InvocationMessage.InvokeRequest;
 import org.pragmatica.aether.invoke.InvocationMessage.InvokeResponse;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.SliceRuntime.SliceInvokerFacade;
-import org.pragmatica.cluster.net.ClusterNetwork;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.net.ClusterNetwork;
+import org.pragmatica.consensus.NodeId;
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
@@ -18,7 +18,7 @@ import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.messaging.MessageReceiver;
 import org.pragmatica.net.serialization.Deserializer;
 import org.pragmatica.net.serialization.Serializer;
-import org.pragmatica.utility.ULID;
+import org.pragmatica.utility.KSUID;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -300,8 +300,8 @@ class SliceInvokerImpl implements SliceInvoker {
         return selectEndpoint(slice, method)
                .flatMap(endpoint -> {
                             var payload = serializeRequest(request);
-                            var correlationId = ULID.randomULID()
-                                                    .toString();
+                            var correlationId = KSUID.ksuid()
+                                                     .toString();
                             var invokeRequest = new InvokeRequest(
         self, correlationId, slice, method, payload, false);
                             network.send(endpoint.nodeId(),
@@ -323,8 +323,8 @@ class SliceInvokerImpl implements SliceInvoker {
         return selectEndpoint(slice, method)
                .flatMap(endpoint -> {
                             var payload = serializeRequest(request);
-                            var correlationId = ULID.randomULID()
-                                                    .toString();
+                            var correlationId = KSUID.ksuid()
+                                                     .toString();
                             // Create pending promise using callback pattern
         return Promise.<R>promise(pendingPromise -> {
                                       // Store with timestamp for cleanup

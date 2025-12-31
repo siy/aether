@@ -5,13 +5,13 @@ import org.pragmatica.aether.node.AetherNode;
 import org.pragmatica.aether.slice.blueprint.BlueprintParser;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.NodeId;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
-import org.pragmatica.net.TlsConfig;
+import org.pragmatica.net.tcp.TlsConfig;
 import org.pragmatica.net.TlsContextFactory;
 
 import java.io.InputStream;

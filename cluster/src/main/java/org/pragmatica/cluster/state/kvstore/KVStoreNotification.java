@@ -1,6 +1,6 @@
 package org.pragmatica.cluster.state.kvstore;
 
-import org.pragmatica.cluster.state.StateMachineNotification;
+import org.pragmatica.consensus.state.StateMachineNotification;
 import org.pragmatica.lang.Option;
 
 public sealed interface KVStoreNotification<K extends StructuredKey> extends StateMachineNotification<KVCommand<K>> {

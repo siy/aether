@@ -1,16 +1,16 @@
 package org.pragmatica.cluster.net.netty;
 
-import org.pragmatica.cluster.consensus.ProtocolMessage;
-import org.pragmatica.cluster.net.ClusterNetwork;
-import org.pragmatica.cluster.net.NetworkManagementOperation;
-import org.pragmatica.cluster.net.NetworkManagementOperation.ListConnectedNodes;
-import org.pragmatica.cluster.net.NetworkMessage.Ping;
-import org.pragmatica.cluster.net.NetworkMessage.Pong;
-import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.net.NodeInfo;
-import org.pragmatica.cluster.topology.QuorumStateNotification;
-import org.pragmatica.cluster.topology.TopologyChangeNotification;
-import org.pragmatica.cluster.topology.TopologyManager;
+import org.pragmatica.consensus.ProtocolMessage;
+import org.pragmatica.consensus.net.ClusterNetwork;
+import org.pragmatica.consensus.net.NetworkManagementOperation;
+import org.pragmatica.consensus.net.NetworkManagementOperation.ListConnectedNodes;
+import org.pragmatica.consensus.net.NetworkMessage.Ping;
+import org.pragmatica.consensus.net.NetworkMessage.Pong;
+import org.pragmatica.consensus.NodeId;
+import org.pragmatica.consensus.net.NodeInfo;
+import org.pragmatica.consensus.topology.QuorumStateNotification;
+import org.pragmatica.consensus.topology.TopologyChangeNotification;
+import org.pragmatica.consensus.topology.TopologyManager;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
@@ -41,8 +41,8 @@ import io.netty.handler.codec.LengthFieldPrepender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.pragmatica.cluster.net.NetworkManagementOperation.ConnectNode;
-import static org.pragmatica.cluster.net.NetworkManagementOperation.DisconnectNode;
+import static org.pragmatica.consensus.net.NetworkManagementOperation.ConnectNode;
+import static org.pragmatica.consensus.net.NetworkManagementOperation.DisconnectNode;
 import static org.pragmatica.cluster.net.netty.NettyClusterNetwork.ViewChangeOperation.*;
 
 /**

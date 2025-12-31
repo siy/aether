@@ -1,6 +1,6 @@
 package org.pragmatica.cluster.state.kvstore;
 
-import org.pragmatica.cluster.state.StateMachine;
+import org.pragmatica.consensus.StateMachine;
 import org.pragmatica.cluster.state.kvstore.KVCommand.Get;
 import org.pragmatica.cluster.state.kvstore.KVCommand.Put;
 import org.pragmatica.cluster.state.kvstore.KVCommand.Remove;

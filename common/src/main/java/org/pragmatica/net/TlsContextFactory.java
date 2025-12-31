@@ -1,6 +1,7 @@
 package org.pragmatica.net;
 
 import org.pragmatica.lang.Result;
+import org.pragmatica.net.tcp.TlsConfig;
 
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;

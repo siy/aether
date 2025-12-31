@@ -1,8 +1,8 @@
 package org.pragmatica.cluster.node.rabia;
 
-import org.pragmatica.cluster.consensus.rabia.*;
-import org.pragmatica.cluster.net.NetworkMessage;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.rabia.*;
+import org.pragmatica.consensus.net.NetworkMessage;
+import org.pragmatica.consensus.NodeId;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 
 import java.util.HashMap;

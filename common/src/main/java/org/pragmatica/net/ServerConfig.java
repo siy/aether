@@ -1,6 +1,7 @@
 package org.pragmatica.net;
 
 import org.pragmatica.lang.Option;
+import org.pragmatica.net.tcp.TlsConfig;
 
 /**
  * Configuration for TCP server.

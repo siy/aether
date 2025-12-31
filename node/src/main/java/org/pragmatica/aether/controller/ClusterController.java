@@ -1,7 +1,7 @@
 package org.pragmatica.aether.controller;
 
 import org.pragmatica.aether.artifact.Artifact;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.NodeId;
 import org.pragmatica.lang.Promise;
 
 import java.util.List;

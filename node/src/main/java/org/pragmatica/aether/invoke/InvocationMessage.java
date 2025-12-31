@@ -2,8 +2,8 @@ package org.pragmatica.aether.invoke;
 
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.slice.MethodName;
-import org.pragmatica.cluster.consensus.ProtocolMessage;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.ProtocolMessage;
+import org.pragmatica.consensus.NodeId;
 
 /**
  * Messages for inter-slice remote invocation.

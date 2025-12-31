@@ -3,7 +3,7 @@ package org.pragmatica.http.server;
 import org.pragmatica.http.websocket.WebSocketEndpoint;
 import org.pragmatica.lang.Option;
 import org.pragmatica.net.SocketOptions;
-import org.pragmatica.net.TlsConfig;
+import org.pragmatica.net.tcp.TlsConfig;
 
 import java.util.ArrayList;
 import java.util.List;

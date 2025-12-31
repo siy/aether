@@ -3,13 +3,13 @@ package org.pragmatica.aether.node;
 import org.pragmatica.aether.http.RouterConfig;
 import org.pragmatica.aether.slice.SliceActionConfig;
 import org.pragmatica.aether.slice.serialization.FurySerializerFactoryProvider;
-import org.pragmatica.cluster.consensus.rabia.ProtocolConfig;
-import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.net.NodeInfo;
+import org.pragmatica.consensus.rabia.ProtocolConfig;
+import org.pragmatica.consensus.NodeId;
+import org.pragmatica.consensus.net.NodeInfo;
 import org.pragmatica.cluster.topology.ip.TopologyConfig;
 import org.pragmatica.dht.DHTConfig;
 import org.pragmatica.lang.Option;
-import org.pragmatica.net.TlsConfig;
+import org.pragmatica.net.tcp.TlsConfig;
 
 import java.util.List;
 

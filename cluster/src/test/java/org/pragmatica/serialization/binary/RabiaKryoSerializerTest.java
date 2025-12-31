@@ -1,11 +1,11 @@
 package org.pragmatica.serialization.binary;
 
 import org.junit.jupiter.api.Test;
-import org.pragmatica.cluster.consensus.rabia.Batch;
-import org.pragmatica.cluster.consensus.rabia.Phase;
-import org.pragmatica.cluster.consensus.rabia.RabiaProtocolMessage;
-import org.pragmatica.cluster.consensus.rabia.infrastructure.TestCluster.StringKey;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.rabia.Batch;
+import org.pragmatica.consensus.rabia.Phase;
+import org.pragmatica.consensus.rabia.RabiaProtocolMessage;
+import org.pragmatica.consensus.rabia.infrastructure.TestCluster.StringKey;
+import org.pragmatica.consensus.NodeId;
 import org.pragmatica.cluster.node.rabia.CustomClasses;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.net.serialization.binary.kryo.KryoDeserializer;
@@ -14,7 +14,7 @@ import org.pragmatica.net.serialization.binary.kryo.KryoSerializer;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.pragmatica.cluster.consensus.rabia.infrastructure.TestCluster.StringKey.key;
+import static org.pragmatica.consensus.rabia.infrastructure.TestCluster.StringKey.key;
 
 class RabiaKryoSerializerTest {
 

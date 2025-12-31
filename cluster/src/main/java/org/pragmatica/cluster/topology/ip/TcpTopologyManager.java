@@ -1,17 +1,17 @@
 package org.pragmatica.cluster.topology.ip;
 
-import org.pragmatica.cluster.net.NetworkManagementOperation;
-import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.net.NodeInfo;
-import org.pragmatica.cluster.topology.TopologyManagementMessage;
-import org.pragmatica.cluster.topology.TopologyManager;
+import org.pragmatica.consensus.net.NetworkManagementOperation;
+import org.pragmatica.consensus.NodeId;
+import org.pragmatica.consensus.net.NodeInfo;
+import org.pragmatica.consensus.topology.TopologyManagementMessage;
+import org.pragmatica.consensus.topology.TopologyManager;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.io.TimeSpan;
 import org.pragmatica.lang.utils.SharedScheduler;
 import org.pragmatica.messaging.MessageReceiver;
 import org.pragmatica.messaging.MessageRouter;
-import org.pragmatica.net.NodeAddress;
-import org.pragmatica.net.TlsConfig;
+import org.pragmatica.net.tcp.NodeAddress;
+import org.pragmatica.net.tcp.TlsConfig;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;

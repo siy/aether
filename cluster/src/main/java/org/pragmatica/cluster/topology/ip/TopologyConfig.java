@@ -1,10 +1,10 @@
 package org.pragmatica.cluster.topology.ip;
 
-import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.net.NodeInfo;
+import org.pragmatica.consensus.NodeId;
+import org.pragmatica.consensus.net.NodeInfo;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.io.TimeSpan;
-import org.pragmatica.net.TlsConfig;
+import org.pragmatica.net.tcp.TlsConfig;
 
 import java.util.List;
 

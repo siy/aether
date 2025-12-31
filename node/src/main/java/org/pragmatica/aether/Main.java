@@ -2,8 +2,8 @@ package org.pragmatica.aether;
 
 import org.pragmatica.aether.node.AetherNode;
 import org.pragmatica.aether.node.AetherNodeConfig;
-import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.net.NodeInfo;
+import org.pragmatica.consensus.NodeId;
+import org.pragmatica.consensus.net.NodeInfo;
 
 import java.util.Arrays;
 import java.util.List;
@@ -11,8 +11,8 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.pragmatica.cluster.net.NodeInfo.nodeInfo;
-import static org.pragmatica.net.NodeAddress.nodeAddress;
+import static org.pragmatica.consensus.net.NodeInfo.nodeInfo;
+import static org.pragmatica.net.tcp.NodeAddress.nodeAddress;
 
 /**
  * Main entry point for starting an Aether cluster node.

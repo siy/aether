@@ -1,6 +1,6 @@
 package org.pragmatica.aether.api;
 
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.NodeId;
 
 import java.util.ArrayList;
 import java.util.List;

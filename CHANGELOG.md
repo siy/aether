@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2025-12-31
+
+### Changed
+- **Consensus module** - Migrated to use pragmatica-lite consensus module instead of local implementation
+- **Package reorganization** - All consensus-related imports moved from `org.pragmatica.cluster.*` to `org.pragmatica.consensus.*`
+- **TlsConfig/NodeAddress** - Now use pragmatica-lite `org.pragmatica.net.tcp` package
+- **ID generation** - Switched from ULID to KSUID for correlation IDs (pragmatica-lite alignment)
+
+### Removed
+- **Duplicate consensus files** - Removed 30+ files now provided by pragmatica-lite consensus module
+- **Duplicate network types** - Removed local TlsConfig and NodeAddress (use pragmatica-lite versions)
+
+### Fixed
+- **LeaderManagerTest** - Updated to use deterministic node IDs for reliable test ordering
+
 ## [0.6.3] - 2025-12-29
 
 ### Added

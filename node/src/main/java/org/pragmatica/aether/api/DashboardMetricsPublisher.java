@@ -1,7 +1,7 @@
 package org.pragmatica.aether.api;
 
 import org.pragmatica.aether.node.AetherNode;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.NodeId;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;

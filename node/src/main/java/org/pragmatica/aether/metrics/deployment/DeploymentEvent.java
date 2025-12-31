@@ -2,7 +2,7 @@ package org.pragmatica.aether.metrics.deployment;
 
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.slice.SliceState;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.NodeId;
 import org.pragmatica.messaging.Message;
 
 /**

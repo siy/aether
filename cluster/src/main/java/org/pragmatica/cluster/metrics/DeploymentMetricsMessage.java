@@ -1,7 +1,7 @@
 package org.pragmatica.cluster.metrics;
 
-import org.pragmatica.cluster.consensus.ProtocolMessage;
-import org.pragmatica.cluster.net.NodeId;
+import org.pragmatica.consensus.ProtocolMessage;
+import org.pragmatica.consensus.NodeId;
 
 import java.util.List;
 import java.util.Map;

@@ -7,9 +7,9 @@ import org.pragmatica.aether.slice.SliceState;
 import org.pragmatica.cluster.metrics.DeploymentMetricsMessage.DeploymentMetricsEntry;
 import org.pragmatica.cluster.metrics.DeploymentMetricsMessage.DeploymentMetricsPing;
 import org.pragmatica.cluster.metrics.DeploymentMetricsMessage.DeploymentMetricsPong;
-import org.pragmatica.cluster.net.ClusterNetwork;
-import org.pragmatica.cluster.net.NodeId;
-import org.pragmatica.cluster.topology.TopologyChangeNotification;
+import org.pragmatica.consensus.net.ClusterNetwork;
+import org.pragmatica.consensus.NodeId;
+import org.pragmatica.consensus.topology.TopologyChangeNotification;
 import org.pragmatica.messaging.MessageReceiver;
 
 import java.util.*;

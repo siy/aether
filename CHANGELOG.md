@@ -5,22 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.4] - 2025-12-31
-
-### Changed
-- **Consensus module** - Migrated to use pragmatica-lite consensus module instead of local implementation
-- **Package reorganization** - All consensus-related imports moved from `org.pragmatica.cluster.*` to `org.pragmatica.consensus.*`
-- **TlsConfig/NodeAddress** - Now use pragmatica-lite `org.pragmatica.net.tcp` package
-- **ID generation** - Switched from ULID to KSUID for correlation IDs (pragmatica-lite alignment)
-
-### Removed
-- **Duplicate consensus files** - Removed 30+ files now provided by pragmatica-lite consensus module
-- **Duplicate network types** - Removed local TlsConfig and NodeAddress (use pragmatica-lite versions)
-
-### Fixed
-- **LeaderManagerTest** - Updated to use deterministic node IDs for reliable test ordering
-
-## [0.6.3] - 2025-12-29
+## [0.6.3] - 2026-01-01
 
 ### Added
 - **Production dashboard** - Real-time cluster monitoring at `/dashboard` with Alpine.js and Chart.js
@@ -34,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Operational runbooks** - Added docs/runbooks/ with incident-response, scaling, troubleshooting, deployment guides
 
 ### Changed
+- **pragmatica-lite 0.9.2** - Updated to latest version with breaking API changes
+- **Consensus module** - Migrated to pragmatica-lite consensus module (removed 30+ duplicate files)
+- **Package reorganization** - All consensus-related imports moved from `org.pragmatica.cluster.*` to `org.pragmatica.consensus.*`
+- **TlsConfig/NodeAddress** - Now use pragmatica-lite `org.pragmatica.net.tcp` package
+- **ID generation** - Switched from ULID to KSUID for correlation IDs (pragmatica-lite alignment)
+- **Route registration** - Centralized in node assembly, removed `configure()` methods from components
+- **Verify API** - Updated to new `Verify.ensure(value, predicate, pattern, cause)` signature
 - **MetricsCollector** - Use RingBuffer instead of CopyOnWriteArrayList for historical metrics (7200 capacity)
 - **HttpMethod.fromString()** - Returns `Option<HttpMethod>` instead of throwing
 - **PathPattern.compile()** - Returns `Result<PathPattern>` instead of throwing
@@ -42,7 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DHTNode.create()** - Renamed to `DHTNode.dhtNode()` (JBCT naming convention)
 - **SliceRegistry.create()** - Renamed to `SliceRegistry.sliceRegistry()` (JBCT naming convention)
 
+### Removed
+- **common module** - Replaced by pragmatica-lite modules (messaging, dht, consensus, utility, net)
+- **Duplicate consensus files** - Now provided by pragmatica-lite consensus module
+- **Duplicate network types** - Now use pragmatica-lite versions
+
 ### Fixed
+- **LeaderManagerTest** - Updated to use deterministic node IDs for reliable test ordering
 
 ## [0.6.2] - 2025-12-29
 

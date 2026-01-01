@@ -1,6 +1,7 @@
 package org.pragmatica.aether.api;
 
 import org.pragmatica.aether.artifact.Artifact;
+import org.pragmatica.aether.metrics.observability.ObservabilityRegistry;
 import org.pragmatica.aether.node.AetherNode;
 import org.pragmatica.aether.slice.blueprint.BlueprintParser;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
@@ -85,6 +86,7 @@ class ManagementServerImpl implements ManagementServer {
     private final MultiThreadIoEventLoopGroup workerGroup;
     private final AlertManager alertManager;
     private final DashboardMetricsPublisher metricsPublisher;
+    private final ObservabilityRegistry observability;
     private final Option<SslContext> sslContext;
     private Channel serverChannel;
 
@@ -95,6 +97,7 @@ class ManagementServerImpl implements ManagementServer {
         this.workerGroup = new MultiThreadIoEventLoopGroup(NioIoHandler.newFactory());
         this.alertManager = new AlertManager();
         this.metricsPublisher = new DashboardMetricsPublisher(nodeSupplier, alertManager);
+        this.observability = ObservabilityRegistry.prometheus();
         this.sslContext = tls.map(TlsContextFactory::create)
                              .flatMap(result -> result.fold(_ -> Option.empty(),
                                                             Option::some));
@@ -117,7 +120,8 @@ class ManagementServerImpl implements ManagementServer {
                                                                                                                   true));
                                                                      p.addLast(new DashboardWebSocketHandler(metricsPublisher));
                                                                      p.addLast(new HttpRequestHandler(nodeSupplier,
-                                                                                                      alertManager));
+                                                                                                      alertManager,
+                                                                                                      observability));
                                                                  }
         });
                                    bootstrap.bind(port)
@@ -169,13 +173,18 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private static final String CONTENT_TYPE_HTML = "text/html; charset=UTF-8";
     private static final String CONTENT_TYPE_CSS = "text/css; charset=UTF-8";
     private static final String CONTENT_TYPE_JS = "application/javascript; charset=UTF-8";
+    private static final String CONTENT_TYPE_PROMETHEUS = "text/plain; version=0.0.4; charset=utf-8";
 
     private final Supplier<AetherNode> nodeSupplier;
     private final AlertManager alertManager;
+    private final ObservabilityRegistry observability;
 
-    HttpRequestHandler(Supplier<AetherNode> nodeSupplier, AlertManager alertManager) {
+    HttpRequestHandler(Supplier<AetherNode> nodeSupplier,
+                       AlertManager alertManager,
+                       ObservabilityRegistry observability) {
         this.nodeSupplier = nodeSupplier;
         this.alertManager = alertManager;
+        this.observability = observability;
     }
 
     @Override
@@ -217,6 +226,11 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         // Handle rolling update paths
         if (uri.startsWith("/rolling-update/") || uri.equals("/rolling-updates")) {
             handleRollingUpdateGet(ctx, node, uri);
+            return;
+        }
+        // Handle Prometheus metrics endpoint
+        if (uri.equals("/metrics/prometheus")) {
+            sendPrometheus(ctx, observability.scrape());
             return;
         }
         var response = switch (uri) {
@@ -750,6 +764,18 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, buf);
         response.headers()
                 .set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_JSON);
+        response.headers()
+                .setInt(HttpHeaderNames.CONTENT_LENGTH,
+                        buf.readableBytes());
+        ctx.writeAndFlush(response)
+           .addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void sendPrometheus(ChannelHandlerContext ctx, String content) {
+        var buf = Unpooled.copiedBuffer(content, CharsetUtil.UTF_8);
+        var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, buf);
+        response.headers()
+                .set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_PROMETHEUS);
         response.headers()
                 .setInt(HttpHeaderNames.CONTENT_LENGTH,
                         buf.readableBytes());

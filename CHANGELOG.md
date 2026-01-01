@@ -39,8 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `update approve/complete/rollback <id>` - Update lifecycle operations
   - `update health <id>` - View version health metrics
 - **KV schema extensions** - `VersionRoutingKey`, `RollingUpdateKey`, `VersionRoutingValue`, `RollingUpdateValue`
+- **Observability metrics** - Micrometer integration with Prometheus endpoint
+  - `GET /metrics/prometheus` - Prometheus-format metrics scrape endpoint
+  - `ObservabilityRegistry` - Central registry for metrics with JVM/process metrics
+  - `AetherMetrics` - Pre-configured metrics for slice invocations, consensus, deployments
+  - JVM metrics - memory, GC, threads, classloaders via Micrometer binders
 
 ### Changed
+- **pragmatica-lite 0.9.3** - Updated with consensus observability support
 
 ### Fixed
 

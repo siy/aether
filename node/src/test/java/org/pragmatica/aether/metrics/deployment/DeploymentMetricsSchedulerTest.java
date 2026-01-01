@@ -256,7 +256,6 @@ class DeploymentMetricsSchedulerTest {
             return Promise.success(Unit.unit());
         }
 
-        @Override
         public void configure(MessageRouter.MutableRouter router) {}
     }
 

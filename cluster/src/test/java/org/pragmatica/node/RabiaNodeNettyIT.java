@@ -38,7 +38,7 @@ class RabiaNodeNettyIT {
     private static final Logger log = LoggerFactory.getLogger(RabiaNodeNettyIT.class);
 
     private static final int CLUSTER_SIZE = 5;
-    private static final int BASE_PORT = 3040;
+    private static final int BASE_PORT = 13040;
     private static final List<NodeInfo> NODES = List.of(
             nodeInfo(nodeId("node-1"), nodeAddress("localhost", BASE_PORT)),
             nodeInfo(nodeId("node-2"), nodeAddress("localhost", BASE_PORT + 1)),

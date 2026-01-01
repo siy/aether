@@ -29,6 +29,7 @@
         <module>examples/order-demo</module>
         <module>forge</module>
         <module>infra-services</module>
+        <module>e2e-tests</module>
     </modules>
 
     <properties>

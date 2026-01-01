@@ -14,6 +14,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AetherNodeContainer** - Testcontainer wrapper with API helpers for E2E tests
 - **AetherCluster** - Multi-node cluster helper for managing N-node clusters in tests
 - **CI workflow enhancements** - E2E tests job (main or `[e2e]` tag) and Docker build/push to ghcr.io
+- **Rolling update system** - Two-stage deployment model (deploy then route) for zero-downtime updates
+  - `ArtifactBase` - Version-agnostic artifact identifier for rolling updates
+  - `RollingUpdateState` - State machine with 10 states (PENDING → COMPLETED/ROLLED_BACK/FAILED)
+  - `VersionRouting` - Ratio-based traffic routing between versions (e.g., 1:3 = 25% new)
+  - `HealthThresholds` - Configurable error rate and latency thresholds for auto-progression
+  - `CleanupPolicy` - IMMEDIATE, GRACE_PERIOD (5min), or MANUAL cleanup of old versions
+  - `RollingUpdateManager` - Interface for start/adjust/approve/complete/rollback operations
+- **Weighted endpoint routing** - `EndpointRegistry.selectEndpointWithRouting()` with weighted round-robin
+- **Rolling update API endpoints** - REST API for rolling update management
+  - `POST /rolling-update/start` - Start new rolling update
+  - `GET /rolling-updates` - List active updates
+  - `GET /rolling-update/{id}` - Get update status
+  - `POST /rolling-update/{id}/routing` - Adjust traffic ratio
+  - `POST /rolling-update/{id}/approve` - Manual approval
+  - `POST /rolling-update/{id}/complete` - Complete update
+  - `POST /rolling-update/{id}/rollback` - Rollback to old version
+  - `GET /rolling-update/{id}/health` - Version health metrics
+- **Rolling update CLI commands** - `aether update` command group
+  - `update start <artifact> <version>` - Start rolling update with health thresholds
+  - `update status <id>` - Get update status
+  - `update list` - List active updates
+  - `update routing <id> -r <ratio>` - Adjust traffic routing
+  - `update approve/complete/rollback <id>` - Update lifecycle operations
+  - `update health <id>` - View version health metrics
+- **KV schema extensions** - `VersionRoutingKey`, `RollingUpdateKey`, `VersionRoutingValue`, `RollingUpdateValue`
 
 ### Changed
 

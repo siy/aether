@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pragmatica-lite 0.9.3** - Updated with consensus observability support
 
 ### Fixed
+- **RabiaNode protocol message routing** - Added routes for RabiaProtocolMessage types (Propose, Vote, Decision, SyncRequest/Response, NewBatch) to RabiaEngine
+- **TestCluster QuorumStateNotification** - Added missing route for QuorumStateNotification to RabiaEngine in test infrastructure
 
 ## [0.6.3] - 2026-01-01
 

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.4] - 2026-01-01
 
 ### Added
+- **Docker container infrastructure** - Separate Dockerfiles for aether-node and aether-forge with Alpine base
+- **docker-compose.yml** - 3-node cluster configuration with health checks and optional Forge profile
+- **E2E testing module** - Testcontainers-based E2E tests for cluster formation, deployment, and chaos scenarios
+- **AetherNodeContainer** - Testcontainer wrapper with API helpers for E2E tests
+- **AetherCluster** - Multi-node cluster helper for managing N-node clusters in tests
+- **CI workflow enhancements** - E2E tests job (main or `[e2e]` tag) and Docker build/push to ghcr.io
 
 ### Changed
 

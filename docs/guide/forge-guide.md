@@ -1,6 +1,6 @@
-# Aether Forge: Continuous Testing and Chaos Engineering
+# Aether Forge: Local Development Environment
 
-Aether Forge is a built-in testing environment that lets you run realistic simulations of your distributed application, inject failures, and verify resilience.
+Aether Forge is a built-in local development environment for running, testing, and debugging Aether clusters. It provides a visual dashboard, real-time monitoring, and chaos engineering capabilities — all in a single process.
 
 ## Why Forge?
 
@@ -14,28 +14,47 @@ Traditional testing approaches fall short for distributed systems:
 | Production testing | Risky |
 
 Forge provides:
-- **Local multi-node cluster** in a single process
-- **Realistic load generation** with configurable patterns
-- **Chaos operations** (kill nodes, network partitions, latency injection)
-- **Visual dashboard** for real-time monitoring
-- **Automated verification** of system invariants
+- **Local multi-node cluster** — Run 5+ nodes in a single process
+- **Visual dashboard** — Real-time cluster topology, per-node metrics (CPU, heap, leader status)
+- **Management API access** — Each node exposes management API (ports 5150+)
+- **Cluster operations** — Add/remove nodes, rolling restarts, scale up/down
+- **Chaos operations** — Kill nodes, inject failures, observe recovery
+- **Realistic load generation** — Configurable patterns (planned)
+- **Automated verification** — System invariants (planned)
 
 ## Quick Start
 
 ```bash
-# Start Forge with default configuration
-cd your-project
-aether forge start
+# Start Forge
+aether-forge
 
 # Open dashboard
-open http://localhost:8080
+open http://localhost:8888
 ```
 
 The dashboard shows:
-- Cluster topology (nodes, slices, connections)
-- Real-time metrics (CPU, latency, throughput)
-- Chaos controls (kill node, inject latency, etc.)
-- Event log
+- **Cluster topology** — Nodes with ports, leader indicator, health status
+- **Per-node metrics** — CPU usage, heap memory, leader status
+- **Cluster controls** — Add node, kill node, rolling restart
+- **Management access** — Direct links to each node's management API (ports 5150+)
+
+### Management Ports
+
+Each Forge node exposes a management API:
+
+| Node | Cluster Port | Management Port |
+|------|--------------|-----------------|
+| node-1 | 5050 | 5150 |
+| node-2 | 5051 | 5151 |
+| node-3 | 5052 | 5152 |
+| ... | ... | ... |
+
+Access any node's management API directly:
+```bash
+curl http://localhost:5150/health
+curl http://localhost:5151/metrics
+curl http://localhost:5152/status
+```
 
 ## Configuration
 

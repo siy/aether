@@ -96,7 +96,7 @@
                         <include>**/*E2ETest.java</include>
                     </includes>
                     <systemPropertyVariables>
-                        <project.basedir>${project.basedir}</project.basedir>
+                        <project.basedir>${maven.multiModuleProjectDirectory}</project.basedir>
                     </systemPropertyVariables>
                 </configuration>
                 <executions>

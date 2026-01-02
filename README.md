@@ -113,16 +113,21 @@ aether deploy org.example:my-slice:1.0.0
 aether scale org.example:my-slice:1.0.0 3
 ```
 
-## Try Forge (Chaos Testing)
+## Try Forge (Local Development Environment)
 
-See Aether's resilience in action:
+Run a complete Aether cluster locally with visual monitoring:
 
 ```bash
 aether-forge
 # Open http://localhost:8888
 ```
 
-Kill nodes, inject latency, watch recovery — all from the dashboard.
+- **Visual Dashboard** — Real-time cluster topology, per-node metrics (CPU, heap, leader status)
+- **Cluster Operations** — Add/remove nodes, rolling restarts, scale up/down
+- **Chaos Testing** — Kill nodes, inject failures, observe recovery
+- **Management Access** — Each node exposes management API (ports 5150+)
+
+Perfect for development, testing, and learning how Aether works.
 
 → [Forge Guide](docs/guide/forge-guide.md)
 
@@ -146,7 +151,7 @@ Kill nodes, inject latency, watch recovery — all from the dashboard.
 | Document | Description |
 |----------|-------------|
 | [CLI Reference](docs/guide/cli-reference.md) | All commands |
-| [Forge Guide](docs/guide/forge-guide.md) | Chaos testing |
+| [Forge Guide](docs/guide/forge-guide.md) | Local cluster development & testing |
 | [Slice Developer Guide](docs/slice-developer-guide.md) | Writing slices |
 | [Configuration Reference](docs/guide/configuration-reference.md) | All settings |
 | [Management API](docs/api/management-api.md) | HTTP API reference |
@@ -175,7 +180,7 @@ Kill nodes, inject latency, watch recovery — all from the dashboard.
 | **No Cold Starts** | Instances stay warm, no container spin-up |
 | **Failure Recovery** | Automatic retry, failover, rebalancing |
 | **Type-Safe Invocation** | Compile-time checks for slice calls |
-| **Chaos Testing** | Built-in Forge for resilience testing |
+| **Local Dev Environment** | Forge for cluster development, testing & debugging |
 
 ## Project Structure
 
@@ -185,7 +190,7 @@ aetherx/
 ├── slice/               # Slice management
 ├── node/                # Runtime (AetherNode)
 ├── cluster/             # Rabia consensus
-├── forge/               # Chaos testing dashboard
+├── forge/               # Local cluster simulator & dashboard
 ├── cli/                 # Command-line tools
 └── examples/
     └── order-demo/      # Complete demo (5 slices)

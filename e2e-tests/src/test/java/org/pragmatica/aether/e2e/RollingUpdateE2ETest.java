@@ -31,7 +31,7 @@ import static org.awaitility.Awaitility.await;
 class RollingUpdateE2ETest {
     private static final Path PROJECT_ROOT = Path.of(System.getProperty("project.basedir", ".."));
     private static final String OLD_VERSION = "org.pragmatica-lite.aether:example-slice:0.6.3";
-    private static final String NEW_VERSION = "org.pragmatica-lite.aether:example-slice:0.6.4";
+    private static final String NEW_VERSION = "org.pragmatica-lite.aether:example-slice:0.6.5";
     private static final Duration UPDATE_TIMEOUT = Duration.ofSeconds(120);
     private AetherCluster cluster;
 

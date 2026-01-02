@@ -31,4 +31,9 @@ public record TestTopologyManager(int clusterSize, NodeInfo self) implements Top
     public TimeSpan pingInterval() {
         return TimeSpan.timeSpan(1).seconds();
     }
+
+    @Override
+    public TimeSpan helloTimeout() {
+        return TimeSpan.timeSpan(5).seconds();
+    }
 }

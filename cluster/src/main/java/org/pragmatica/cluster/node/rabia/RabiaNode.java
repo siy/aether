@@ -10,7 +10,7 @@ import org.pragmatica.consensus.net.NetworkManagementOperation.ListConnectedNode
 import org.pragmatica.consensus.net.NetworkMessage.Ping;
 import org.pragmatica.consensus.net.NetworkMessage.Pong;
 import org.pragmatica.consensus.NodeId;
-import org.pragmatica.cluster.net.netty.NettyClusterNetwork;
+import org.pragmatica.consensus.net.netty.NettyClusterNetwork;
 import org.pragmatica.cluster.node.ClusterNode;
 import org.pragmatica.consensus.Command;
 import org.pragmatica.consensus.StateMachine;
@@ -27,7 +27,7 @@ import org.pragmatica.consensus.rabia.RabiaProtocolMessage.Synchronous.Propose;
 import org.pragmatica.consensus.rabia.RabiaProtocolMessage.Synchronous.SyncResponse;
 import org.pragmatica.consensus.rabia.RabiaProtocolMessage.Synchronous.VoteRound1;
 import org.pragmatica.consensus.rabia.RabiaProtocolMessage.Synchronous.VoteRound2;
-import org.pragmatica.cluster.topology.ip.TcpTopologyManager;
+import org.pragmatica.consensus.topology.TcpTopologyManager;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.messaging.MessageRouter;

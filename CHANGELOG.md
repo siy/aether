@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Supports Fixed, Adaptive, PerMethod, Composite strategies
 - **E2E rolling update tests** - Fixed and enabled `RollingUpdateE2ETest`
   - `AetherNodeContainer.get()` and `post()` helpers for HTTP operations
+- **Forge management ports** - Each Forge node now exposes management API (ports 5150+)
+  - `ForgeCluster` enables management on all nodes
+  - `NodeStatus` includes `mgmtPort` field
+  - Dashboard can link to per-node management endpoints
+- **Integration tests** - New integration tests without mocks
+  - `ManagementApiIT` - Tests management API with shared 3-node cluster
+  - `EndpointRegistryIT` - Tests weighted routing for rolling updates
 
 ### Changed
 - **AlertManager** - Now requires `RabiaNode` and `KVStore` for persistence
@@ -35,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ThresholdStrategy** - Added getter methods for introspection
   - `Adaptive`: `minThresholdNs()`, `maxThresholdNs()`, `multiplier()`
   - `PerMethod`: `defaultThresholdNs()`
+- **Documentation** - Repositioned Forge as local development environment
+  - Updated README.md Forge section
+  - Updated Forge Guide with management port documentation
+  - Clarified chaos testing as one feature among many
 
 ## [0.6.5] - 2026-01-02
 

@@ -1,7 +1,7 @@
 package org.pragmatica.cluster.node.rabia;
 
 import org.pragmatica.consensus.rabia.ProtocolConfig;
-import org.pragmatica.cluster.topology.ip.TopologyConfig;
+import org.pragmatica.consensus.topology.TopologyConfig;
 
 public interface NodeConfig {
     ProtocolConfig protocol();

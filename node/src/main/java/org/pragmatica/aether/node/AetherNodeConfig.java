@@ -6,7 +6,7 @@ import org.pragmatica.aether.slice.serialization.FurySerializerFactoryProvider;
 import org.pragmatica.consensus.rabia.ProtocolConfig;
 import org.pragmatica.consensus.NodeId;
 import org.pragmatica.consensus.net.NodeInfo;
-import org.pragmatica.cluster.topology.ip.TopologyConfig;
+import org.pragmatica.consensus.topology.TopologyConfig;
 import org.pragmatica.dht.DHTConfig;
 import org.pragmatica.lang.Option;
 import org.pragmatica.net.tcp.TlsConfig;
@@ -132,7 +132,12 @@ public record AetherNodeConfig(
         var tlsOption = Option.some(tlsConfig);
         // Update TopologyConfig with TLS for cluster communication
         var newTopology = new TopologyConfig(
-        topology.self(), topology.reconciliationInterval(), topology.pingInterval(), topology.coreNodes(), tlsOption);
+        topology.self(),
+        topology.reconciliationInterval(),
+        topology.pingInterval(),
+        topology.helloTimeout(),
+        topology.coreNodes(),
+        tlsOption);
         return new AetherNodeConfig(newTopology,
                                     protocol,
                                     sliceAction,

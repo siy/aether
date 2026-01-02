@@ -13,7 +13,7 @@ import org.pragmatica.cluster.node.rabia.CustomClasses;
 import org.pragmatica.cluster.node.rabia.RabiaNode;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
-import org.pragmatica.cluster.topology.ip.TopologyConfig;
+import org.pragmatica.consensus.topology.TopologyConfig;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.io.TimeSpan;
 import org.pragmatica.messaging.MessageRouter;

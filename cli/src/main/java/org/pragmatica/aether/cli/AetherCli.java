@@ -41,7 +41,7 @@ import picocli.CommandLine.Parameters;
  */
 @Command(name = "aether",
  mixinStandardHelpOptions = true,
- version = "Aether 0.6.4",
+ version = "Aether 0.6.5",
  description = "Command-line interface for Aether cluster management",
  subcommands = {AetherCli.StatusCommand.class,
  AetherCli.NodesCommand.class,
@@ -85,7 +85,7 @@ public class AetherCli implements Runnable {
     }
 
     private void runRepl(CommandLine cmd) {
-        System.out.println("Aether v0.6.4 - Connected to " + nodeAddress);
+        System.out.println("Aether v0.6.5 - Connected to " + nodeAddress);
         System.out.println("Type 'help' for available commands, 'exit' to quit.");
         System.out.println();
         try (var reader = new BufferedReader(new InputStreamReader(System.in))) {

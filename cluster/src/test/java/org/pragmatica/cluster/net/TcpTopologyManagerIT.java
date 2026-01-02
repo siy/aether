@@ -7,7 +7,7 @@ import org.pragmatica.consensus.net.NetworkManagementOperation;
 import org.pragmatica.consensus.net.NodeInfo;
 import org.pragmatica.consensus.topology.TopologyManagementMessage;
 import org.pragmatica.consensus.topology.TopologyManager;
-import org.pragmatica.cluster.topology.ip.TopologyConfig;
+import org.pragmatica.consensus.topology.TopologyConfig;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.io.TimeSpan;
 import org.pragmatica.messaging.MessageRouter;
@@ -19,7 +19,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.pragmatica.consensus.NodeId.randomNodeId;
 import static org.pragmatica.consensus.net.NodeInfo.nodeInfo;
-import static org.pragmatica.cluster.topology.ip.TcpTopologyManager.tcpTopologyManager;
+import static org.pragmatica.consensus.topology.TcpTopologyManager.tcpTopologyManager;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 
 class TcpTopologyManagerIT {

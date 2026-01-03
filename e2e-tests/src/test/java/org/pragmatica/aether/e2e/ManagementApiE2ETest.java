@@ -118,11 +118,8 @@ class ManagementApiE2ETest {
 
             // Prometheus format uses # for comments and metric_name{labels} value
             assertThat(prometheus).doesNotContain("\"error\"");
-            // Should have at least some metrics exposed
-            if (!prometheus.contains("error")) {
-                // Valid Prometheus output has either metrics or is empty
-                assertThat(prometheus).isNotNull();
-            }
+            // Valid Prometheus output has either metrics or is empty
+            assertThat(prometheus).isNotNull();
         }
 
         @Test

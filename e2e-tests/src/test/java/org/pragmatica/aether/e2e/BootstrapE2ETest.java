@@ -69,10 +69,8 @@ class BootstrapE2ETest {
 
         // Verify all nodes are healthy
         for (var node : cluster.nodes()) {
-            if (node.isRunning()) {
-                var health = node.getHealth();
-                assertThat(health).doesNotContain("\"error\"");
-            }
+            var health = node.getHealth();
+            assertThat(health).doesNotContain("\"error\"");
         }
     }
 

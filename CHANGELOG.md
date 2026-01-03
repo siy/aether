@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Comprehensive E2E test suite** - 80 E2E tests across 12 test classes proving production readiness
+  - `ClusterFormationE2ETest` (4 tests) - Cluster bootstrap, quorum formation, leader election
+  - `SliceDeploymentE2ETest` (6 tests) - Deploy, scale, undeploy, blueprints
+  - `RollingUpdateE2ETest` (6 tests) - Two-stage updates, traffic shifting
+  - `NodeFailureE2ETest` (6 tests) - Failure modes, recovery
+  - `ChaosE2ETest` (5 tests) - Resilience under adverse conditions
   - `ManagementApiE2ETest` (19 tests) - Status, metrics, thresholds, alerts, controller endpoints
   - `SliceInvocationE2ETest` (9 tests) - Route handling, error cases, request distribution
   - `MetricsE2ETest` (6 tests) - Metrics collection, Prometheus format, distribution

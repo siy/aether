@@ -24,18 +24,23 @@ import java.util.concurrent.Future;
  *   <li>Cluster port (8090) - Internal cluster communication</li>
  * </ul>
  *
- * <p>The Docker image is built once and cached for all test containers,
- * significantly reducing E2E test execution time.
+ * <p>Image selection strategy:
+ * <ol>
+ *   <li>If AETHER_E2E_IMAGE env var is set, use that image (for CI with pre-built images)</li>
+ *   <li>Otherwise, build from Dockerfile (cached for all test containers)</li>
+ * </ol>
  */
 public class AetherNodeContainer extends GenericContainer<AetherNodeContainer> {
     private static final int MANAGEMENT_PORT = 8080;
     private static final int CLUSTER_PORT = 8090;
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(60);
     private static final String IMAGE_NAME = "aether-node-e2e";
+    private static final String E2E_IMAGE_ENV = "AETHER_E2E_IMAGE";
 
     // Cached image - built once, reused across all containers
     private static volatile Future<String> cachedImage;
     private static volatile Path cachedProjectRoot;
+    private static volatile DockerImageName prebuiltImage;
 
     private final String nodeId;
     private final HttpClient httpClient;
@@ -48,19 +53,29 @@ public class AetherNodeContainer extends GenericContainer<AetherNodeContainer> {
                                     .build();
     }
 
+    private AetherNodeContainer(DockerImageName imageName, String nodeId) {
+        super(imageName);
+        this.nodeId = nodeId;
+        this.httpClient = HttpClient.newBuilder()
+                                    .connectTimeout(Duration.ofSeconds(5))
+                                    .build();
+    }
+
     /**
      * Creates a new Aether node container with the specified node ID.
      *
-     * <p>The Docker image is built once on first call and cached for subsequent containers.
+     * <p>Image selection:
+     * <ul>
+     *   <li>If AETHER_E2E_IMAGE env var is set, uses that pre-built image</li>
+     *   <li>Otherwise, builds from Dockerfile (cached for subsequent containers)</li>
+     * </ul>
      *
      * @param nodeId unique identifier for this node
-     * @param projectRoot path to the project root (for Dockerfile context)
+     * @param projectRoot path to the project root (for Dockerfile context, ignored if using pre-built)
      * @return configured container (not yet started)
      */
     public static AetherNodeContainer aetherNode(String nodeId, Path projectRoot) {
-        var image = getOrBuildImage(projectRoot);
-
-        var container = new AetherNodeContainer(image, nodeId);
+        var container = createContainer(nodeId, projectRoot);
         container.withExposedPorts(MANAGEMENT_PORT, CLUSTER_PORT)
                  .withEnv("NODE_ID", nodeId)
                  .withEnv("CLUSTER_PORT", String.valueOf(CLUSTER_PORT))
@@ -72,6 +87,14 @@ public class AetherNodeContainer extends GenericContainer<AetherNodeContainer> {
                                  .withStartupTimeout(STARTUP_TIMEOUT))
                  .withNetworkAliases(nodeId);
         return container;
+    }
+
+    private static AetherNodeContainer createContainer(String nodeId, Path projectRoot) {
+        var prebuiltImageName = System.getenv(E2E_IMAGE_ENV);
+        if (prebuiltImageName != null && !prebuiltImageName.isBlank()) {
+            return new AetherNodeContainer(DockerImageName.parse(prebuiltImageName), nodeId);
+        }
+        return new AetherNodeContainer(getOrBuildImage(projectRoot), nodeId);
     }
 
     /**

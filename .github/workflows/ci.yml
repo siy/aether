@@ -70,7 +70,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run E2E tests
-        run: mvn --no-transfer-progress --batch-mode verify -pl e2e-tests -DskipE2ETests=false
+        run: |
+          # Run only ClusterFormationE2ETest as smoke test in CI (faster)
+          # Full E2E suite can be run manually with [e2e-full] in commit message
+          if [[ "${{ contains(github.event.head_commit.message, '[e2e-full]') }}" == "true" ]]; then
+            mvn --no-transfer-progress --batch-mode verify -pl e2e-tests -DskipE2ETests=false
+          else
+            mvn --no-transfer-progress --batch-mode verify -pl e2e-tests -DskipE2ETests=false \
+              -Dit.test=ClusterFormationE2ETest
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

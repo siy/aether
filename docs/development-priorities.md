@@ -1,6 +1,6 @@
 # Development Priorities
 
-## Current Status (v0.7.0)
+## Current Status (v0.7.1)
 
 Most foundational work is complete. Priorities have shifted to polish and AI integration.
 

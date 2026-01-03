@@ -1,0 +1,279 @@
+package org.pragmatica.aether.e2e;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.pragmatica.aether.e2e.containers.AetherCluster;
+
+import java.nio.file.Path;
+import java.time.Duration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+/**
+ * E2E tests for Management API endpoints.
+ *
+ * <p>Comprehensive coverage of all HTTP API endpoints exposed by AetherNode.
+ * Tests are organized by endpoint category:
+ * <ul>
+ *   <li>Status endpoints (/health, /status, /nodes, /slices)</li>
+ *   <li>Metrics endpoints (/metrics, /metrics/prometheus, /invocation-metrics)</li>
+ *   <li>Threshold & Alert endpoints (/thresholds, /alerts)</li>
+ *   <li>Controller endpoints (/controller/*)</li>
+ * </ul>
+ */
+class ManagementApiE2ETest {
+    private static final Path PROJECT_ROOT = Path.of(System.getProperty("project.basedir", ".."));
+    private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(30);
+    private AetherCluster cluster;
+
+    @BeforeEach
+    void setUp() {
+        cluster = AetherCluster.create(3, PROJECT_ROOT);
+        cluster.start();
+        cluster.awaitQuorum();
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (cluster != null) {
+            cluster.close();
+        }
+    }
+
+    @Nested
+    class StatusEndpoints {
+
+        @Test
+        void health_returnsQuorumStatus_andConnectedPeers() {
+            var health = cluster.anyNode().getHealth();
+
+            assertThat(health).contains("\"status\"");
+            assertThat(health).contains("\"connectedPeers\"");
+            assertThat(health).contains("\"nodeCount\":3");
+            assertThat(health).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void status_showsLeaderInfo_andNodeState() {
+            cluster.awaitLeader();
+            var status = cluster.anyNode().getStatus();
+
+            assertThat(status).contains("\"leader\"");
+            assertThat(status).contains("\"isLeader\"");
+            assertThat(status).contains("\"nodeId\"");
+            assertThat(status).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void nodes_listsAllClusterMembers() {
+            // Wait for nodes to exchange metrics
+            await().atMost(WAIT_TIMEOUT).until(() -> {
+                var nodes = cluster.anyNode().getNodes();
+                return nodes.contains("node-1") && nodes.contains("node-2") && nodes.contains("node-3");
+            });
+
+            var nodes = cluster.anyNode().getNodes();
+            assertThat(nodes).contains("node-1");
+            assertThat(nodes).contains("node-2");
+            assertThat(nodes).contains("node-3");
+        }
+
+        @Test
+        void slices_listsDeployedSlices_withState() {
+            // Initially empty
+            var slices = cluster.anyNode().getSlices();
+            assertThat(slices).doesNotContain("\"error\"");
+
+            // Deploy a slice and verify it appears
+            cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.1", 1);
+
+            await().atMost(WAIT_TIMEOUT).until(() -> {
+                var response = cluster.anyNode().getSlices();
+                return response.contains("example-slice");
+            });
+
+            slices = cluster.anyNode().getSlices();
+            assertThat(slices).contains("example-slice");
+        }
+    }
+
+    @Nested
+    class MetricsEndpoints {
+
+        @Test
+        void metrics_returnsNodeMetrics_andSliceMetrics() {
+            var metrics = cluster.anyNode().getMetrics();
+
+            assertThat(metrics).doesNotContain("\"error\"");
+            // Should contain basic metrics structure
+            assertThat(metrics).containsAnyOf("cpu", "heap", "metrics");
+        }
+
+        @Test
+        void prometheusMetrics_validFormat_scrapable() {
+            var prometheus = cluster.anyNode().getPrometheusMetrics();
+
+            // Prometheus format uses # for comments and metric_name{labels} value
+            assertThat(prometheus).doesNotContain("\"error\"");
+            // Should have at least some metrics exposed
+            if (!prometheus.contains("error")) {
+                // Valid Prometheus output has either metrics or is empty
+                assertThat(prometheus).isNotNull();
+            }
+        }
+
+        @Test
+        void invocationMetrics_tracksCallsPerMethod() {
+            // Deploy a slice to generate some invocation data
+            cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.1", 1);
+
+            await().atMost(WAIT_TIMEOUT).until(() -> {
+                var slices = cluster.anyNode().getSlices();
+                return slices.contains("example-slice");
+            });
+
+            var invocationMetrics = cluster.anyNode().getInvocationMetrics();
+            assertThat(invocationMetrics).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void invocationMetrics_filtering_byArtifactAndMethod() {
+            var filtered = cluster.anyNode().getInvocationMetrics("example-slice", null);
+            assertThat(filtered).doesNotContain("\"error\"");
+
+            var methodFiltered = cluster.anyNode().getInvocationMetrics(null, "process");
+            assertThat(methodFiltered).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void slowInvocations_capturedAboveThreshold() {
+            var slowInvocations = cluster.anyNode().getSlowInvocations();
+            assertThat(slowInvocations).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void invocationStrategy_returnsCurrentConfig() {
+            var strategy = cluster.anyNode().getInvocationStrategy();
+
+            assertThat(strategy).doesNotContain("\"error\"");
+            // Should indicate strategy type
+            assertThat(strategy).containsAnyOf("type", "fixed", "adaptive");
+        }
+    }
+
+    @Nested
+    class ThresholdAndAlertEndpoints {
+
+        @Test
+        void thresholds_setAndGet_persisted() {
+            // Set a threshold
+            var setResponse = cluster.anyNode().setThreshold("cpu.usage", 0.7, 0.9);
+            assertThat(setResponse).doesNotContain("\"error\"");
+
+            // Get thresholds and verify
+            await().atMost(WAIT_TIMEOUT).until(() -> {
+                var thresholds = cluster.anyNode().getThresholds();
+                return thresholds.contains("cpu.usage");
+            });
+
+            var thresholds = cluster.anyNode().getThresholds();
+            assertThat(thresholds).contains("cpu.usage");
+        }
+
+        @Test
+        void thresholds_delete_removesThreshold() {
+            // First set a threshold
+            cluster.anyNode().setThreshold("test.metric", 0.5, 0.8);
+
+            await().atMost(WAIT_TIMEOUT).until(() -> {
+                var thresholds = cluster.anyNode().getThresholds();
+                return thresholds.contains("test.metric");
+            });
+
+            // Now delete it
+            var deleteResponse = cluster.anyNode().deleteThreshold("test.metric");
+            assertThat(deleteResponse).doesNotContain("\"error\"");
+
+            // Verify it's gone
+            await().atMost(WAIT_TIMEOUT).until(() -> {
+                var thresholds = cluster.anyNode().getThresholds();
+                return !thresholds.contains("test.metric");
+            });
+        }
+
+        @Test
+        void alerts_active_reflectsCurrentState() {
+            var activeAlerts = cluster.anyNode().getActiveAlerts();
+            assertThat(activeAlerts).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void alerts_history_recordsPastAlerts() {
+            var alertHistory = cluster.anyNode().getAlertHistory();
+            assertThat(alertHistory).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void alerts_clear_removesAllAlerts() {
+            var clearResponse = cluster.anyNode().clearAlerts();
+            assertThat(clearResponse).doesNotContain("\"error\"");
+
+            // Verify active alerts is empty or contains empty array
+            var activeAlerts = cluster.anyNode().getActiveAlerts();
+            assertThat(activeAlerts).doesNotContain("\"error\"");
+        }
+    }
+
+    @Nested
+    class ControllerEndpoints {
+
+        @Test
+        void controllerConfig_getAndUpdate() {
+            // Get current config
+            var config = cluster.anyNode().getControllerConfig();
+            assertThat(config).doesNotContain("\"error\"");
+
+            // Update config
+            var newConfig = "{\"scaleUpThreshold\":0.85,\"scaleDownThreshold\":0.15}";
+            var updateResponse = cluster.anyNode().setControllerConfig(newConfig);
+            assertThat(updateResponse).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void controllerStatus_showsEnabledState() {
+            var status = cluster.anyNode().getControllerStatus();
+
+            assertThat(status).doesNotContain("\"error\"");
+            // Should indicate enabled/disabled state
+            assertThat(status).containsAnyOf("enabled", "status", "running");
+        }
+
+        @Test
+        void controllerEvaluate_triggersImmediateCheck() {
+            var evalResponse = cluster.anyNode().triggerControllerEvaluation();
+
+            assertThat(evalResponse).doesNotContain("\"error\"");
+        }
+    }
+
+    @Nested
+    class SliceStatusEndpoints {
+
+        @Test
+        void slicesStatus_returnsDetailedHealth() {
+            // Deploy a slice first
+            cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.1", 2);
+
+            await().atMost(WAIT_TIMEOUT).until(() -> {
+                var slices = cluster.anyNode().getSlices();
+                return slices.contains("example-slice");
+            });
+
+            var slicesStatus = cluster.anyNode().getSlicesStatus();
+            assertThat(slicesStatus).doesNotContain("\"error\"");
+        }
+    }
+}

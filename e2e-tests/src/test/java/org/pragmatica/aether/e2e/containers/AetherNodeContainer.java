@@ -319,4 +319,319 @@ public class AetherNodeContainer extends GenericContainer<AetherNodeContainer> {
             return "{\"error\":\"" + e.getMessage() + "\"}";
         }
     }
+
+    /**
+     * Performs a DELETE request to the management API.
+     *
+     * @param path API path (e.g., "/thresholds/cpu")
+     * @return response body JSON
+     */
+    public String delete(String path) {
+        try {
+            var request = HttpRequest.newBuilder()
+                                     .uri(URI.create(managementUrl() + path))
+                                     .DELETE()
+                                     .timeout(Duration.ofSeconds(10))
+                                     .build();
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body();
+        } catch (Exception e) {
+            return "{\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    // ===== Metrics API =====
+
+    /**
+     * Fetches Prometheus-formatted metrics.
+     *
+     * @return metrics in Prometheus text format
+     */
+    public String getPrometheusMetrics() {
+        return get("/metrics/prometheus");
+    }
+
+    /**
+     * Fetches invocation metrics for all methods.
+     *
+     * @return invocation metrics JSON
+     */
+    public String getInvocationMetrics() {
+        return get("/invocation-metrics");
+    }
+
+    /**
+     * Fetches invocation metrics with optional filtering.
+     *
+     * @param artifact artifact filter (partial match, null to skip)
+     * @param method method filter (exact match, null to skip)
+     * @return filtered invocation metrics JSON
+     */
+    public String getInvocationMetrics(String artifact, String method) {
+        var params = new StringBuilder();
+        if (artifact != null) {
+            params.append("artifact=").append(artifact);
+        }
+        if (method != null) {
+            if (!params.isEmpty()) params.append("&");
+            params.append("method=").append(method);
+        }
+        var path = params.isEmpty() ? "/invocation-metrics" : "/invocation-metrics?" + params;
+        return get(path);
+    }
+
+    /**
+     * Fetches slow invocation records.
+     *
+     * @return slow invocations JSON
+     */
+    public String getSlowInvocations() {
+        return get("/invocation-metrics/slow");
+    }
+
+    /**
+     * Fetches current threshold strategy configuration.
+     *
+     * @return strategy configuration JSON
+     */
+    public String getInvocationStrategy() {
+        return get("/invocation-metrics/strategy");
+    }
+
+    // ===== Threshold & Alert API =====
+
+    /**
+     * Fetches all configured thresholds.
+     *
+     * @return thresholds JSON
+     */
+    public String getThresholds() {
+        return get("/thresholds");
+    }
+
+    /**
+     * Sets an alert threshold for a metric.
+     *
+     * @param metric metric name
+     * @param warning warning threshold
+     * @param critical critical threshold
+     * @return response JSON
+     */
+    public String setThreshold(String metric, double warning, double critical) {
+        var body = "{\"metric\":\"" + metric + "\",\"warning\":" + warning + ",\"critical\":" + critical + "}";
+        return post("/thresholds", body);
+    }
+
+    /**
+     * Deletes a threshold for a metric.
+     *
+     * @param metric metric name
+     * @return response JSON
+     */
+    public String deleteThreshold(String metric) {
+        return delete("/thresholds/" + metric);
+    }
+
+    /**
+     * Fetches all alerts (active and history).
+     *
+     * @return alerts JSON
+     */
+    public String getAlerts() {
+        return get("/alerts");
+    }
+
+    /**
+     * Fetches active alerts only.
+     *
+     * @return active alerts JSON
+     */
+    public String getActiveAlerts() {
+        return get("/alerts/active");
+    }
+
+    /**
+     * Fetches alert history.
+     *
+     * @return alert history JSON
+     */
+    public String getAlertHistory() {
+        return get("/alerts/history");
+    }
+
+    /**
+     * Clears all alerts.
+     *
+     * @return response JSON
+     */
+    public String clearAlerts() {
+        return post("/alerts/clear", "{}");
+    }
+
+    // ===== Controller API =====
+
+    /**
+     * Fetches controller configuration.
+     *
+     * @return controller config JSON
+     */
+    public String getControllerConfig() {
+        return get("/controller/config");
+    }
+
+    /**
+     * Fetches controller status (enabled/disabled).
+     *
+     * @return controller status JSON
+     */
+    public String getControllerStatus() {
+        return get("/controller/status");
+    }
+
+    /**
+     * Updates controller configuration.
+     *
+     * @param config configuration JSON
+     * @return response JSON
+     */
+    public String setControllerConfig(String config) {
+        return post("/controller/config", config);
+    }
+
+    /**
+     * Triggers immediate controller evaluation.
+     *
+     * @return evaluation result JSON
+     */
+    public String triggerControllerEvaluation() {
+        return post("/controller/evaluate", "{}");
+    }
+
+    // ===== Rolling Update API =====
+
+    /**
+     * Starts a rolling update.
+     *
+     * @param oldVersion old artifact version
+     * @param newVersion new artifact version
+     * @return response JSON with update ID
+     */
+    public String startRollingUpdate(String oldVersion, String newVersion) {
+        var body = "{\"oldVersion\":\"" + oldVersion + "\",\"newVersion\":\"" + newVersion + "\"}";
+        return post("/rolling-update/start", body);
+    }
+
+    /**
+     * Gets all active rolling updates.
+     *
+     * @return active updates JSON
+     */
+    public String getRollingUpdates() {
+        return get("/rolling-updates");
+    }
+
+    /**
+     * Gets status of a specific rolling update.
+     *
+     * @param updateId update identifier
+     * @return update status JSON
+     */
+    public String getRollingUpdateStatus(String updateId) {
+        return get("/rolling-update/" + updateId);
+    }
+
+    /**
+     * Adjusts traffic routing during rolling update.
+     *
+     * @param updateId update identifier
+     * @param oldWeight weight for old version
+     * @param newWeight weight for new version
+     * @return response JSON
+     */
+    public String setRollingUpdateRouting(String updateId, int oldWeight, int newWeight) {
+        var body = "{\"oldWeight\":" + oldWeight + ",\"newWeight\":" + newWeight + "}";
+        return post("/rolling-update/" + updateId + "/routing", body);
+    }
+
+    /**
+     * Completes a rolling update.
+     *
+     * @param updateId update identifier
+     * @return response JSON
+     */
+    public String completeRollingUpdate(String updateId) {
+        return post("/rolling-update/" + updateId + "/complete", "{}");
+    }
+
+    /**
+     * Rolls back a rolling update.
+     *
+     * @param updateId update identifier
+     * @return response JSON
+     */
+    public String rollbackRollingUpdate(String updateId) {
+        return post("/rolling-update/" + updateId + "/rollback", "{}");
+    }
+
+    // ===== Slice Status API =====
+
+    /**
+     * Fetches detailed slice status with health per instance.
+     *
+     * @return slice status JSON
+     */
+    public String getSlicesStatus() {
+        return get("/slices/status");
+    }
+
+    // ===== Slice Invocation API =====
+
+    /**
+     * Invokes a slice method via HTTP router.
+     *
+     * @param httpMethod HTTP method (GET, POST, etc.)
+     * @param path       Route path (e.g., "/api/orders")
+     * @param body       Request body (for POST/PUT)
+     * @return response body or error JSON
+     */
+    public String invokeSlice(String httpMethod, String path, String body) {
+        return switch (httpMethod.toUpperCase()) {
+            case "GET" -> get(path);
+            case "POST" -> post(path, body);
+            case "DELETE" -> delete(path);
+            default -> "{\"error\":\"Unsupported HTTP method: " + httpMethod + "\"}";
+        };
+    }
+
+    /**
+     * Invokes a slice method with GET.
+     *
+     * @param path Route path
+     * @return response body
+     */
+    public String invokeGet(String path) {
+        return get(path);
+    }
+
+    /**
+     * Invokes a slice method with POST.
+     *
+     * @param path Route path
+     * @param body Request body JSON
+     * @return response body
+     */
+    public String invokePost(String path, String body) {
+        return post(path, body);
+    }
+
+    // ===== Routes API =====
+
+    /**
+     * Fetches all registered routes.
+     *
+     * @return routes JSON
+     */
+    public String getRoutes() {
+        return get("/routes");
+    }
 }

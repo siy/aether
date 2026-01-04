@@ -71,15 +71,53 @@ node.isRunning();       // Check if running
 ### API Methods
 
 ```java
+// Status endpoints
 node.getHealth();       // GET /health
 node.getStatus();       // GET /status
 node.getNodes();        // GET /nodes
 node.getSlices();       // GET /slices
-node.getMetrics();      // GET /metrics
+node.getSlicesStatus(); // GET /slices/status
 
+// Deployment
 node.deploy(artifact, instances);  // POST /deploy
 node.scale(artifact, instances);   // POST /scale
 node.undeploy(artifact);           // POST /undeploy
+
+// Metrics
+node.getMetrics();              // GET /metrics
+node.getPrometheusMetrics();    // GET /metrics/prometheus
+node.getInvocationMetrics();    // GET /invocation-metrics
+node.getInvocationMetrics(artifact, method); // with filters
+node.getSlowInvocations();      // GET /invocation-metrics/slow
+node.getInvocationStrategy();   // GET /invocation-metrics/strategy
+
+// Thresholds & Alerts
+node.getThresholds();                           // GET /thresholds
+node.setThreshold(metric, warning, critical);   // POST /thresholds
+node.deleteThreshold(metric);                   // DELETE /thresholds/{metric}
+node.getActiveAlerts();                         // GET /alerts/active
+node.getAlertHistory();                         // GET /alerts/history
+node.clearAlerts();                             // POST /alerts/clear
+
+// Controller
+node.getControllerConfig();         // GET /controller/config
+node.setControllerConfig(config);   // POST /controller/config
+node.getControllerStatus();         // GET /controller/status
+node.triggerControllerEvaluation(); // POST /controller/evaluate
+
+// Rolling Updates
+node.startRollingUpdate(oldVersion, newVersion);       // POST /rolling-update/start
+node.getRollingUpdates();                              // GET /rolling-updates
+node.getRollingUpdateStatus(updateId);                 // GET /rolling-update/{id}
+node.setRollingUpdateRouting(updateId, oldWeight, newWeight); // POST /rolling-update/{id}/routing
+node.completeRollingUpdate(updateId);                  // POST /rolling-update/{id}/complete
+node.rollbackRollingUpdate(updateId);                  // POST /rolling-update/{id}/rollback
+
+// Slice Invocation
+node.invokeSlice(httpMethod, path, body);  // Invoke via HTTP router
+node.invokeGet(path);                      // GET to route
+node.invokePost(path, body);               // POST to route
+node.getRoutes();                          // GET /routes
 ```
 
 ### Generic HTTP
@@ -150,6 +188,25 @@ cluster.rollingRestart(Duration.ofSeconds(5));  // Rolling restart
 cluster.runningNodeCount();    // Number of running nodes
 cluster.size();                // Total cluster size
 ```
+
+## Test Suite Overview
+
+The E2E test suite contains **80 tests** across **12 test classes**:
+
+| Test Class | Tests | Coverage |
+|------------|-------|----------|
+| ClusterFormationE2ETest | 4 | Cluster bootstrap, quorum, leader election |
+| SliceDeploymentE2ETest | 6 | Deploy, scale, undeploy, blueprints |
+| RollingUpdateE2ETest | 6 | Two-stage updates, traffic shifting |
+| NodeFailureE2ETest | 6 | Failure modes, recovery |
+| ChaosE2ETest | 5 | Resilience under adverse conditions |
+| ManagementApiE2ETest | 19 | Status, metrics, thresholds, alerts, controller |
+| SliceInvocationE2ETest | 9 | Route handling, error cases, distribution |
+| MetricsE2ETest | 6 | Collection, Prometheus, distribution |
+| ControllerE2ETest | 7 | Configuration, status, leader behavior |
+| BootstrapE2ETest | 4 | Node restart, state recovery |
+| GracefulShutdownE2ETest | 4 | Peer detection, leader failover |
+| NetworkPartitionE2ETest | 4 | Quorum behavior, partition healing |
 
 ## Test Categories
 

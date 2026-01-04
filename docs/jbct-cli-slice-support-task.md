@@ -1264,7 +1264,7 @@ impl.interface=org.example.inventory.InventoryService
 
 # Generation metadata
 generated.timestamp=2025-01-15T10:30:00Z
-processor.version=0.7.0
+processor.version=0.7.1
 ```
 
 ### 5.3 Generated Code Templates

@@ -5,9 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - 2026-01-02
+## [0.7.1] - 2026-01-03
 
 ### Added
+- **Comprehensive E2E test suite** - 80 E2E tests across 12 test classes proving production readiness
+  - `ClusterFormationE2ETest` (4 tests) - Cluster bootstrap, quorum formation, leader election
+  - `SliceDeploymentE2ETest` (6 tests) - Deploy, scale, undeploy, blueprints
+  - `RollingUpdateE2ETest` (6 tests) - Two-stage updates, traffic shifting
+  - `NodeFailureE2ETest` (6 tests) - Failure modes, recovery
+  - `ChaosE2ETest` (5 tests) - Resilience under adverse conditions
+  - `ManagementApiE2ETest` (19 tests) - Status, metrics, thresholds, alerts, controller endpoints
+  - `SliceInvocationE2ETest` (9 tests) - Route handling, error cases, request distribution
+  - `MetricsE2ETest` (6 tests) - Metrics collection, Prometheus format, distribution
+  - `ControllerE2ETest` (7 tests) - Configuration, status, leader behavior
+  - `BootstrapE2ETest` (4 tests) - Node restart, state recovery, rolling restart
+  - `GracefulShutdownE2ETest` (4 tests) - Peer detection, slice handling, leader failover
+  - `NetworkPartitionE2ETest` (4 tests) - Quorum behavior, partition healing, consistency
+- **Enhanced AetherNodeContainer** - 20+ new API methods for E2E testing
+  - Metrics API: `getPrometheusMetrics()`, `getInvocationMetrics()`, `getSlowInvocations()`
+  - Threshold API: `getThresholds()`, `setThreshold()`, `deleteThreshold()`
+  - Alert API: `getActiveAlerts()`, `getAlertHistory()`, `clearAlerts()`
+  - Controller API: `getControllerConfig()`, `setControllerConfig()`, `triggerControllerEvaluation()`
+  - Rolling Update API: `startRollingUpdate()`, `getRollingUpdates()`, `setRollingUpdateRouting()`
+  - Slice invocation: `invokeSlice()`, `invokeGet()`, `invokePost()`, `getRoutes()`
 - **Weighted endpoint routing integration** - `SliceInvoker` now uses weighted routing during rolling updates
   - Checks for active rolling update via `RollingUpdateManager`
   - Uses `EndpointRegistry.selectEndpointWithRouting()` for traffic distribution

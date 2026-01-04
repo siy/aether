@@ -7,15 +7,11 @@ import org.pragmatica.serialization.Deserializer;
 import org.pragmatica.serialization.Serializer;
 import org.pragmatica.serialization.ClassRegistrator;
 import org.pragmatica.serialization.kryo.KryoDeserializer;
-import org.pragmatica.serialization.kryo.KryoPoolFactory;
 import org.pragmatica.serialization.kryo.KryoSerializer;
 
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.util.Pool;
 
 /**
  * Kryo-based serializer factory provider using FIFO pooling pattern.
@@ -27,22 +23,15 @@ import com.esotericsoftware.kryo.util.Pool;
  */
 public interface KryoSerializerFactoryProvider extends SerializerFactoryProvider {
     static KryoSerializerFactoryProvider kryoSerializerFactoryProvider(ClassRegistrator... registrators) {
-        record kryoProvider(ClassRegistrator[] registrators) implements KryoSerializerFactoryProvider {
-            @Override
-            public SerializerFactory createFactory(List<TypeToken< ? >> typeTokens) {
-                // Create Kryo pool (standard pattern from existing code)
-                Pool<Kryo> kryoPool = KryoPoolFactory.kryoPool(registrators);
-                // Create pooled serializers using the Kryo pool
-                Serializer serializer = KryoSerializer.kryoSerializer(registrators);
-                Deserializer deserializer = KryoDeserializer.kryoDeserializer(registrators);
-                // Pool size: 2 * processors (same as KryoPoolFactory default)
-                int poolSize = Runtime.getRuntime()
-                                      .availableProcessors() * 2;
-                // Return FIFO pooled factory
-                return pooledFactory(serializer, deserializer, poolSize);
-            }
-        }
-        return new kryoProvider(registrators);
+        return typeTokens -> {
+            // Create pooled serializers using Kryo (not thread-safe, needs pooling)
+            Serializer serializer = KryoSerializer.kryoSerializer(registrators);
+            Deserializer deserializer = KryoDeserializer.kryoDeserializer(registrators);
+            // Pool size: 2 * processors
+            int poolSize = Runtime.getRuntime()
+                                  .availableProcessors() * 2;
+            return pooledFactory(serializer, deserializer, poolSize);
+        };
     }
 
     private static SerializerFactory pooledFactory(Serializer serializer, Deserializer deserializer, int poolSize) {

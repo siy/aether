@@ -61,7 +61,7 @@ class AetherNodeIT {
             var port = BASE_PORT + i;
 
             var config = AetherNodeConfig.testConfig(nodeId, port, configuredNodes);
-            var node = AetherNode.aetherNode(config);
+            var node = AetherNode.aetherNode(config).unwrap();
             nodes.add(node);
         }
 

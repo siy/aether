@@ -64,7 +64,7 @@ class ManagementApiIT {
             var mgmtPort = BASE_MGMT_PORT + i;
 
             var config = testConfigWithManagement(nodeId, port, configuredNodes, mgmtPort);
-            var node = AetherNode.aetherNode(config);
+            var node = AetherNode.aetherNode(config).unwrap();
             nodes.add(node);
         }
 

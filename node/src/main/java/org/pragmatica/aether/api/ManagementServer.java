@@ -3,9 +3,12 @@ package org.pragmatica.aether.api;
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.metrics.observability.ObservabilityRegistry;
 import org.pragmatica.aether.node.AetherNode;
+import org.pragmatica.aether.slice.SliceState;
 import org.pragmatica.aether.slice.blueprint.BlueprintParser;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
+import org.pragmatica.aether.slice.kvstore.AetherKey.SliceNodeKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
+import org.pragmatica.aether.slice.kvstore.AetherValue.SliceNodeValue;
 import org.pragmatica.consensus.NodeId;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.lang.Option;
@@ -15,6 +18,9 @@ import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.net.tcp.TlsConfig;
 import org.pragmatica.net.tcp.TlsContextFactory;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -65,15 +71,6 @@ public interface ManagementServer {
     Promise<Unit> start();
 
     Promise<Unit> stop();
-
-    static ManagementServer managementServer(int port, Supplier<AetherNode> nodeSupplier) {
-        return managementServer(port, nodeSupplier, Option.empty());
-    }
-
-    static ManagementServer managementServer(int port, Supplier<AetherNode> nodeSupplier, Option<TlsConfig> tls) {
-        // This overload is deprecated - use the version with AlertManager
-        throw new IllegalArgumentException("AlertManager is required - use managementServer(port, nodeSupplier, alertManager, tls)");
-    }
 
     static ManagementServer managementServer(int port,
                                              Supplier<AetherNode> nodeSupplier,
@@ -163,18 +160,20 @@ class ManagementServerImpl implements ManagementServer {
                                    metricsPublisher.stop();
                                    if (serverChannel != null) {
                                    serverChannel.close()
-                                                .addListener(f -> {
-                                                                 bossGroup.shutdownGracefully();
-                                                                 workerGroup.shutdownGracefully();
-                                                                 log.info("Management server stopped");
-                                                                 promise.succeed(unit());
-                                                             });
+                                                .addListener(_ -> shutdownEventLoops(promise));
                                }else {
-                                   bossGroup.shutdownGracefully();
-                                   workerGroup.shutdownGracefully();
-                                   promise.succeed(unit());
+                                   shutdownEventLoops(promise);
                                }
                                });
+    }
+
+    private void shutdownEventLoops(Promise<Unit> promise) {
+        var bossFuture = bossGroup.shutdownGracefully();
+        var workerFuture = workerGroup.shutdownGracefully();
+        bossFuture.addListener(_ -> workerFuture.addListener(_ -> {
+                                                                 log.info("Management server stopped");
+                                                                 promise.succeed(unit());
+                                                             }));
     }
 }
 
@@ -275,7 +274,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             case"/health" -> buildHealthResponse(node);
             case"/controller/config" -> buildControllerConfigResponse(node);
             case"/controller/status" -> buildControllerStatusResponse(node);
-            default -> null;
+            default -> (String) null;
         };
         if (response != null) {
             sendJson(ctx, response);
@@ -418,17 +417,17 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                : uri;
     }
 
-    private static String extractQueryParam(String uri, String paramName) {
+    private static Option<String> extractQueryParam(String uri, String paramName) {
         var queryIndex = uri.indexOf('?');
-        if (queryIndex < 0) return null;
+        if (queryIndex < 0) return Option.empty();
         var query = uri.substring(queryIndex + 1);
         for (var pair : query.split("&")) {
             var kv = pair.split("=", 2);
             if (kv.length == 2 && kv[0].equals(paramName)) {
-                return java.net.URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+                return Option.option(java.net.URLDecoder.decode(kv[1], StandardCharsets.UTF_8));
             }
         }
-        return null;
+        return Option.empty();
     }
 
     // Simple JSON parsing helpers
@@ -635,12 +634,14 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                             : org.pragmatica.aether.update.CleanupPolicy.GRACE_PERIOD;
         org.pragmatica.aether.artifact.ArtifactBase.artifactBase(artifactBaseStr)
            .flatMap(artifactBase -> org.pragmatica.aether.artifact.Version.version(versionStr)
-                                       .map(version -> new Object[]{artifactBase, version}))
+                                       .flatMap(version -> org.pragmatica.aether.update.HealthThresholds.healthThresholds(maxErrorRate,
+                                                                                                                          maxLatencyMs,
+                                                                                                                          manualApproval)
+                                                              .map(thresholds -> new Object[]{artifactBase, version, thresholds})))
            .onSuccess(arr -> {
                           var artifactBase = (org.pragmatica.aether.artifact.ArtifactBase) arr[0];
                           var version = (org.pragmatica.aether.artifact.Version) arr[1];
-                          var thresholds = org.pragmatica.aether.update.HealthThresholds.healthThresholds(
-        maxErrorRate, maxLatencyMs, manualApproval);
+                          var thresholds = (org.pragmatica.aether.update.HealthThresholds) arr[2];
                           node.rollingUpdateManager()
                               .startUpdate(artifactBase, version, instances, thresholds, cleanupPolicy)
                               .onSuccess(update -> sendJson(ctx,
@@ -660,18 +661,17 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing routing field");
             return;
         }
-        try{
-            var routing = org.pragmatica.aether.update.VersionRouting.parse(routingMatch.group(1));
-            node.rollingUpdateManager()
-                .adjustRouting(updateId, routing)
-                .onSuccess(update -> sendJson(ctx,
-                                              buildRollingUpdateJson(update)))
-                .onFailure(cause -> sendJsonError(ctx,
-                                                  HttpResponseStatus.BAD_REQUEST,
-                                                  cause.message()));
-        } catch (IllegalArgumentException e) {
-            sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, e.getMessage());
-        }
+        org.pragmatica.aether.update.VersionRouting.parse(routingMatch.group(1))
+           .onSuccess(routing -> node.rollingUpdateManager()
+                                     .adjustRouting(updateId, routing)
+                                     .onSuccess(update -> sendJson(ctx,
+                                                                   buildRollingUpdateJson(update)))
+                                     .onFailure(cause -> sendJsonError(ctx,
+                                                                       HttpResponseStatus.BAD_REQUEST,
+                                                                       cause.message())))
+           .onFailure(cause -> sendJsonError(ctx,
+                                             HttpResponseStatus.BAD_REQUEST,
+                                             cause.message()));
     }
 
     private void handleRollingUpdateApprove(ChannelHandlerContext ctx, AetherNode node, String updateId) {
@@ -971,52 +971,94 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     private String buildSlicesStatusResponse(AetherNode node) {
+        // Query KV-Store for all slice entries across the cluster
+        Map<Artifact, java.util.List<SliceInstance>> slicesByArtifact = new HashMap<>();
+        node.kvStore()
+            .snapshot()
+            .forEach((key, value) -> collectSliceInstance(slicesByArtifact, key, value));
         var sb = new StringBuilder();
         sb.append("{\"slices\":[");
-        var slices = node.sliceStore()
-                         .loaded();
         boolean first = true;
-        for (var slice : slices) {
+        for (var entry : slicesByArtifact.entrySet()) {
             if (!first) sb.append(",");
-            sb.append("{");
-            sb.append("\"artifact\":\"")
-              .append(slice.artifact()
-                           .asString())
-              .append("\",");
-            sb.append("\"state\":\"ACTIVE\",");
-            // TODO: get actual state from kvstore
-            sb.append("\"instances\":[{");
-            sb.append("\"nodeId\":\"")
-              .append(node.self()
-                          .id())
-              .append("\",");
-            sb.append("\"state\":\"ACTIVE\",");
-            sb.append("\"health\":\"HEALTHY\"");
-            sb.append("}]");
-            sb.append("}");
             first = false;
+            var artifact = entry.getKey();
+            var instances = entry.getValue();
+            // Determine aggregate state (ACTIVE if any instance is ACTIVE)
+            var aggregateState = instances.stream()
+                                          .map(SliceInstance::state)
+                                          .filter(s -> s == SliceState.ACTIVE)
+                                          .findAny()
+                                          .orElse(instances.isEmpty()
+                                                  ? SliceState.FAILED
+                                                  : instances.getFirst()
+                                                             .state());
+            sb.append("{\"artifact\":\"")
+              .append(artifact.asString())
+              .append("\",\"state\":\"")
+              .append(aggregateState.name())
+              .append("\",\"instances\":[");
+            boolean firstInstance = true;
+            for (var instance : instances) {
+                if (!firstInstance) sb.append(",");
+                firstInstance = false;
+                var health = instance.state() == SliceState.ACTIVE
+                             ? "HEALTHY"
+                             : "UNHEALTHY";
+                sb.append("{\"nodeId\":\"")
+                  .append(instance.nodeId()
+                                  .id())
+                  .append("\",\"state\":\"")
+                  .append(instance.state()
+                                  .name())
+                  .append("\",\"health\":\"")
+                  .append(health)
+                  .append("\"}");
+            }
+            sb.append("]}");
         }
         sb.append("]}");
         return sb.toString();
     }
 
-    private String buildInvocationMetricsResponse(AetherNode node, String artifactFilter, String methodFilter) {
+    private record SliceInstance(NodeId nodeId, SliceState state) {}
+
+    private void collectSliceInstance(Map<Artifact, java.util.List<SliceInstance>> map,
+                                      AetherKey key,
+                                      AetherValue value) {
+        if (key instanceof SliceNodeKey sliceKey && value instanceof SliceNodeValue sliceValue) {
+            map.computeIfAbsent(sliceKey.artifact(),
+                                _ -> new ArrayList<>())
+               .add(new SliceInstance(sliceKey.nodeId(),
+                                      sliceValue.state()));
+        }
+    }
+
+    private String buildInvocationMetricsResponse(AetherNode node,
+                                                  Option<String> artifactFilter,
+                                                  Option<String> methodFilter) {
         var snapshots = node.invocationMetrics()
                             .snapshot();
         var sb = new StringBuilder();
         sb.append("{\"snapshots\":[");
         boolean first = true;
         for (var snapshot : snapshots) {
-            // Apply artifact filter (partial match)
-            if (artifactFilter != null && !snapshot.artifact()
-                                                   .asString()
-                                                   .contains(artifactFilter)) {
+            // Apply artifact filter (partial match) - skip if filter present and doesn't match
+            var skipByArtifact = artifactFilter.fold(
+            () -> false,
+            filter -> !snapshot.artifact()
+                               .asString()
+                               .contains(filter));
+            if (skipByArtifact) {
                 continue;
             }
-            // Apply method filter (exact match)
-            if (methodFilter != null && !snapshot.methodName()
-                                                 .name()
-                                                 .equals(methodFilter)) {
+            // Apply method filter (exact match) - skip if filter present and doesn't match
+            var skipByMethod = methodFilter.fold(
+            () -> false,
+            filter -> !snapshot.methodName()
+                               .name()
+                               .equals(filter));
+            if (skipByMethod) {
                 continue;
             }
             if (!first) sb.append(",");

@@ -95,7 +95,7 @@ class ClusterFailoverIT {
             var port = BASE_PORT + i;
 
             var config = AetherNodeConfig.testConfig(nodeId, port, nodeInfos);
-            var node = AetherNode.aetherNode(config);
+            var node = AetherNode.aetherNode(config).unwrap();
             nodes.add(node);
             nodeMap.put(nodeId.id(), node);
         }
@@ -374,7 +374,7 @@ class ClusterFailoverIT {
             // Start replacement node
             var port = BASE_PORT + i;
             var config = AetherNodeConfig.testConfig(nodeId, port, ALL_NODES.subList(0, CLUSTER_SIZE));
-            var newNode = AetherNode.aetherNode(config);
+            var newNode = AetherNode.aetherNode(config).unwrap();
 
             newNode.start()
                    .await(AWAIT_TIMEOUT)

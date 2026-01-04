@@ -1,5 +1,7 @@
 package org.pragmatica.aether.forge;
 
+import org.pragmatica.lang.Option;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLDecoder;
@@ -68,18 +70,21 @@ public final class StaticFileHandler extends SimpleChannelInboundHandler<FullHtt
             return;
         }
         // Load from classpath
-        var resourcePath = STATIC_PREFIX + (path.startsWith("/")
-                                            ? path.substring(1)
-                                            : path);
-        var content = loadResource(resourcePath);
-        if (content == null) {
-            log.debug("Static file not found: {}", resourcePath);
-            sendError(ctx, NOT_FOUND, "File not found: " + path);
-            return;
-        }
-        // Determine content type
+        var finalPath = path;
+        // capture for lambda
+        var resourcePath = STATIC_PREFIX + (finalPath.startsWith("/")
+                                            ? finalPath.substring(1)
+                                            : finalPath);
+        loadResource(resourcePath)
+        .onEmpty(() -> {
+                     log.debug("Static file not found: {}", resourcePath);
+                     sendError(ctx, NOT_FOUND, "File not found: " + finalPath);
+                 })
+        .onPresent(content -> sendStaticContent(ctx, finalPath, content));
+    }
+
+    private void sendStaticContent(ChannelHandlerContext ctx, String path, byte[] content) {
         var contentType = getContentType(path);
-        // Send response
         var buffer = Unpooled.wrappedBuffer(content);
         var response = new DefaultFullHttpResponse(HTTP_1_1, OK, buffer);
         response.headers()
@@ -93,17 +98,17 @@ public final class StaticFileHandler extends SimpleChannelInboundHandler<FullHtt
            .addListener(ChannelFutureListener.CLOSE);
     }
 
-    private byte[] loadResource(String path) {
+    private Option<byte[] > loadResource(String path) {
         try (InputStream is = getClass()
                               .getClassLoader()
                               .getResourceAsStream(path)) {
             if (is == null) {
-                return null;
+                return Option.empty();
             }
-            return is.readAllBytes();
+            return Option.option(is.readAllBytes());
         } catch (IOException e) {
             log.error("Error loading resource: {}", path, e);
-            return null;
+            return Option.empty();
         }
     }
 

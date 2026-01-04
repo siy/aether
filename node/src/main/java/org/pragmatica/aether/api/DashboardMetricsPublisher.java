@@ -75,10 +75,10 @@ public class DashboardMetricsPublisher {
             var nodeId = entry.getKey();
             var metrics = entry.getValue();
             for (var metric : metrics.entrySet()) {
-                var alert = alertManager.checkThreshold(metric.getKey(), nodeId, metric.getValue());
-                if (alert != null) {
-                    DashboardWebSocketHandler.broadcast(alert);
-                }
+                alertManager.checkThreshold(metric.getKey(),
+                                            nodeId,
+                                            metric.getValue())
+                            .onPresent(DashboardWebSocketHandler::broadcast);
             }
         }
     }
@@ -193,8 +193,44 @@ public class DashboardMetricsPublisher {
     }
 
     private String buildInvocationMetrics() {
-        // TODO: expose invocationMetricsCollector via AetherNode interface
-        return "[]";
+        var node = nodeSupplier.get();
+        var snapshots = node.invocationMetrics()
+                            .snapshot();
+        if (snapshots.isEmpty()) {
+            return "[]";
+        }
+        var sb = new StringBuilder();
+        sb.append("[");
+        boolean first = true;
+        for (var snapshot : snapshots) {
+            if (!first) sb.append(",");
+            first = false;
+            var metrics = snapshot.metrics();
+            sb.append("{\"artifact\":\"")
+              .append(snapshot.artifact()
+                              .asString())
+              .append("\",\"method\":\"")
+              .append(snapshot.methodName()
+                              .name())
+              .append("\",\"count\":")
+              .append(metrics.count())
+              .append(",\"successCount\":")
+              .append(metrics.successCount())
+              .append(",\"failureCount\":")
+              .append(metrics.failureCount())
+              .append(",\"avgDurationMs\":")
+              .append(String.format("%.2f",
+                                    metrics.averageLatencyNs() / 1_000_000.0))
+              .append(",\"errorRate\":")
+              .append(String.format("%.4f",
+                                    1.0 - metrics.successRate()))
+              .append(",\"slowCalls\":")
+              .append(snapshot.slowInvocations()
+                              .size())
+              .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     /**

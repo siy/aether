@@ -405,11 +405,6 @@ class NodeDeploymentManagerTest {
         }
 
         @Override
-        public Promise<Unit> unload(Artifact artifact) {
-            return unloadSlice(artifact);
-        }
-
-        @Override
         public List<LoadedSlice> loaded() {
             return List.copyOf(loadedSlices);
         }

@@ -208,30 +208,19 @@ public interface EndpointRegistry {
                                           artifactBase.asString() + "/new/" + methodName.name());
                 }
                 // Scale routing to available instances
-                var scaled = routing.scaleToInstances(newEndpoints.size(), oldEndpoints.size());
-                if (scaled == null) {
-                    // Cannot satisfy ratio, fall back to old version
-                    log.warn("Cannot satisfy routing {} with {} new and {} old instances, falling back to old",
-                             routing,
-                             newEndpoints.size(),
-                             oldEndpoints.size());
-                    return selectFromList(oldEndpoints,
-                                          artifactBase.asString() + "/old/" + methodName.name());
-                }
-                // Weighted round-robin: cycle through scaled[0] new + scaled[1] old
-                int totalWeight = scaled[0] + scaled[1];
-                var lookupKey = artifactBase.asString() + "/weighted/" + methodName.name();
-                var counter = roundRobinCounters.computeIfAbsent(lookupKey, _ -> new AtomicInteger(0));
-                var position = (counter.getAndIncrement() & 0x7FFFFFFF) % totalWeight;
-                if (position < scaled[0]) {
-                    // Route to new version
-                    var index = position % newEndpoints.size();
-                    return Option.option(newEndpoints.get(index));
-                }else {
-                    // Route to old version
-                    var index = (position - scaled[0]) % oldEndpoints.size();
-                    return Option.option(oldEndpoints.get(index));
-                }
+                return routing.scaleToInstances(newEndpoints.size(),
+                                                oldEndpoints.size())
+                              .fold(() -> fallbackToOld(routing,
+                                                        newEndpoints.size(),
+                                                        oldEndpoints.size(),
+                                                        oldEndpoints,
+                                                        artifactBase,
+                                                        methodName),
+                                    scaled -> weightedRoundRobin(scaled,
+                                                                 newEndpoints,
+                                                                 oldEndpoints,
+                                                                 artifactBase,
+                                                                 methodName));
             }
 
             @Override
@@ -256,6 +245,37 @@ public interface EndpointRegistry {
                 var counter = roundRobinCounters.computeIfAbsent(lookupKey, _ -> new AtomicInteger(0));
                 var index = (counter.getAndIncrement() & 0x7FFFFFFF) % available.size();
                 return Option.option(available.get(index));
+            }
+
+            private Option<Endpoint> fallbackToOld(VersionRouting routing,
+                                                   int newCount,
+                                                   int oldCount,
+                                                   List<Endpoint> oldEndpoints,
+                                                   ArtifactBase artifactBase,
+                                                   MethodName methodName) {
+                log.warn("Cannot satisfy routing {} with {} new and {} old instances, falling back to old",
+                         routing,
+                         newCount,
+                         oldCount);
+                return selectFromList(oldEndpoints,
+                                      artifactBase.asString() + "/old/" + methodName.name());
+            }
+
+            private Option<Endpoint> weightedRoundRobin(int[] scaled,
+                                                        List<Endpoint> newEndpoints,
+                                                        List<Endpoint> oldEndpoints,
+                                                        ArtifactBase artifactBase,
+                                                        MethodName methodName) {
+                int totalWeight = scaled[0] + scaled[1];
+                var lookupKey = artifactBase.asString() + "/weighted/" + methodName.name();
+                var counter = roundRobinCounters.computeIfAbsent(lookupKey, _ -> new AtomicInteger(0));
+                var position = (counter.getAndIncrement() & 0x7FFFFFFF) % totalWeight;
+                if (position < scaled[0]) {
+                    var index = position % newEndpoints.size();
+                    return Option.option(newEndpoints.get(index));
+                }
+                var index = (position - scaled[0]) % oldEndpoints.size();
+                return Option.option(oldEndpoints.get(index));
             }
         }
         return new endpointRegistry(

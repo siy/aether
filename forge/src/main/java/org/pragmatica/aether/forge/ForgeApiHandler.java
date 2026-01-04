@@ -7,8 +7,12 @@ import org.pragmatica.aether.forge.simulator.ChaosController;
 import org.pragmatica.aether.forge.simulator.ChaosEvent;
 import org.pragmatica.aether.forge.simulator.SimulatorConfig;
 import org.pragmatica.aether.forge.simulator.SimulatorMode;
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.aether.forge.simulator.DataGenerator;
 
 import java.nio.charset.StandardCharsets;
@@ -220,21 +224,20 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     private void handleAddNode(ChannelHandlerContext ctx) {
         addEvent("ADD_NODE", "Adding new node to cluster");
         cluster.addNode()
-               .onSuccess(nodeId -> {
-                              addEvent("NODE_JOINED",
-                                       "Node " + nodeId.id() + " joined the cluster");
-                              sendResponse(ctx,
-                                           OK,
-                                           "{\"success\": true, \"nodeId\": \"" + nodeId.id()
-                                           + "\", \"state\": \"joining\"}");
-                          })
-               .onFailure(cause -> {
-                              addEvent("ADD_NODE_FAILED",
-                                       "Failed to add node: " + cause.message());
-                              sendResponse(ctx,
-                                           INTERNAL_SERVER_ERROR,
-                                           "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
-                          });
+               .onSuccess(nodeId -> onNodeAdded(ctx, nodeId))
+               .onFailure(cause -> onAddNodeFailed(ctx, cause));
+    }
+
+    private void onNodeAdded(ChannelHandlerContext ctx, org.pragmatica.consensus.NodeId nodeId) {
+        addEvent("NODE_JOINED", "Node " + nodeId.id() + " joined the cluster");
+        sendResponse(ctx, OK, "{\"success\": true, \"nodeId\": \"" + nodeId.id() + "\", \"state\": \"joining\"}");
+    }
+
+    private void onAddNodeFailed(ChannelHandlerContext ctx, Cause cause) {
+        addEvent("ADD_NODE_FAILED", "Failed to add node: " + cause.message());
+        sendResponse(ctx,
+                     INTERNAL_SERVER_ERROR,
+                     "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
     }
 
     private void handleKillNode(ChannelHandlerContext ctx, String nodeId) {
@@ -245,22 +248,25 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                                                           ? " (leader)"
                                                           : ""));
         cluster.killNode(nodeId)
-               .onSuccess(_ -> {
-                              var newLeader = cluster.currentLeader()
-                                                     .fold(() -> "none",
-                                                           l -> l);
-                              addEvent("NODE_KILLED",
-                                       "Node " + nodeId + " killed" + (wasLeader
-                                                                       ? ", new leader: " + newLeader
-                                                                       : ""));
-                              sendResponse(ctx, OK, "{\"success\": true, \"newLeader\": \"" + newLeader + "\"}");
-                          })
-               .onFailure(cause -> {
-                              addEvent("KILL_FAILED", "Failed to kill node " + nodeId);
-                              sendResponse(ctx,
-                                           INTERNAL_SERVER_ERROR,
-                                           "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
-                          });
+               .onSuccess(_ -> onNodeKilled(ctx, nodeId, wasLeader))
+               .onFailure(cause -> onKillFailed(ctx, nodeId, cause));
+    }
+
+    private void onNodeKilled(ChannelHandlerContext ctx, String nodeId, boolean wasLeader) {
+        var newLeader = cluster.currentLeader()
+                               .fold(() -> "none",
+                                     l -> l);
+        addEvent("NODE_KILLED", "Node " + nodeId + " killed" + (wasLeader
+                                                                ? ", new leader: " + newLeader
+                                                                : ""));
+        sendResponse(ctx, OK, "{\"success\": true, \"newLeader\": \"" + newLeader + "\"}");
+    }
+
+    private void onKillFailed(ChannelHandlerContext ctx, String nodeId, Cause cause) {
+        addEvent("KILL_FAILED", "Failed to kill node " + nodeId);
+        sendResponse(ctx,
+                     INTERNAL_SERVER_ERROR,
+                     "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
     }
 
     private void handleCrashNode(ChannelHandlerContext ctx, String nodeId) {
@@ -271,35 +277,42 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                                                                           ? " (leader)"
                                                                           : ""));
         cluster.crashNode(nodeId)
-               .onSuccess(_ -> {
-                              var newLeader = cluster.currentLeader()
-                                                     .fold(() -> "none",
-                                                           l -> l);
-                              addEvent("NODE_CRASHED", "Node " + nodeId + " crashed");
-                              sendResponse(ctx, OK, "{\"success\": true, \"newLeader\": \"" + newLeader + "\"}");
-                          })
-               .onFailure(cause -> {
-                              addEvent("CRASH_FAILED", "Failed to crash node " + nodeId);
-                              sendResponse(ctx,
-                                           INTERNAL_SERVER_ERROR,
-                                           "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
-                          });
+               .onSuccess(_ -> onNodeCrashed(ctx, nodeId))
+               .onFailure(cause -> onCrashFailed(ctx, nodeId, cause));
+    }
+
+    private void onNodeCrashed(ChannelHandlerContext ctx, String nodeId) {
+        var newLeader = cluster.currentLeader()
+                               .fold(() -> "none",
+                                     l -> l);
+        addEvent("NODE_CRASHED", "Node " + nodeId + " crashed");
+        sendResponse(ctx, OK, "{\"success\": true, \"newLeader\": \"" + newLeader + "\"}");
+    }
+
+    private void onCrashFailed(ChannelHandlerContext ctx, String nodeId, Cause cause) {
+        addEvent("CRASH_FAILED", "Failed to crash node " + nodeId);
+        sendResponse(ctx,
+                     INTERNAL_SERVER_ERROR,
+                     "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
     }
 
     private void handleRollingRestart(ChannelHandlerContext ctx) {
         addEvent("ROLLING_RESTART", "Starting rolling restart of all nodes");
         cluster.rollingRestart()
-               .onSuccess(_ -> {
-                              addEvent("ROLLING_RESTART_COMPLETE", "Rolling restart completed successfully");
-                              sendResponse(ctx, OK, "{\"success\": true}");
-                          })
-               .onFailure(cause -> {
-                              addEvent("ROLLING_RESTART_FAILED",
-                                       "Rolling restart failed: " + cause.message());
-                              sendResponse(ctx,
-                                           INTERNAL_SERVER_ERROR,
-                                           "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
-                          });
+               .onSuccess(_ -> onRollingRestartComplete(ctx))
+               .onFailure(cause -> onRollingRestartFailed(ctx, cause));
+    }
+
+    private void onRollingRestartComplete(ChannelHandlerContext ctx) {
+        addEvent("ROLLING_RESTART_COMPLETE", "Rolling restart completed successfully");
+        sendResponse(ctx, OK, "{\"success\": true}");
+    }
+
+    private void onRollingRestartFailed(ChannelHandlerContext ctx, Cause cause) {
+        addEvent("ROLLING_RESTART_FAILED", "Rolling restart failed: " + cause.message());
+        sendResponse(ctx,
+                     INTERNAL_SERVER_ERROR,
+                     "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
     }
 
     private void handleSetLoad(ChannelHandlerContext ctx, String rateStr) {
@@ -621,76 +634,61 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         sendResponse(ctx, OK, "{\"success\":true,\"enabled\":" + enabled + "}");
     }
 
+    private static final Fn1<Cause, String>UNKNOWN_CHAOS_TYPE = Causes.forOneValue("Unknown chaos type: {}");
+
     /**
      * Inject a chaos event.
      * Body format: {"type":"NODE_KILL","nodeId":"node-1","durationSeconds":30}
      */
     private void handleChaosInject(ChannelHandlerContext ctx, FullHttpRequest request) {
-        try{
-            var body = request.content()
-                              .toString(StandardCharsets.UTF_8);
-            var type = extractString(body, "type", "");
-            var durationSeconds = extractLong(body, "durationSeconds", 60);
-            var duration = Duration.ofSeconds(durationSeconds);
-            ChaosEvent event = switch (type.toUpperCase()) {
-                case"NODE_KILL" -> {
-                    var nodeId = extractString(body, "nodeId", null);
-                    if (nodeId == null || nodeId.isBlank()) {
-                        throw new IllegalArgumentException("nodeId is required for NODE_KILL");
-                    }
-                    yield ChaosEvent.NodeKill.kill(nodeId, duration);
-                }
-                case"LATENCY_SPIKE" -> {
-                    var nodeId = extractString(body, "nodeId", null);
-                    if (nodeId == null || nodeId.isBlank()) {
-                        throw new IllegalArgumentException("nodeId is required for LATENCY_SPIKE");
-                    }
-                    var latencyMs = extractLong(body, "latencyMs", 500);
-                    yield ChaosEvent.LatencySpike.addLatency(nodeId, latencyMs, duration);
-                }
-                case"SLICE_CRASH" -> {
-                    var artifact = extractString(body, "artifact", null);
-                    if (artifact == null || artifact.isBlank()) {
-                        throw new IllegalArgumentException("artifact is required for SLICE_CRASH");
-                    }
-                    var nodeId = extractString(body, "nodeId", null);
-                    yield ChaosEvent.SliceCrash.crashSlice(artifact, nodeId, duration);
-                }
-                case"INVOCATION_FAILURE" -> {
-                    var artifact = extractString(body, "artifact", null);
-                    var failureRate = extractDouble(body, "failureRate", 0.5);
-                    yield ChaosEvent.InvocationFailure.forSlice(artifact, failureRate, duration);
-                }
-                case"CPU_SPIKE" -> {
-                    var nodeId = extractString(body, "nodeId", null);
-                    if (nodeId == null || nodeId.isBlank()) {
-                        throw new IllegalArgumentException("nodeId is required for CPU_SPIKE");
-                    }
-                    var level = extractDouble(body, "level", 0.8);
-                    yield ChaosEvent.CpuSpike.onNode(nodeId, level, duration);
-                }
-                case"MEMORY_PRESSURE" -> {
-                    var nodeId = extractString(body, "nodeId", null);
-                    if (nodeId == null || nodeId.isBlank()) {
-                        throw new IllegalArgumentException("nodeId is required for MEMORY_PRESSURE");
-                    }
-                    var level = extractDouble(body, "level", 0.9);
-                    yield ChaosEvent.MemoryPressure.onNode(nodeId, level, duration);
-                }
-                default -> throw new IllegalArgumentException("Unknown chaos type: " + type);
-            };
-            chaosController.injectChaos(event)
-                           .onSuccess(eventId -> sendResponse(ctx,
-                                                              OK,
-                                                              "{\"success\":true,\"eventId\":\"" + eventId
-                                                              + "\",\"type\":\"" + type + "\"}"))
-                           .onFailure(cause -> sendResponse(ctx,
-                                                            BAD_REQUEST,
-                                                            "{\"success\":false,\"error\":\"" + escapeJson(cause.message())
-                                                            + "\"}"));
-        } catch (Exception e) {
-            sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
-        }
+        var body = request.content()
+                          .toString(StandardCharsets.UTF_8);
+        var type = extractString(body, "type", "");
+        var durationSeconds = extractLong(body, "durationSeconds", 60);
+        var duration = Duration.ofSeconds(durationSeconds);
+        parseChaosEvent(body, type, duration)
+        .async()
+        .flatMap(chaosController::injectChaos)
+        .onSuccess(eventId -> sendChaosSuccess(ctx, eventId, type))
+        .onFailure(cause -> sendChaosError(ctx, cause));
+    }
+
+    private Result<ChaosEvent> parseChaosEvent(String body, String type, Duration duration) {
+        return switch (type.toUpperCase()) {
+            case"NODE_KILL" -> ChaosEvent.NodeKill.kill(extractString(body, "nodeId", null),
+                                                        duration)
+                                         .map(e -> e);
+            case"LATENCY_SPIKE" -> ChaosEvent.LatencySpike.addLatency(extractString(body, "nodeId", null),
+                                                                      extractLong(body, "latencyMs", 500),
+                                                                      duration)
+                                             .map(e -> e);
+            case"SLICE_CRASH" -> ChaosEvent.SliceCrash.crashSlice(extractString(body, "artifact", null),
+                                                                  extractString(body, "nodeId", null),
+                                                                  duration)
+                                           .map(e -> e);
+            case"INVOCATION_FAILURE" -> ChaosEvent.InvocationFailure.forSlice(extractString(body, "artifact", null),
+                                                                              extractDouble(body, "failureRate", 0.5),
+                                                                              duration)
+                                                  .map(e -> e);
+            case"CPU_SPIKE" -> ChaosEvent.CpuSpike.onNode(extractString(body, "nodeId", null),
+                                                          extractDouble(body, "level", 0.8),
+                                                          duration)
+                                         .map(e -> e);
+            case"MEMORY_PRESSURE" -> ChaosEvent.MemoryPressure.onNode(extractString(body, "nodeId", null),
+                                                                      extractDouble(body, "level", 0.9),
+                                                                      duration)
+                                               .map(e -> e);
+            default -> UNKNOWN_CHAOS_TYPE.apply(type)
+                                         .result();
+        };
+    }
+
+    private void sendChaosSuccess(ChannelHandlerContext ctx, String eventId, String type) {
+        sendResponse(ctx, OK, "{\"success\":true,\"eventId\":\"" + eventId + "\",\"type\":\"" + type + "\"}");
+    }
+
+    private void sendChaosError(ChannelHandlerContext ctx, Cause cause) {
+        sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
     }
 
     /**
@@ -768,23 +766,23 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handlePlaceOrder(ChannelHandlerContext ctx, FullHttpRequest request) {
         applySimulation("place-order")
-        .onSuccess(_ -> {
-                       var random = java.util.concurrent.ThreadLocalRandom.current();
-                       var orderId = String.format("ORD-%08d",
-                                                   random.nextInt(100_000_000));
-                       // Track order ID for subsequent queries
+        .onSuccess(_ -> sendPlaceOrderSuccess(ctx))
+        .onFailure(cause -> sendErrorResponse(ctx, INTERNAL_SERVER_ERROR, cause));
+    }
+
+    private void sendPlaceOrderSuccess(ChannelHandlerContext ctx) {
+        var random = java.util.concurrent.ThreadLocalRandom.current();
+        var orderId = String.format("ORD-%08d", random.nextInt(100_000_000));
         DataGenerator.OrderIdGenerator.trackOrderId(orderId);
-                       var total = 10.00 + random.nextDouble() * 990.00;
-                       // $10-$1000
-        var json = String.format(
-        "{\"success\":true,\"orderId\":\"%s\",\"status\":\"CONFIRMED\",\"total\":\"USD %.2f\"}", orderId, total);
-                       sendResponse(ctx, OK, json);
-                   })
-        .onFailure(cause -> {
-                       sendResponse(ctx,
-                                    INTERNAL_SERVER_ERROR,
-                                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
-                   });
+        var total = 10.00 + random.nextDouble() * 990.00;
+        var json = String.format("{\"success\":true,\"orderId\":\"%s\",\"status\":\"CONFIRMED\",\"total\":\"USD %.2f\"}",
+                                 orderId,
+                                 total);
+        sendResponse(ctx, OK, json);
+    }
+
+    private void sendErrorResponse(ChannelHandlerContext ctx, HttpResponseStatus status, Cause cause) {
+        sendResponse(ctx, status, "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
     }
 
     /**
@@ -792,25 +790,22 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handleGetOrderStatus(ChannelHandlerContext ctx, String orderId) {
         applySimulation("get-order-status")
-        .onSuccess(_ -> {
-                       var random = java.util.concurrent.ThreadLocalRandom.current();
-                       var statuses = List.of("CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED");
-                       var status = statuses.get(random.nextInt(statuses.size()));
-                       var total = 10.00 + random.nextDouble() * 990.00;
-                       var itemCount = 1 + random.nextInt(5);
-                       var json = String.format(
-        "{\"success\":true,\"orderId\":\"%s\",\"status\":\"%s\",\"total\":\"USD %.2f\",\"itemCount\":%d}",
-        orderId,
-        status,
-        total,
-        itemCount);
-                       sendResponse(ctx, OK, json);
-                   })
-        .onFailure(cause -> {
-                       sendResponse(ctx,
-                                    NOT_FOUND,
-                                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
-                   });
+        .onSuccess(_ -> sendOrderStatusSuccess(ctx, orderId))
+        .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
+    }
+
+    private void sendOrderStatusSuccess(ChannelHandlerContext ctx, String orderId) {
+        var random = java.util.concurrent.ThreadLocalRandom.current();
+        var statuses = List.of("CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED");
+        var status = statuses.get(random.nextInt(statuses.size()));
+        var total = 10.00 + random.nextDouble() * 990.00;
+        var itemCount = 1 + random.nextInt(5);
+        var json = String.format("{\"success\":true,\"orderId\":\"%s\",\"status\":\"%s\",\"total\":\"USD %.2f\",\"itemCount\":%d}",
+                                 orderId,
+                                 status,
+                                 total,
+                                 itemCount);
+        sendResponse(ctx, OK, json);
     }
 
     /**
@@ -821,18 +816,15 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                           .toString(StandardCharsets.UTF_8);
         var reason = extractString(body, "reason", "User requested cancellation");
         applySimulation("cancel-order")
-        .onSuccess(_ -> {
-                       var json = String.format(
-        "{\"success\":true,\"orderId\":\"%s\",\"status\":\"CANCELLED\",\"reason\":\"%s\"}",
-        orderId,
-        escapeJson(reason));
-                       sendResponse(ctx, OK, json);
-                   })
-        .onFailure(cause -> {
-                       sendResponse(ctx,
-                                    BAD_REQUEST,
-                                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
-                   });
+        .onSuccess(_ -> sendCancelOrderSuccess(ctx, orderId, reason))
+        .onFailure(cause -> sendErrorResponse(ctx, BAD_REQUEST, cause));
+    }
+
+    private void sendCancelOrderSuccess(ChannelHandlerContext ctx, String orderId, String reason) {
+        var json = String.format("{\"success\":true,\"orderId\":\"%s\",\"status\":\"CANCELLED\",\"reason\":\"%s\"}",
+                                 orderId,
+                                 escapeJson(reason));
+        sendResponse(ctx, OK, json);
     }
 
     /**
@@ -840,21 +832,18 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handleCheckStock(ChannelHandlerContext ctx, String productId) {
         applySimulation("inventory-service")
-        .onSuccess(_ -> {
-                       var random = java.util.concurrent.ThreadLocalRandom.current();
-                       var available = random.nextInt(1000);
-                       var json = String.format(
-        "{\"success\":true,\"productId\":\"%s\",\"available\":%d,\"sufficient\":%b}",
-        productId,
-        available,
-        available > 0);
-                       sendResponse(ctx, OK, json);
-                   })
-        .onFailure(cause -> {
-                       sendResponse(ctx,
-                                    NOT_FOUND,
-                                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
-                   });
+        .onSuccess(_ -> sendCheckStockSuccess(ctx, productId))
+        .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
+    }
+
+    private void sendCheckStockSuccess(ChannelHandlerContext ctx, String productId) {
+        var random = java.util.concurrent.ThreadLocalRandom.current();
+        var available = random.nextInt(1000);
+        var json = String.format("{\"success\":true,\"productId\":\"%s\",\"available\":%d,\"sufficient\":%b}",
+                                 productId,
+                                 available,
+                                 available > 0);
+        sendResponse(ctx, OK, json);
     }
 
     /**
@@ -862,19 +851,15 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handleGetPrice(ChannelHandlerContext ctx, String productId) {
         applySimulation("pricing-service")
-        .onSuccess(_ -> {
-                       var random = java.util.concurrent.ThreadLocalRandom.current();
-                       var price = 5.00 + random.nextDouble() * 495.00;
-                       // $5-$500
-        var json = String.format(
-        "{\"success\":true,\"productId\":\"%s\",\"price\":\"USD %.2f\"}", productId, price);
-                       sendResponse(ctx, OK, json);
-                   })
-        .onFailure(cause -> {
-                       sendResponse(ctx,
-                                    NOT_FOUND,
-                                    "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
-                   });
+        .onSuccess(_ -> sendGetPriceSuccess(ctx, productId))
+        .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
+    }
+
+    private void sendGetPriceSuccess(ChannelHandlerContext ctx, String productId) {
+        var random = java.util.concurrent.ThreadLocalRandom.current();
+        var price = 5.00 + random.nextDouble() * 495.00;
+        var json = String.format("{\"success\":true,\"productId\":\"%s\",\"price\":\"USD %.2f\"}", productId, price);
+        sendResponse(ctx, OK, json);
     }
 
     /**
@@ -912,32 +897,34 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         var node = nodes.getFirst();
         node.mavenProtocolHandler()
             .handleGet(path)
-            .onSuccess(response -> {
-                           if (response.statusCode() == 200) {
-                           var content = Unpooled.wrappedBuffer(response.content());
-                           var httpResponse = new DefaultFullHttpResponse(HTTP_1_1, OK, content);
-                           httpResponse.headers()
-                                       .set(HttpHeaderNames.CONTENT_TYPE,
-                                            response.contentType());
-                           httpResponse.headers()
-                                       .set(HttpHeaderNames.CONTENT_LENGTH,
-                                            response.content().length);
-                           httpResponse.headers()
-                                       .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-                           ctx.writeAndFlush(httpResponse)
-                              .addListener(ChannelFutureListener.CLOSE);
-                       }else if (response.statusCode() == 404) {
-                           sendResponse(ctx, NOT_FOUND, "{\"error\": \"Artifact not found\"}");
-                       }else {
-                           sendResponse(ctx,
-                                        HttpResponseStatus.valueOf(response.statusCode()),
-                                        new String(response.content(),
-                                                   StandardCharsets.UTF_8));
-                       }
-                       })
+            .onSuccess(response -> sendRepositoryGetResponse(ctx, response))
             .onFailure(cause -> sendResponse(ctx,
                                              INTERNAL_SERVER_ERROR,
                                              "{\"error\": \"" + escapeJson(cause.message()) + "\"}"));
+    }
+
+    private void sendRepositoryGetResponse(ChannelHandlerContext ctx,
+                                           org.pragmatica.aether.infra.artifact.MavenProtocolHandler.MavenResponse response) {
+        if (response.statusCode() == 200) {
+            var content = Unpooled.wrappedBuffer(response.content());
+            var httpResponse = new DefaultFullHttpResponse(HTTP_1_1, OK, content);
+            httpResponse.headers()
+                        .set(HttpHeaderNames.CONTENT_TYPE,
+                             response.contentType());
+            httpResponse.headers()
+                        .set(HttpHeaderNames.CONTENT_LENGTH,
+                             response.content().length);
+            httpResponse.headers()
+                        .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+            ctx.writeAndFlush(httpResponse)
+               .addListener(ChannelFutureListener.CLOSE);
+        }else if (response.statusCode() == 404) {
+            sendResponse(ctx, NOT_FOUND, "{\"error\": \"Artifact not found\"}");
+        }else {
+            sendResponse(ctx,
+                         HttpResponseStatus.valueOf(response.statusCode()),
+                         new String(response.content(), StandardCharsets.UTF_8));
+        }
     }
 
     /**
@@ -955,17 +942,16 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         byteBuf.readBytes(content);
         node.mavenProtocolHandler()
             .handlePut(path, content)
-            .onSuccess(response -> {
-                           var json = String.format("{\"success\":true,\"path\":\"%s\",\"size\":%d}",
-                                                    escapeJson(path),
-                                                    content.length);
-                           sendResponse(ctx, OK, json);
-                           addEvent("ARTIFACT_DEPLOYED",
-                                    "Deployed " + path + " (" + content.length + " bytes)");
-                       })
+            .onSuccess(_ -> sendRepositoryPutSuccess(ctx, path, content.length))
             .onFailure(cause -> sendResponse(ctx,
                                              INTERNAL_SERVER_ERROR,
                                              "{\"error\": \"" + escapeJson(cause.message()) + "\"}"));
+    }
+
+    private void sendRepositoryPutSuccess(ChannelHandlerContext ctx, String path, int contentLength) {
+        var json = String.format("{\"success\":true,\"path\":\"%s\",\"size\":%d}", escapeJson(path), contentLength);
+        sendResponse(ctx, OK, json);
+        addEvent("ARTIFACT_DEPLOYED", "Deployed " + path + " (" + contentLength + " bytes)");
     }
 
     public void addEvent(String type, String message) {

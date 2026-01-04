@@ -148,7 +148,7 @@ public interface BlueprintExpander {
     /**
      * Check for circular dependencies.
      */
-    private static Result<Void> checkCycles(Map<String, List<String>> graph) {
+    private static Result<Unit> checkCycles(Map<String, List<String>> graph) {
         return DependencyCycleDetector.checkForCycles(graph);
     }
 

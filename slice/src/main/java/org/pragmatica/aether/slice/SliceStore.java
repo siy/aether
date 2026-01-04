@@ -30,8 +30,6 @@ public interface SliceStore {
         Slice slice();
     }
 
-    Promise<Unit> unload(Artifact artifact);
-
     List<LoadedSlice> loaded();
 
     /**

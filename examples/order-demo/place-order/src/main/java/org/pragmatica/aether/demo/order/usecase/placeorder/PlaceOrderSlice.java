@@ -17,10 +17,10 @@ import org.pragmatica.aether.slice.SliceRoute;
 import org.pragmatica.aether.slice.SliceRuntime;
 import org.pragmatica.aether.slice.SliceRuntime.SliceInvokerFacade;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.type.TypeToken;
 import org.pragmatica.lang.utils.Causes;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -76,24 +76,30 @@ public record PlaceOrderSlice() implements Slice {
     private Promise<ValidWithStockCheck> checkAllStock(ValidPlaceOrderRequest request) {
         var stockChecks = request.items()
                                  .stream()
-                                 .map(item -> invoker()
-                                              .invokeAndWait(INVENTORY,
-                                                             "checkStock",
-                                                             new CheckStockRequest(item.productId(),
-                                                                                   item.quantity()),
-                                                             StockAvailability.class))
+                                 .map(item -> checkStock(item))
                                  .toList();
         return Promise.allOf(stockChecks)
-                      .flatMap(results -> {
-                                   var allAvailable = results.stream()
-                                                             .allMatch(r -> r.isSuccess() && r.expect("Stock check passed")
-                                                                                              .sufficient());
-                                   if (!allAvailable) {
-                                   return new PlaceOrderError.InventoryCheckFailed(
-        Causes.cause("Some items not available")).promise();
-                               }
-                                   return Promise.success(new ValidWithStockCheck(request));
-                               });
+                      .flatMap(results -> validateStockResults(results, request));
+    }
+
+    private Promise<StockAvailability> checkStock(ValidPlaceOrderRequest.ValidOrderItem item) {
+        return invoker()
+               .invokeAndWait(INVENTORY,
+                              "checkStock",
+                              new CheckStockRequest(item.productId(),
+                                                    item.quantity()),
+                              StockAvailability.class);
+    }
+
+    private Promise<ValidWithStockCheck> validateStockResults(List<Result<StockAvailability>> results,
+                                                              ValidPlaceOrderRequest request) {
+        var allAvailable = results.stream()
+                                  .allMatch(r -> r.isSuccess() && r.expect("Stock check")
+                                                                   .sufficient());
+        if (!allAvailable) {
+            return new PlaceOrderError.InventoryCheckFailed(Causes.cause("Some items not available")).promise();
+        }
+        return Promise.success(new ValidWithStockCheck(request));
     }
 
     private Promise<ValidWithPrice> calculateTotal(ValidWithStockCheck context) {
@@ -112,7 +118,7 @@ public record PlaceOrderSlice() implements Slice {
                               OrderTotal.class)
                .map(total -> new ValidWithPrice(context.request(),
                                                 total))
-               .mapError(cause -> new PlaceOrderError.PricingFailed(cause));
+               .mapError(PlaceOrderError.PricingFailed::new);
     }
 
     private Promise<ValidWithReservations> reserveAllStock(ValidWithPrice context) {
@@ -120,49 +126,41 @@ public record PlaceOrderSlice() implements Slice {
         var reservations = context.request()
                                   .items()
                                   .stream()
-                                  .map(item -> invoker()
-                                               .invokeAndWait(INVENTORY,
-                                                              "reserveStock",
-                                                              new ReserveStockRequest(item.productId(),
-                                                                                      item.quantity(),
-                                                                                      orderId.value()),
-                                                              StockReservation.class))
+                                  .map(item -> reserveStock(item, orderId))
                                   .toList();
         return Promise.allOf(reservations)
-                      .flatMap(results -> {
-                                   var successful = new ArrayList<StockReservation>();
-                                   for (var r : results) {
-                                   if (r.isSuccess()) {
-                                   successful.add(r.expect("Reservation succeeded"));
-                               }
-                               }
-                                   if (successful.size() != results.size()) {
-                                   return new PlaceOrderError.ReservationFailed(
-        Causes.cause("Failed to reserve all items")).promise();
-                               }
-                                   return Promise.success(new ValidWithReservations(
-        context.request(),
-        context.total(),
-        orderId,
-        successful));
-                               });
+                      .flatMap(results -> validateReservationResults(results, context, orderId));
+    }
+
+    private Promise<StockReservation> reserveStock(ValidPlaceOrderRequest.ValidOrderItem item, OrderId orderId) {
+        return invoker()
+               .invokeAndWait(INVENTORY,
+                              "reserveStock",
+                              new ReserveStockRequest(item.productId(),
+                                                      item.quantity(),
+                                                      orderId.value()),
+                              StockReservation.class);
+    }
+
+    private Promise<ValidWithReservations> validateReservationResults(List<Result<StockReservation>> results,
+                                                                      ValidWithPrice context,
+                                                                      OrderId orderId) {
+        var successful = results.stream()
+                                .filter(Result::isSuccess)
+                                .map(r -> r.expect("Reservation succeeded"))
+                                .toList();
+        if (successful.size() != results.size()) {
+            return new PlaceOrderError.ReservationFailed(Causes.cause("Failed to reserve all items")).promise();
+        }
+        return Promise.success(new ValidWithReservations(context.request(), context.total(), orderId, successful));
     }
 
     private PlaceOrderResponse createOrder(ValidWithReservations context) {
-        // Build order items with prices
         var items = context.request()
                            .items()
                            .stream()
-                           .map(item -> {
-                                    // Calculate unit price from total / quantity (simplified)
-        var unitPrice = Money.usd("29.99");
-                                    // Default price, in production would come from pricing
-        return new OrderRepository.OrderItem(item.productId(),
-                                             item.quantity(),
-                                             unitPrice);
-                                })
+                           .map(this::toOrderItem)
                            .toList();
-        // Store the order in the shared repository
         var order = new OrderRepository.StoredOrder(
         context.orderId(),
         context.request()
@@ -188,6 +186,12 @@ public record PlaceOrderSlice() implements Slice {
                .stream()
                .map(StockReservation::reservationId)
                .toList());
+    }
+
+    private OrderRepository.OrderItem toOrderItem(ValidPlaceOrderRequest.ValidOrderItem item) {
+        // Default price, in production would come from pricing
+        var unitPrice = Money.usd("29.99");
+        return new OrderRepository.OrderItem(item.productId(), item.quantity(), unitPrice);
     }
 
     // Pipeline context records

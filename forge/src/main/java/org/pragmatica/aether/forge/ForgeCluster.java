@@ -295,7 +295,8 @@ public final class ForgeCluster {
         Option.empty(),
         DHTConfig.FULL,
         Option.empty());
-        return AetherNode.aetherNode(config);
+        return AetherNode.aetherNode(config)
+                         .unwrap();
     }
 
     /**

@@ -201,11 +201,6 @@ public interface SliceStoreImpl {
         }
 
         @Override
-        public Promise<Unit> unload(Artifact artifact) {
-            return unloadSlice(artifact);
-        }
-
-        @Override
         public List<LoadedSlice> loaded() {
             return entries.values()
                           .stream()

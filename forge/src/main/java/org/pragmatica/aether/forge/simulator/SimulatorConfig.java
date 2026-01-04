@@ -1,10 +1,10 @@
 package org.pragmatica.aether.forge.simulator;
 
-import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Result;
+import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -14,6 +14,8 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.pragmatica.lang.Unit.unit;
 
 /**
  * Configuration for the simulator.
@@ -28,20 +30,9 @@ public record SimulatorConfig(
  double globalRateMultiplier) {
     private static final Logger log = LoggerFactory.getLogger(SimulatorConfig.class);
 
-    /**
-     * Compact constructor with validation.
-     */
-    public SimulatorConfig {
-        if (entryPoints == null) {
-            throw new IllegalArgumentException("entryPoints cannot be null");
-        }
-        if (slices == null) {
-            throw new IllegalArgumentException("slices cannot be null");
-        }
-        if (globalRateMultiplier < 0 || !Double.isFinite(globalRateMultiplier)) {
-            throw new IllegalArgumentException("globalRateMultiplier must be >= 0 and finite, got: " + globalRateMultiplier);
-        }
-    }
+    private static final Cause ENTRY_POINTS_NULL = Causes.cause("entryPoints cannot be null");
+    private static final Cause SLICES_NULL = Causes.cause("slices cannot be null");
+    private static final Cause INVALID_MULTIPLIER = Causes.cause("globalRateMultiplier must be >= 0 and finite");
 
     /**
      * Configuration for a single entry point.
@@ -81,7 +72,8 @@ public record SimulatorConfig(
                 case"placeOrder" -> new DataGenerator.OrderRequestGenerator(
                 productGen,
                 DataGenerator.CustomerIdGenerator.withDefaults(),
-                DataGenerator.IntRange.of(minQuantity, maxQuantity));
+                DataGenerator.IntRange.of(minQuantity, maxQuantity)
+                             .unwrap());
                 case"getOrderStatus", "cancelOrder" -> DataGenerator.OrderIdGenerator.withSharedPool();
                 case"checkStock" -> new DataGenerator.StockCheckGenerator(productGen);
                 case"getPrice" -> new DataGenerator.PriceCheckGenerator(productGen);
@@ -90,18 +82,8 @@ public record SimulatorConfig(
         }
 
         public String toJson() {
-            var productsJson = products.isEmpty()
-                               ? "[]"
-                               : "[" + String.join(",",
-                                                   products.stream()
-                                                           .map(p -> "\"" + p + "\"")
-                                                           .toList()) + "]";
-            var customerIdsJson = customerIds.isEmpty()
-                                  ? "[]"
-                                  : "[" + String.join(",",
-                                                      customerIds.stream()
-                                                                 .map(c -> "\"" + c + "\"")
-                                                                 .toList()) + "]";
+            var productsJson = formatStringList(products);
+            var customerIdsJson = formatStringList(customerIds);
             return String.format(
             "{\"callsPerSecond\":%d,\"enabled\":%b,\"products\":%s,\"customerIds\":%s,\"minQuantity\":%d,\"maxQuantity\":%d}",
             callsPerSecond,
@@ -111,6 +93,16 @@ public record SimulatorConfig(
             minQuantity,
             maxQuantity);
         }
+
+        private static String formatStringList(List<String> list) {
+            if (list.isEmpty()) {
+                return "[]";
+            }
+            return "[" + String.join(",",
+                                     list.stream()
+                                         .map(s -> "\"" + s + "\"")
+                                         .toList()) + "]";
+        }
     }
 
     /**
@@ -118,32 +110,51 @@ public record SimulatorConfig(
      */
     public record SliceConfig(
     String stockMode,
-    // "infinite" or "realistic"
     int refillRate,
     int baseLatencyMs,
     int jitterMs,
     double failureRate,
     double spikeChance,
     int spikeLatencyMs) {
-        public SliceConfig {
+        private static final Cause INVALID_STOCK_MODE = Causes.cause("stockMode must be 'infinite' or 'realistic'");
+        private static final Cause BASE_LATENCY_NEGATIVE = Causes.cause("baseLatencyMs must be >= 0");
+        private static final Cause JITTER_NEGATIVE = Causes.cause("jitterMs must be >= 0");
+        private static final Cause FAILURE_RATE_OUT_OF_RANGE = Causes.cause("failureRate must be between 0 and 1");
+        private static final Cause SPIKE_CHANCE_OUT_OF_RANGE = Causes.cause("spikeChance must be between 0 and 1");
+        private static final Cause SPIKE_LATENCY_NEGATIVE = Causes.cause("spikeLatencyMs must be >= 0");
+
+        public static Result<SliceConfig> sliceConfig(String stockMode,
+                                                      int refillRate,
+                                                      int baseLatencyMs,
+                                                      int jitterMs,
+                                                      double failureRate,
+                                                      double spikeChance,
+                                                      int spikeLatencyMs) {
             if (stockMode == null || (!stockMode.equals("infinite") && !stockMode.equals("realistic"))) {
-                throw new IllegalArgumentException("stockMode must be 'infinite' or 'realistic'");
+                return INVALID_STOCK_MODE.result();
             }
             if (baseLatencyMs < 0) {
-                throw new IllegalArgumentException("baseLatencyMs must be >= 0");
+                return BASE_LATENCY_NEGATIVE.result();
             }
             if (jitterMs < 0) {
-                throw new IllegalArgumentException("jitterMs must be >= 0");
+                return JITTER_NEGATIVE.result();
             }
             if (failureRate < 0 || failureRate > 1) {
-                throw new IllegalArgumentException("failureRate must be between 0 and 1");
+                return FAILURE_RATE_OUT_OF_RANGE.result();
             }
             if (spikeChance < 0 || spikeChance > 1) {
-                throw new IllegalArgumentException("spikeChance must be between 0 and 1");
+                return SPIKE_CHANCE_OUT_OF_RANGE.result();
             }
             if (spikeLatencyMs < 0) {
-                throw new IllegalArgumentException("spikeLatencyMs must be >= 0");
+                return SPIKE_LATENCY_NEGATIVE.result();
             }
+            return Result.success(new SliceConfig(stockMode,
+                                                  refillRate,
+                                                  baseLatencyMs,
+                                                  jitterMs,
+                                                  failureRate,
+                                                  spikeChance,
+                                                  spikeLatencyMs));
         }
 
         public static SliceConfig defaultConfig() {
@@ -160,20 +171,27 @@ public record SimulatorConfig(
                 return BackendSimulation.NoOp.INSTANCE;
             }
             if (hasLatency && hasFailure) {
-                return BackendSimulation.Composite.of(
-                new BackendSimulation.LatencySimulation(baseLatencyMs, jitterMs, spikeChance, spikeLatencyMs),
-                BackendSimulation.FailureInjection.withRate(
-                failureRate,
-                new BackendSimulation.SimulatedError.ServiceUnavailable("backend"),
-                new BackendSimulation.SimulatedError.Timeout("operation", 5000)));
+                return buildCompositeSimulation();
             }
             if (hasLatency) {
                 return new BackendSimulation.LatencySimulation(baseLatencyMs, jitterMs, spikeChance, spikeLatencyMs);
             }
-            return BackendSimulation.FailureInjection.withRate(
-            failureRate,
-            new BackendSimulation.SimulatedError.ServiceUnavailable("backend"),
-            new BackendSimulation.SimulatedError.Timeout("operation", 5000));
+            return buildFailureSimulation();
+        }
+
+        private BackendSimulation buildCompositeSimulation() {
+            var latency = new BackendSimulation.LatencySimulation(baseLatencyMs, jitterMs, spikeChance, spikeLatencyMs);
+            var failure = buildFailureSimulation();
+            return BackendSimulation.Composite.of(latency, failure)
+                                    .unwrap();
+        }
+
+        private BackendSimulation buildFailureSimulation() {
+            return BackendSimulation.FailureInjection.withRate(failureRate,
+                                                               new BackendSimulation.SimulatedError.ServiceUnavailable("backend"),
+                                                               new BackendSimulation.SimulatedError.Timeout("operation",
+                                                                                                            5000))
+                                    .unwrap();
         }
 
         public String toJson() {
@@ -189,14 +207,34 @@ public record SimulatorConfig(
         }
     }
 
+    public static Result<SimulatorConfig> simulatorConfig(Map<String, EntryPointConfig> entryPoints,
+                                                          Map<String, SliceConfig> slices,
+                                                          boolean loadGeneratorEnabled,
+                                                          double globalRateMultiplier) {
+        if (entryPoints == null) {
+            return ENTRY_POINTS_NULL.result();
+        }
+        if (slices == null) {
+            return SLICES_NULL.result();
+        }
+        if (globalRateMultiplier < 0 || !Double.isFinite(globalRateMultiplier)) {
+            return INVALID_MULTIPLIER.result();
+        }
+        return Result.success(new SimulatorConfig(entryPoints, slices, loadGeneratorEnabled, globalRateMultiplier));
+    }
+
     /**
      * Create default configuration.
      */
     public static SimulatorConfig defaultConfig() {
         var entryPoints = new HashMap<String, EntryPointConfig>();
         entryPoints.put("placeOrder",
-                        new EntryPointConfig(
-        500, true, List.of("PROD-ABC123", "PROD-DEF456", "PROD-GHI789"), List.of(), 1, 5));
+                        new EntryPointConfig(500,
+                                             true,
+                                             List.of("PROD-ABC123", "PROD-DEF456", "PROD-GHI789"),
+                                             List.of(),
+                                             1,
+                                             5));
         entryPoints.put("getOrderStatus", EntryPointConfig.withRate(0));
         entryPoints.put("cancelOrder", EntryPointConfig.withRate(0));
         entryPoints.put("checkStock", EntryPointConfig.withRate(0));
@@ -237,13 +275,12 @@ public record SimulatorConfig(
         var newEntryPoints = new HashMap<>(entryPoints);
         var existing = entryPointConfig(entryPoint);
         newEntryPoints.put(entryPoint,
-                           new EntryPointConfig(
-        rate,
-        existing.enabled(),
-        existing.products(),
-        existing.customerIds(),
-        existing.minQuantity(),
-        existing.maxQuantity()));
+                           new EntryPointConfig(rate,
+                                                existing.enabled(),
+                                                existing.products(),
+                                                existing.customerIds(),
+                                                existing.minQuantity(),
+                                                existing.maxQuantity()));
         return new SimulatorConfig(newEntryPoints, slices, loadGeneratorEnabled, globalRateMultiplier);
     }
 
@@ -267,27 +304,9 @@ public record SimulatorConfig(
     public String toJson() {
         var sb = new StringBuilder();
         sb.append("{\"entryPoints\":{");
-        var first = true;
-        for (var entry : entryPoints.entrySet()) {
-            if (!first) sb.append(",");
-            first = false;
-            sb.append("\"")
-              .append(entry.getKey())
-              .append("\":")
-              .append(entry.getValue()
-                           .toJson());
-        }
+        appendMapEntries(sb, entryPoints, EntryPointConfig::toJson);
         sb.append("},\"slices\":{");
-        first = true;
-        for (var entry : slices.entrySet()) {
-            if (!first) sb.append(",");
-            first = false;
-            sb.append("\"")
-              .append(entry.getKey())
-              .append("\":")
-              .append(entry.getValue()
-                           .toJson());
-        }
+        appendMapEntries(sb, slices, SliceConfig::toJson);
         sb.append("},\"loadGeneratorEnabled\":")
           .append(loadGeneratorEnabled);
         sb.append(",\"globalRateMultiplier\":")
@@ -296,12 +315,26 @@ public record SimulatorConfig(
         return sb.toString();
     }
 
+    private static <T> void appendMapEntries(StringBuilder sb,
+                                             Map<String, T> map,
+                                             java.util.function.Function<T, String> toJson) {
+        var first = true;
+        for (var entry : map.entrySet()) {
+            if (!first) sb.append(",");
+            first = false;
+            sb.append("\"")
+              .append(entry.getKey())
+              .append("\":")
+              .append(toJson.apply(entry.getValue()));
+        }
+    }
+
     /**
      * Load configuration from file.
      */
     public static Result<SimulatorConfig> loadFromFile(Path path) {
-        return Result.lift(
-        Causes.forOneValue("Failed to load config from " + path), () -> parseJson(Files.readString(path)));
+        return Result.lift(Causes.forOneValue("Failed to load config from " + path),
+                           () -> parseJson(Files.readString(path)));
     }
 
     /**
@@ -326,7 +359,13 @@ public record SimulatorConfig(
         var config = defaultConfig();
         var entryPoints = new HashMap<>(config.entryPoints());
         var slices = new HashMap<>(config.slices());
-        // Parse entry point rates using regex (simple approach)
+        parseEntryPointRates(json, entryPoints);
+        var multiplier = parseDoubleField(json, "globalRateMultiplier", config.globalRateMultiplier());
+        var enabled = parseBooleanField(json, "loadGeneratorEnabled", config.loadGeneratorEnabled());
+        return new SimulatorConfig(entryPoints, slices, enabled, multiplier);
+    }
+
+    private static void parseEntryPointRates(String json, Map<String, EntryPointConfig> entryPoints) {
         var entryPointPattern = Pattern.compile("\"(\\w+)\"\\s*:\\s*\\{[^}]*\"callsPerSecond\"\\s*:\\s*(\\d+)");
         var matcher = entryPointPattern.matcher(json);
         while (matcher.find()) {
@@ -335,40 +374,40 @@ public record SimulatorConfig(
             if (entryPoints.containsKey(name)) {
                 var existing = entryPoints.get(name);
                 entryPoints.put(name,
-                                new EntryPointConfig(
-                rate,
-                existing.enabled(),
-                existing.products(),
-                existing.customerIds(),
-                existing.minQuantity(),
-                existing.maxQuantity()));
+                                new EntryPointConfig(rate,
+                                                     existing.enabled(),
+                                                     existing.products(),
+                                                     existing.customerIds(),
+                                                     existing.minQuantity(),
+                                                     existing.maxQuantity()));
             }
         }
-        // Parse global settings
-        var multiplierPattern = Pattern.compile("\"globalRateMultiplier\"\\s*:\\s*([\\d.]+)");
-        var multiplierMatcher = multiplierPattern.matcher(json);
-        double multiplier = config.globalRateMultiplier();
-        if (multiplierMatcher.find()) {
-            multiplier = Double.parseDouble(multiplierMatcher.group(1));
-        }
-        var enabledPattern = Pattern.compile("\"loadGeneratorEnabled\"\\s*:\\s*(true|false)");
-        var enabledMatcher = enabledPattern.matcher(json);
-        boolean enabled = config.loadGeneratorEnabled();
-        if (enabledMatcher.find()) {
-            enabled = Boolean.parseBoolean(enabledMatcher.group(1));
-        }
-        return new SimulatorConfig(entryPoints, slices, enabled, multiplier);
+    }
+
+    private static double parseDoubleField(String json, String fieldName, double defaultValue) {
+        var pattern = Pattern.compile("\"" + fieldName + "\"\\s*:\\s*([\\d.]+)");
+        var matcher = pattern.matcher(json);
+        return matcher.find()
+               ? Double.parseDouble(matcher.group(1))
+               : defaultValue;
+    }
+
+    private static boolean parseBooleanField(String json, String fieldName, boolean defaultValue) {
+        var pattern = Pattern.compile("\"" + fieldName + "\"\\s*:\\s*(true|false)");
+        var matcher = pattern.matcher(json);
+        return matcher.find()
+               ? Boolean.parseBoolean(matcher.group(1))
+               : defaultValue;
     }
 
     /**
      * Save configuration to file.
      */
-    public Result<Void> saveToFile(Path path) {
-        return Result.lift(
-        Causes.forOneValue("Failed to save config to " + path),
-        () -> {
-            Files.writeString(path, toJson());
-            return null;
-        });
+    public Result<Unit> saveToFile(Path path) {
+        return Result.lift(Causes.forOneValue("Failed to save config to " + path),
+                           () -> {
+                               Files.writeString(path, toJson());
+                               return unit();
+                           });
     }
 }

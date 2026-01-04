@@ -6,7 +6,12 @@ import org.pragmatica.lang.Verify;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.File;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public sealed interface MavenLocalRepoLocator {
+    Logger log = LoggerFactory.getLogger(MavenLocalRepoLocator.class);
+
     static String findLocalRepository() {
         var userHome = System.getProperty("user.home");
         return checkSystemProperty()
@@ -54,7 +59,9 @@ public sealed interface MavenLocalRepoLocator {
                                           .trim())
                              .filter(Verify.Is::notEmpty);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.debug("Failed to read Maven settings from {}: {}", settingsPath, e.getMessage());
+        }
         return Option.empty();
     }
 

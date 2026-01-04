@@ -6,12 +6,9 @@ import org.pragmatica.serialization.Deserializer;
 import org.pragmatica.serialization.Serializer;
 import org.pragmatica.serialization.ClassRegistrator;
 import org.pragmatica.serialization.fury.FuryDeserializer;
-import org.pragmatica.serialization.fury.FuryFactory;
 import org.pragmatica.serialization.fury.FurySerializer;
 
 import java.util.List;
-
-import org.apache.fury.ThreadSafeFury;
 
 /**
  * Fury-based serializer factory provider using singleton pattern.
@@ -21,19 +18,12 @@ import org.apache.fury.ThreadSafeFury;
  */
 public interface FurySerializerFactoryProvider extends SerializerFactoryProvider {
     static FurySerializerFactoryProvider furySerializerFactoryProvider(ClassRegistrator... registrators) {
-        record furyProvider(ClassRegistrator[] registrators) implements FurySerializerFactoryProvider {
-            @Override
-            public SerializerFactory createFactory(List<TypeToken< ? >> typeTokens) {
-                // Create single ThreadSafeFury instance for all method invocations
-                ThreadSafeFury fury = FuryFactory.fury(registrators);
-                // Create singleton serializer and deserializer
-                Serializer serializer = FurySerializer.furySerializer(registrators);
-                Deserializer deserializer = FuryDeserializer.furyDeserializer(registrators);
-                // Return factory that provides same instances (thread-safe)
-                return singletonFactory(serializer, deserializer);
-            }
-        }
-        return new furyProvider(registrators);
+        return typeTokens -> {
+            // Create singleton serializer and deserializer (ThreadSafeFury is thread-safe)
+            Serializer serializer = FurySerializer.furySerializer(registrators);
+            Deserializer deserializer = FuryDeserializer.furyDeserializer(registrators);
+            return singletonFactory(serializer, deserializer);
+        };
     }
 
     private static SerializerFactory singletonFactory(Serializer serializer, Deserializer deserializer) {

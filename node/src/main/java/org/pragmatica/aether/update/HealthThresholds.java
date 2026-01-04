@@ -1,4 +1,9 @@
 package org.pragmatica.aether.update;
+
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.utils.Causes;
+
 /**
  * Health thresholds for automatic rolling update progression.
  *
@@ -17,6 +22,9 @@ public record HealthThresholds(
  double maxErrorRate,
  long maxLatencyMs,
  boolean requireManualApproval) {
+    private static final Cause INVALID_ERROR_RATE = Causes.cause("Error rate must be between 0.0 and 1.0");
+    private static final Cause NEGATIVE_LATENCY = Causes.cause("Latency must be non-negative");
+
     /**
      * Default thresholds: 1% error rate, 500ms latency, no manual approval required.
      */
@@ -34,17 +42,19 @@ public record HealthThresholds(
 
     /**
      * Creates health thresholds with validation.
+     *
+     * @return health thresholds, or failure if values are invalid
      */
-    public static HealthThresholds healthThresholds(double maxErrorRate,
-                                                    long maxLatencyMs,
-                                                    boolean requireManualApproval) {
+    public static Result<HealthThresholds> healthThresholds(double maxErrorRate,
+                                                            long maxLatencyMs,
+                                                            boolean requireManualApproval) {
         if (maxErrorRate < 0.0 || maxErrorRate > 1.0) {
-            throw new IllegalArgumentException("Error rate must be between 0.0 and 1.0");
+            return INVALID_ERROR_RATE.result();
         }
         if (maxLatencyMs < 0) {
-            throw new IllegalArgumentException("Latency must be non-negative");
+            return NEGATIVE_LATENCY.result();
         }
-        return new HealthThresholds(maxErrorRate, maxLatencyMs, requireManualApproval);
+        return Result.success(new HealthThresholds(maxErrorRate, maxLatencyMs, requireManualApproval));
     }
 
     /**

@@ -7,7 +7,9 @@ import org.pragmatica.aether.endpoint.EndpointRegistry.Endpoint;
 import org.pragmatica.aether.invoke.InvocationMessage.InvokeRequest;
 import org.pragmatica.aether.invoke.InvocationMessage.InvokeResponse;
 import org.pragmatica.aether.slice.MethodName;
+import org.pragmatica.aether.slice.SliceBridge;
 import org.pragmatica.aether.slice.SliceRuntime.SliceInvokerFacade;
+import org.pragmatica.aether.update.RollingUpdate;
 import org.pragmatica.aether.update.RollingUpdateManager;
 import org.pragmatica.consensus.net.ClusterNetwork;
 import org.pragmatica.consensus.NodeId;
@@ -22,6 +24,7 @@ import org.pragmatica.serialization.Deserializer;
 import org.pragmatica.serialization.Serializer;
 import org.pragmatica.utility.KSUID;
 
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -241,11 +244,7 @@ class SliceInvokerImpl implements SliceInvoker {
         this.deserializer = deserializer;
         this.timeoutMs = timeoutMs;
         this.rollingUpdateManager = rollingUpdateManager;
-        this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-                                                                        var t = new Thread(r, "slice-invoker-scheduler");
-                                                                        t.setDaemon(true);
-                                                                        return t;
-                                                                    });
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(this::createSchedulerThread);
         // Schedule periodic cleanup of stale pending invocations
         scheduler.scheduleAtFixedRate(this::cleanupStaleInvocations,
                                       CLEANUP_INTERVAL_MS,
@@ -253,22 +252,33 @@ class SliceInvokerImpl implements SliceInvoker {
                                       TimeUnit.MILLISECONDS);
     }
 
+    private Thread createSchedulerThread(Runnable r) {
+        var t = new Thread(r, "slice-invoker-scheduler");
+        t.setDaemon(true);
+        return t;
+    }
+
     private void cleanupStaleInvocations() {
-        var now = System.currentTimeMillis();
-        var staleThreshold = now - (timeoutMs * 2);
-        // 2x timeout to be safe
+        var staleThreshold = System.currentTimeMillis() - (timeoutMs * 2);
         pendingInvocations.entrySet()
-                          .removeIf(entry -> {
-                                        var pending = entry.getValue();
-                                        if (pending.createdAtMs() < staleThreshold) {
-                                        log.warn("Cleaning up stale pending invocation: {}",
-                                                 entry.getKey());
-                                        pending.promise()
-                                               .resolve(Result.failure(Causes.cause("Invocation timed out (cleanup)")));
-                                        return true;
-                                    }
-                                        return false;
-                                    });
+                          .removeIf(entry -> isStaleAndCleanup(entry, staleThreshold));
+    }
+
+    private boolean isStaleAndCleanup(Map.Entry<String, PendingInvocation> entry, long staleThreshold) {
+        var pending = entry.getValue();
+        if (pending.createdAtMs() < staleThreshold) {
+            log.warn("Cleaning up stale pending invocation: {}", entry.getKey());
+            pending.promise()
+                   .resolve(Causes.cause("Invocation timed out (cleanup)")
+                                  .result());
+            return true;
+        }
+        return false;
+    }
+
+    private void cancelPendingInvocation(String id, PendingInvocation pending) {
+        pending.promise()
+               .resolve(INVOKER_STOPPED.result());
     }
 
     @Override
@@ -279,10 +289,7 @@ class SliceInvokerImpl implements SliceInvoker {
         stopped = true;
         log.info("Stopping SliceInvoker with {} pending invocations", pendingInvocations.size());
         // Cancel all pending invocations
-        pendingInvocations.forEach((id, pending) -> {
-            pending.promise()
-                   .resolve(Result.failure(INVOKER_STOPPED));
-        });
+        pendingInvocations.forEach(this::cancelPendingInvocation);
         pendingInvocations.clear();
         // Shutdown scheduler
         scheduler.shutdown();
@@ -307,20 +314,17 @@ class SliceInvokerImpl implements SliceInvoker {
     @Override
     public Promise<Unit> invoke(Artifact slice, MethodName method, Object request) {
         return selectEndpoint(slice, method)
-               .flatMap(endpoint -> {
-                            var payload = serializeRequest(request);
-                            var correlationId = KSUID.ksuid()
-                                                     .toString();
-                            var invokeRequest = new InvokeRequest(
-        self, correlationId, slice, method, payload, false);
-                            network.send(endpoint.nodeId(),
-                                         invokeRequest);
-                            log.debug("Sent fire-and-forget invocation to {}: {}.{}",
-                                      endpoint.nodeId(),
-                                      slice,
-                                      method);
-                            return Promise.success(unit());
-                        });
+               .flatMap(endpoint -> sendFireAndForget(endpoint, slice, method, request));
+    }
+
+    private Promise<Unit> sendFireAndForget(Endpoint endpoint, Artifact slice, MethodName method, Object request) {
+        var payload = serializeRequest(request);
+        var correlationId = KSUID.ksuid()
+                                 .toString();
+        var invokeRequest = new InvokeRequest(self, correlationId, slice, method, payload, false);
+        network.send(endpoint.nodeId(), invokeRequest);
+        log.debug("Sent fire-and-forget invocation to {}: {}.{}", endpoint.nodeId(), slice, method);
+        return Promise.success(unit());
     }
 
     @Override
@@ -330,33 +334,32 @@ class SliceInvokerImpl implements SliceInvoker {
             return INVOKER_STOPPED.promise();
         }
         return selectEndpoint(slice, method)
-               .flatMap(endpoint -> {
-                            var payload = serializeRequest(request);
-                            var correlationId = KSUID.ksuid()
-                                                     .toString();
-                            // Create pending promise using callback pattern
-        return Promise.<R>promise(pendingPromise -> {
-                                      // Store with timestamp for cleanup
-        var pending = new PendingInvocation(
-        (Promise<Object>)(Promise< ? >) pendingPromise,
-        System.currentTimeMillis());
-                                      pendingInvocations.put(correlationId, pending);
-                                      // Set timeout to clean up if no response
+               .flatMap(endpoint -> sendRequestResponse(endpoint, slice, method, request));
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> Promise<R> sendRequestResponse(Endpoint endpoint, Artifact slice, MethodName method, Object request) {
+        var payload = serializeRequest(request);
+        var correlationId = KSUID.ksuid()
+                                 .toString();
+        return Promise.promise(pendingPromise -> setupPendingInvocation(
+        (Promise<Object>)(Promise< ? >) pendingPromise, correlationId, endpoint, slice, method, payload));
+    }
+
+    private void setupPendingInvocation(Promise<Object> pendingPromise,
+                                        String correlationId,
+                                        Endpoint endpoint,
+                                        Artifact slice,
+                                        MethodName method,
+                                        byte[] payload) {
+        var pending = new PendingInvocation(pendingPromise, System.currentTimeMillis());
+        pendingInvocations.put(correlationId, pending);
         pendingPromise.timeout(timeSpan(timeoutMs)
                                .millis())
                       .onResult(_ -> pendingInvocations.remove(correlationId));
-                                      // Send request
-        var invokeRequest = new InvokeRequest(
-        self, correlationId, slice, method, payload, true);
-                                      network.send(endpoint.nodeId(),
-                                                   invokeRequest);
-                                      log.debug("Sent request-response invocation to {}: {}.{} [{}]",
-                                                endpoint.nodeId(),
-                                                slice,
-                                                method,
-                                                correlationId);
-                                  });
-                        });
+        var invokeRequest = new InvokeRequest(self, correlationId, slice, method, payload, true);
+        network.send(endpoint.nodeId(), invokeRequest);
+        log.debug("Sent request-response invocation to {}: {}.{} [{}]", endpoint.nodeId(), slice, method, correlationId);
     }
 
     @Override
@@ -377,47 +380,57 @@ class SliceInvokerImpl implements SliceInvoker {
         if (stopped) {
             return INVOKER_STOPPED.promise();
         }
-        return Promise.promise(promise -> {
-                                   invokeAndWait(slice, method, request, responseType)
-                                   .onSuccess(promise::succeed)
-                                   .onFailure(cause -> {
-                                                  if (stopped) {
-                                                  promise.fail(INVOKER_STOPPED);
-                                                  return;
-                                              }
-                                                  if (attempt < maxRetries) {
-                                                  var nextAttempt = attempt + 1;
-                                                  var delayMs = BASE_RETRY_DELAY_MS * (1L<< attempt);
-                                                  // Exponential backoff: 100, 200, 400, 800...
+        var ctx = new RetryContext<>(slice, method, request, responseType, attempt, maxRetries);
+        return Promise.promise(promise -> executeWithRetry(promise, ctx));
+    }
+
+    private record RetryContext<R>(Artifact slice,
+                                   MethodName method,
+                                   Object request,
+                                   Class<R> responseType,
+                                   int attempt,
+                                   int maxRetries) {}
+
+    private <R> void executeWithRetry(Promise<R> promise, RetryContext<R> ctx) {
+        invokeAndWait(ctx.slice, ctx.method, ctx.request, ctx.responseType)
+        .onSuccess(promise::succeed)
+        .onFailure(cause -> handleRetryFailure(promise, ctx, cause));
+    }
+
+    private <R> void handleRetryFailure(Promise<R> promise, RetryContext<R> ctx, Cause cause) {
+        if (stopped) {
+            promise.fail(INVOKER_STOPPED);
+            return;
+        }
+        if (ctx.attempt < ctx.maxRetries) {
+            scheduleRetry(promise, ctx, cause);
+        }else {
+            log.warn("Invocation failed after {} retries: {}.{} - {}",
+                     ctx.maxRetries,
+                     ctx.slice,
+                     ctx.method,
+                     cause.message());
+            promise.fail(cause);
+        }
+    }
+
+    private <R> void scheduleRetry(Promise<R> promise, RetryContext<R> ctx, Cause cause) {
+        var nextAttempt = ctx.attempt + 1;
+        var delayMs = BASE_RETRY_DELAY_MS * (1L<< ctx.attempt);
         log.debug("Invocation failed, scheduling retry {}/{} in {}ms: {}.{} - {}",
                   nextAttempt,
-                  maxRetries,
+                  ctx.maxRetries,
                   delayMs,
-                  slice,
-                  method,
+                  ctx.slice,
+                  ctx.method,
                   cause.message());
-                                                  scheduler.schedule(() -> {
-                                                                         invokeWithRetryInternal(slice,
-                                                                                                 method,
-                                                                                                 request,
-                                                                                                 responseType,
-                                                                                                 nextAttempt,
-                                                                                                 maxRetries)
-                                                                         .onSuccess(promise::succeed)
-                                                                         .onFailure(promise::fail);
-                                                                     },
-                                                                     delayMs,
-                                                                     TimeUnit.MILLISECONDS);
-                                              }else {
-                                                  log.warn("Invocation failed after {} retries: {}.{} - {}",
-                                                           maxRetries,
-                                                           slice,
-                                                           method,
-                                                           cause.message());
-                                                  promise.fail(cause);
-                                              }
-                                              });
-                               });
+        var nextCtx = new RetryContext<>(ctx.slice,
+                                         ctx.method,
+                                         ctx.request,
+                                         ctx.responseType,
+                                         nextAttempt,
+                                         ctx.maxRetries);
+        scheduler.schedule(() -> executeWithRetry(promise, nextCtx), delayMs, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -425,14 +438,15 @@ class SliceInvokerImpl implements SliceInvoker {
     public <R> Promise<R> invokeLocal(Artifact slice, MethodName method, Object request, Class<R> responseType) {
         return invocationHandler.getLocalSlice(slice)
                                 .fold(() -> SLICE_NOT_FOUND.<R>promise(),
-                                      bridge -> {
-                                          // Encode request to byte array
+                                      bridge -> invokeViaBridge(bridge, method, request));
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> Promise<R> invokeViaBridge(SliceBridge bridge, MethodName method, Object request) {
         var inputBytes = serializer.encode(request);
-                                          // Invoke via SliceBridge using byte[] interface
         return bridge.invoke(method.name(),
                              inputBytes)
                      .map(outputBytes -> (R) deserializer.decode(outputBytes));
-                                      });
     }
 
     @Override
@@ -453,12 +467,13 @@ class SliceInvokerImpl implements SliceInvoker {
                 promise.resolve(Result.success(result));
                 log.debug("Completed invocation [{}]", response.correlationId());
             } catch (Exception e) {
-                promise.resolve(Result.failure(Causes.fromThrowable(e)));
+                promise.resolve(Causes.fromThrowable(e)
+                                      .result());
                 log.error("Failed to deserialize response [{}]: {}", response.correlationId(), e.getMessage());
             }
         }else {
             var errorMessage = new String(response.payload());
-            promise.resolve(Result.failure(new InvocationError(errorMessage)));
+            promise.resolve(new InvocationError(errorMessage).result());
             log.debug("Invocation failed [{}]: {}", response.correlationId(), errorMessage);
         }
     }
@@ -470,19 +485,21 @@ class SliceInvokerImpl implements SliceInvoker {
                                    .fold(() -> endpointRegistry.selectEndpoint(slice, method)
                                                                .fold(() -> NO_ENDPOINT_FOUND.promise(),
                                                                      Promise::success),
-                                         // Active update - use weighted routing based on version routing configuration
-        update -> {
-                                             log.debug("Using weighted routing for {} during rolling update {}",
-                                                       slice,
-                                                       update.updateId());
-                                             return endpointRegistry.selectEndpointWithRouting(artifactBase,
-                                                                                               method,
-                                                                                               update.routing(),
-                                                                                               update.oldVersion(),
-                                                                                               update.newVersion())
-                                                                    .fold(() -> NO_ENDPOINT_FOUND.promise(),
-                                                                          Promise::success);
-                                         });
+                                         update -> selectEndpointWithWeightedRouting(slice, artifactBase, method, update));
+    }
+
+    private Promise<Endpoint> selectEndpointWithWeightedRouting(Artifact slice,
+                                                                ArtifactBase artifactBase,
+                                                                MethodName method,
+                                                                RollingUpdate update) {
+        log.debug("Using weighted routing for {} during rolling update {}", slice, update.updateId());
+        return endpointRegistry.selectEndpointWithRouting(artifactBase,
+                                                          method,
+                                                          update.routing(),
+                                                          update.oldVersion(),
+                                                          update.newVersion())
+                               .fold(() -> NO_ENDPOINT_FOUND.promise(),
+                                     Promise::success);
     }
 
     private byte[] serializeRequest(Object request) {

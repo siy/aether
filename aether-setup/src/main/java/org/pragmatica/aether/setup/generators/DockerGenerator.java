@@ -12,6 +12,9 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Generates Docker Compose deployment for Aether cluster.
  *
@@ -26,6 +29,8 @@ import java.util.stream.IntStream;
  * </ul>
  */
 public final class DockerGenerator implements Generator {
+    private static final Logger log = LoggerFactory.getLogger(DockerGenerator.class);
+
     @Override
     public boolean supports(AetherConfig config) {
         return config.environment() == Environment.DOCKER;
@@ -278,6 +283,9 @@ public final class DockerGenerator implements Generator {
     private void makeExecutable(Path path) throws IOException {
         try{
             Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rwxr-xr-x"));
-        } catch (UnsupportedOperationException e) {}
+        } catch (UnsupportedOperationException e) {
+            // POSIX permissions not supported on this filesystem (e.g., Windows)
+            log.debug("Cannot set POSIX permissions on {}: {}", path, e.getMessage());
+        }
     }
 }

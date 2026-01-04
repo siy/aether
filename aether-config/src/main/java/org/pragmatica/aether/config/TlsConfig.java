@@ -1,7 +1,8 @@
 package org.pragmatica.aether.config;
 
+import org.pragmatica.lang.Option;
+
 import java.nio.file.Path;
-import java.util.Optional;
 
 /**
  * TLS configuration for secure cluster communication.
@@ -37,21 +38,21 @@ public record TlsConfig(
         return !autoGenerate && !certPath.isBlank() && !keyPath.isBlank();
     }
 
-    public Optional<Path> certFile() {
+    public Option<Path> certFile() {
         return certPath.isBlank()
-               ? Optional.empty()
-               : Optional.of(Path.of(certPath));
+               ? Option.none()
+               : Option.option(Path.of(certPath));
     }
 
-    public Optional<Path> keyFile() {
+    public Option<Path> keyFile() {
         return keyPath.isBlank()
-               ? Optional.empty()
-               : Optional.of(Path.of(keyPath));
+               ? Option.none()
+               : Option.option(Path.of(keyPath));
     }
 
-    public Optional<Path> caFile() {
+    public Option<Path> caFile() {
         return caPath.isBlank()
-               ? Optional.empty()
-               : Optional.of(Path.of(caPath));
+               ? Option.none()
+               : Option.option(Path.of(caPath));
     }
 }

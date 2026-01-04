@@ -92,14 +92,14 @@ public final class ForgeServer {
         log.info("Forge running in standalone mode (no slices loaded)");
         // Start the cluster
         log.info("Starting {} node cluster...", clusterSize);
-        cluster.start()
-               .await(TimeSpan.timeSpan(60)
-                              .seconds())
-               .onFailure(cause -> {
-                              log.error("Failed to start cluster: {}",
-                                        cause.message());
-                              throw new RuntimeException("Cluster start failed: " + cause.message());
-                          });
+        var startResult = cluster.start()
+                                 .await(TimeSpan.timeSpan(60)
+                                                .seconds());
+        if (startResult.isFailure()) {
+            startResult.onFailure(cause -> log.error("Failed to start cluster: {}", cause.message()));
+            System.exit(1);
+            return;
+        }
         // Wait for cluster to stabilize
         Thread.sleep(2000);
         // Start metrics collection
@@ -244,7 +244,7 @@ public final class ForgeServer {
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            cause.printStackTrace();
+            log.error("Error in HTTP request handler", cause);
             ctx.close();
         }
     }

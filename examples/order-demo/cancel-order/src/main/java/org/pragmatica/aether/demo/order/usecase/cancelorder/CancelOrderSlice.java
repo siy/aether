@@ -12,6 +12,7 @@ import org.pragmatica.aether.slice.SliceRoute;
 import org.pragmatica.aether.slice.SliceRuntime;
 import org.pragmatica.aether.slice.SliceRuntime.SliceInvokerFacade;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.type.TypeToken;
 
 import java.time.Instant;
@@ -80,45 +81,55 @@ public record CancelOrderSlice() implements Slice {
         return repository()
                .findById(validRequest.orderId()
                                      .value())
-               .fold(() -> new CancelOrderError.OrderNotFound(validRequest.orderId()
-                                                                          .value()).<OrderWithContext>promise(),
-                     order -> {
-                         if (!CANCELLABLE_STATUSES.contains(order.status())) {
-                         return new CancelOrderError.OrderNotCancellable(
-        validRequest.orderId()
-                    .value(),
-        "Order is in " + order.status() + " status").<OrderWithContext>promise();
-                     }
-                         return Promise.success(new OrderWithContext(validRequest, order));
-                     });
+               .fold(() -> orderNotFound(validRequest),
+                     order -> validateCancellable(order, validRequest));
+    }
+
+    private Promise<OrderWithContext> orderNotFound(ValidCancelOrderRequest validRequest) {
+        return new CancelOrderError.OrderNotFound(validRequest.orderId()
+                                                              .value()).promise();
+    }
+
+    private Promise<OrderWithContext> validateCancellable(StoredOrder order, ValidCancelOrderRequest validRequest) {
+        if (!CANCELLABLE_STATUSES.contains(order.status())) {
+            return new CancelOrderError.OrderNotCancellable(
+            validRequest.orderId()
+                        .value(),
+            "Order is in " + order.status() + " status").promise();
+        }
+        return Promise.success(new OrderWithContext(validRequest, order));
     }
 
     private Promise<OrderWithReleases> releaseAllStock(OrderWithContext context) {
         var releases = context.order()
                               .reservationIds()
                               .stream()
-                              .map(reservationId -> invoker()
-                                                    .invokeAndWait(INVENTORY,
-                                                                   "releaseStock",
-                                                                   new ReleaseStockRequest(reservationId),
-                                                                   StockReleased.class))
+                              .map(this::releaseStock)
                               .toList();
         return Promise.allOf(releases)
-                      .flatMap(results -> {
-                                   var allSuccess = results.stream()
-                                                           .allMatch(r -> r.isSuccess());
-                                   if (!allSuccess) {
-                                   // In production, we'd handle partial releases
-        return new CancelOrderError.StockReleaseFailed(
-        new CancelOrderError.InvalidRequest("Some reservations could not be released")).promise();
-                               }
-                                   return Promise.success(new OrderWithReleases(context.request(),
-                                                                                context.order()));
-                               });
+                      .flatMap(results -> validateReleases(results, context));
+    }
+
+    private Promise<StockReleased> releaseStock(String reservationId) {
+        return invoker()
+               .invokeAndWait(INVENTORY,
+                              "releaseStock",
+                              new ReleaseStockRequest(reservationId),
+                              StockReleased.class);
+    }
+
+    private Promise<OrderWithReleases> validateReleases(List<Result<StockReleased>> results,
+                                                        OrderWithContext context) {
+        var allSuccess = results.stream()
+                                .allMatch(Result::isSuccess);
+        if (!allSuccess) {
+            return new CancelOrderError.StockReleaseFailed(
+            new CancelOrderError.InvalidRequest("Some reservations could not be released")).promise();
+        }
+        return Promise.success(new OrderWithReleases(context.request(), context.order()));
     }
 
     private CancelOrderResponse updateAndConfirm(OrderWithReleases context) {
-        // Update order status in the repository
         var orderId = context.request()
                              .orderId()
                              .value();

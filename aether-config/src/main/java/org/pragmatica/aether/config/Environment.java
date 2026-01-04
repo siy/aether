@@ -1,4 +1,10 @@
 package org.pragmatica.aether.config;
+
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Functions.Fn1;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.utils.Causes;
+
 /**
  * Deployment environment with environment-specific defaults.
  *
@@ -13,6 +19,7 @@ public enum Environment {
     LOCAL("local", 3, "256m", false),
     DOCKER("docker", 5, "512m", false),
     KUBERNETES("kubernetes", 5, "1g", true);
+    private static final Fn1<Cause, String>UNKNOWN_ENVIRONMENT = Causes.forOneValue("Unknown environment: {}. Valid: local, docker, kubernetes");
     private final String name;
     private final int defaultNodes;
     private final String defaultHeap;
@@ -37,18 +44,20 @@ public enum Environment {
     }
     /**
      * Parse environment from string, case-insensitive.
+     *
+     * @return parsed environment, or failure if unknown
      */
-    public static Environment fromString(String value) {
+    public static Result<Environment> fromString(String value) {
         if (value == null || value.isBlank()) {
-            return DOCKER;
+            return Result.success(DOCKER);
         }
         return switch (value.toLowerCase()
                             .trim()) {
-            case"local" -> LOCAL;
-            case"docker" -> DOCKER;
-            case"kubernetes", "k8s" -> KUBERNETES;
-            default -> throw new IllegalArgumentException(
-            "Unknown environment: " + value + ". Valid: local, docker, kubernetes");
+            case"local" -> Result.success(LOCAL);
+            case"docker" -> Result.success(DOCKER);
+            case"kubernetes", "k8s" -> Result.success(KUBERNETES);
+            default -> UNKNOWN_ENVIRONMENT.apply(value)
+                                          .result();
         };
     }
 }

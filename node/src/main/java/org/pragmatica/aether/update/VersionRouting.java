@@ -1,4 +1,11 @@
 package org.pragmatica.aether.update;
+
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Functions.Fn1;
+import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.utils.Causes;
+
 /**
  * Traffic routing ratio between old and new versions.
  *
@@ -19,6 +26,11 @@ package org.pragmatica.aether.update;
  * @param oldWeight weight for old version traffic
  */
 public record VersionRouting(int newWeight, int oldWeight) {
+    private static final Cause NEGATIVE_WEIGHTS = Causes.cause("Weights must be non-negative");
+    private static final Cause NO_POSITIVE_WEIGHT = Causes.cause("At least one weight must be positive");
+
+    private static final Fn1<Cause, String>INVALID_RATIO_FORMAT = Causes.forOneValue("Invalid ratio format. Expected 'new:old', got: {}");
+
     /**
      * Initial routing: all traffic to old version.
      */
@@ -31,35 +43,37 @@ public record VersionRouting(int newWeight, int oldWeight) {
 
     /**
      * Creates a routing configuration.
+     *
+     * @return routing configuration, or failure if weights are invalid
      */
-    public static VersionRouting versionRouting(int newWeight, int oldWeight) {
+    public static Result<VersionRouting> versionRouting(int newWeight, int oldWeight) {
         if (newWeight < 0 || oldWeight < 0) {
-            throw new IllegalArgumentException("Weights must be non-negative");
+            return NEGATIVE_WEIGHTS.result();
         }
         if (newWeight == 0 && oldWeight == 0) {
-            throw new IllegalArgumentException("At least one weight must be positive");
+            return NO_POSITIVE_WEIGHT.result();
         }
-        return new VersionRouting(newWeight, oldWeight);
+        return Result.success(new VersionRouting(newWeight, oldWeight));
     }
 
     /**
      * Parses routing from string format "new:old" (e.g., "1:3").
      *
      * @param ratio the ratio string
-     * @return parsed routing
-     * @throws IllegalArgumentException if format is invalid
+     * @return parsed routing, or failure if format is invalid
      */
-    public static VersionRouting parse(String ratio) {
+    public static Result<VersionRouting> parse(String ratio) {
         var parts = ratio.split(":");
         if (parts.length != 2) {
-            throw new IllegalArgumentException("Invalid ratio format. Expected 'new:old', got: " + ratio);
+            return INVALID_RATIO_FORMAT.apply(ratio)
+                                       .result();
         }
-        try{
-            return versionRouting(Integer.parseInt(parts[0].trim()),
-                                  Integer.parseInt(parts[1].trim()));
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid ratio values: " + ratio);
-        }
+        return Result.lift(_ -> INVALID_RATIO_FORMAT.apply(ratio),
+                           () -> new VersionRouting(
+        Integer.parseInt(parts[0].trim()),
+        Integer.parseInt(parts[1].trim())))
+                     .flatMap(vr -> versionRouting(vr.newWeight(),
+                                                   vr.oldWeight()));
     }
 
     /**
@@ -100,24 +114,22 @@ public record VersionRouting(int newWeight, int oldWeight) {
      *
      * @param newInstances available new version instances
      * @param oldInstances available old version instances
-     * @return scaled instance counts (new, old), or null if unsatisfiable
+     * @return scaled instance counts (new, old), or empty if unsatisfiable
      */
-    public int[] scaleToInstances(int newInstances, int oldInstances) {
+    public Option<int[] > scaleToInstances(int newInstances, int oldInstances) {
         if (isAllOld()) {
-            return new int[] {0, oldInstances};
+            return Option.option(new int[] {0, oldInstances});
         }
         if (isAllNew()) {
-            return new int[] {newInstances, 0};
+            return Option.option(new int[] {newInstances, 0});
         }
-        // Calculate maximum scale factor
         int maxNewScale = newInstances / newWeight;
         int maxOldScale = oldInstances / oldWeight;
         int scaleFactor = Math.min(maxNewScale, maxOldScale);
         if (scaleFactor < 1) {
-            return null;
+            return Option.none();
         }
-        return new int[] {scaleFactor * newWeight,
-        scaleFactor * oldWeight};
+        return Option.option(new int[] {scaleFactor * newWeight, scaleFactor * oldWeight});
     }
 
     @Override

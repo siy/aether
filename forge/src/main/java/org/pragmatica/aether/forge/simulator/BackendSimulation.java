@@ -2,7 +2,9 @@ package org.pragmatica.aether.forge.simulator;
 
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.utils.Causes;
 
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -24,13 +26,22 @@ public sealed interface BackendSimulation {
     /**
      * Shared scheduler for latency simulation.
      */
-    ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(2,
-                                                                          r -> {
-                                                                              var t = new Thread(r,
-                                                                                                 "backend-simulation-" + THREAD_COUNTER.incrementAndGet());
-                                                                              t.setDaemon(true);
-                                                                              return t;
-                                                                          });
+    ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(2, BackendSimulation::createDaemonThread);
+
+    private static Thread createDaemonThread(Runnable r) {
+        var t = new Thread(r, "backend-simulation-" + THREAD_COUNTER.incrementAndGet());
+        t.setDaemon(true);
+        return t;
+    }
+
+    // Shared validation causes
+    Cause BASE_LATENCY_NEGATIVE = Causes.cause("baseLatencyMs must be >= 0");
+    Cause JITTER_NEGATIVE = Causes.cause("jitterMs must be >= 0");
+    Cause SPIKE_CHANCE_OUT_OF_RANGE = Causes.cause("spikeChance must be between 0 and 1");
+    Cause SPIKE_LATENCY_NEGATIVE = Causes.cause("spikeLatencyMs must be >= 0");
+    Cause FAILURE_RATE_OUT_OF_RANGE = Causes.cause("failureRate must be between 0 and 1");
+    Cause ERROR_TYPES_EMPTY = Causes.cause("errorTypes cannot be null or empty");
+    Cause SIMULATIONS_EMPTY = Causes.cause("simulations cannot be null or empty");
 
     /**
      * Shutdown the scheduler. Should be called on application shutdown.
@@ -70,28 +81,17 @@ public sealed interface BackendSimulation {
     /**
      * Simulates network/processing latency with optional jitter and spikes.
      */
-    record LatencySimulation(
-    long baseLatencyMs,
-    long jitterMs,
-    double spikeChance,
-    long spikeLatencyMs) implements BackendSimulation {
-        public LatencySimulation {
-            if (baseLatencyMs < 0) {
-                throw new IllegalArgumentException("baseLatencyMs must be >= 0");
-            }
-            if (jitterMs < 0) {
-                throw new IllegalArgumentException("jitterMs must be >= 0");
-            }
-            if (spikeChance < 0 || spikeChance > 1) {
-                throw new IllegalArgumentException("spikeChance must be between 0 and 1");
-            }
-            if (spikeLatencyMs < 0) {
-                throw new IllegalArgumentException("spikeLatencyMs must be >= 0");
-            }
-        }
-
+    record LatencySimulation(long baseLatencyMs, long jitterMs, double spikeChance, long spikeLatencyMs)
+    implements BackendSimulation {
         @Override
         public Promise<Unit> apply() {
+            var delay = calculateDelay();
+            return delay <= 0
+                   ? Promise.success(Unit.unit())
+                   : scheduleDelay(delay);
+        }
+
+        private long calculateDelay() {
             var random = ThreadLocalRandom.current();
             var delay = baseLatencyMs;
             if (jitterMs > 0) {
@@ -100,14 +100,32 @@ public sealed interface BackendSimulation {
             if (spikeChance > 0 && random.nextDouble() < spikeChance) {
                 delay += spikeLatencyMs;
             }
-            if (delay <= 0) {
-                return Promise.success(Unit.unit());
+            return delay;
+        }
+
+        private static Promise<Unit> scheduleDelay(long delayMs) {
+            return Promise.promise(p -> SCHEDULER.schedule(() -> p.succeed(Unit.unit()),
+                                                           delayMs,
+                                                           TimeUnit.MILLISECONDS));
+        }
+
+        public static Result<LatencySimulation> latencySimulation(long baseMs,
+                                                                  long jitterMs,
+                                                                  double spikeChance,
+                                                                  long spikeMs) {
+            if (baseMs < 0) {
+                return BASE_LATENCY_NEGATIVE.result();
             }
-            final var finalDelay = delay;
-            return Promise.<Unit>promise(p -> SCHEDULER.schedule(
-            () -> p.succeed(Unit.unit()),
-            finalDelay,
-            TimeUnit.MILLISECONDS));
+            if (jitterMs < 0) {
+                return JITTER_NEGATIVE.result();
+            }
+            if (spikeChance < 0 || spikeChance > 1) {
+                return SPIKE_CHANCE_OUT_OF_RANGE.result();
+            }
+            if (spikeMs < 0) {
+                return SPIKE_LATENCY_NEGATIVE.result();
+            }
+            return Result.success(new LatencySimulation(baseMs, jitterMs, spikeChance, spikeMs));
         }
 
         public static LatencySimulation fixed(long latencyMs) {
@@ -118,39 +136,51 @@ public sealed interface BackendSimulation {
             return new LatencySimulation(baseMs, jitterMs, 0, 0);
         }
 
-        public static LatencySimulation withSpikes(long baseMs, long jitterMs, double spikeChance, long spikeMs) {
-            return new LatencySimulation(baseMs, jitterMs, spikeChance, spikeMs);
+        public static Result<LatencySimulation> withSpikes(long baseMs,
+                                                           long jitterMs,
+                                                           double spikeChance,
+                                                           long spikeMs) {
+            return latencySimulation(baseMs, jitterMs, spikeChance, spikeMs);
         }
     }
 
     /**
      * Simulates random failures at a configurable rate.
      */
-    record FailureInjection(
-    double failureRate,
-    List<SimulatedError> errorTypes) implements BackendSimulation {
-        public FailureInjection {
-            if (failureRate < 0 || failureRate > 1) {
-                throw new IllegalArgumentException("failureRate must be between 0 and 1");
-            }
-            if (errorTypes == null || errorTypes.isEmpty()) {
-                throw new IllegalArgumentException("errorTypes cannot be null or empty");
-            }
-            errorTypes = List.copyOf(errorTypes);
+    record FailureInjection(double failureRate, List<SimulatedError> errorTypes) implements BackendSimulation {
+        public FailureInjection(double failureRate, List<SimulatedError> errorTypes) {
+            this.failureRate = failureRate;
+            this.errorTypes = errorTypes == null
+                              ? List.of()
+                              : List.copyOf(errorTypes);
         }
 
         @Override
         public Promise<Unit> apply() {
             var random = ThreadLocalRandom.current();
             if (random.nextDouble() < failureRate) {
-                var error = errorTypes.get(random.nextInt(errorTypes.size()));
-                return error.promise();
+                return selectRandomError(random)
+                       .promise();
             }
             return Promise.success(Unit.unit());
         }
 
-        public static FailureInjection withRate(double rate, SimulatedError... errors) {
-            return new FailureInjection(rate, List.of(errors));
+        private SimulatedError selectRandomError(ThreadLocalRandom random) {
+            return errorTypes.get(random.nextInt(errorTypes.size()));
+        }
+
+        public static Result<FailureInjection> failureInjection(double rate, List<SimulatedError> errors) {
+            if (rate < 0 || rate > 1) {
+                return FAILURE_RATE_OUT_OF_RANGE.result();
+            }
+            if (errors == null || errors.isEmpty()) {
+                return ERROR_TYPES_EMPTY.result();
+            }
+            return Result.success(new FailureInjection(rate, errors));
+        }
+
+        public static Result<FailureInjection> withRate(double rate, SimulatedError... errors) {
+            return failureInjection(rate, List.of(errors));
         }
     }
 
@@ -159,11 +189,10 @@ public sealed interface BackendSimulation {
      * Latency simulations are applied sequentially (delays add up).
      */
     record Composite(List<BackendSimulation> simulations) implements BackendSimulation {
-        public Composite {
-            if (simulations == null || simulations.isEmpty()) {
-                throw new IllegalArgumentException("simulations cannot be null or empty");
-            }
-            simulations = List.copyOf(simulations);
+        public Composite(List<BackendSimulation> simulations) {
+            this.simulations = simulations == null
+                               ? List.of()
+                               : List.copyOf(simulations);
         }
 
         @Override
@@ -175,8 +204,15 @@ public sealed interface BackendSimulation {
             return result;
         }
 
-        public static Composite of(BackendSimulation... simulations) {
-            return new Composite(List.of(simulations));
+        public static Result<Composite> composite(List<BackendSimulation> simulations) {
+            if (simulations == null || simulations.isEmpty()) {
+                return SIMULATIONS_EMPTY.result();
+            }
+            return Result.success(new Composite(simulations));
+        }
+
+        public static Result<Composite> of(BackendSimulation... simulations) {
+            return composite(List.of(simulations));
         }
     }
 

@@ -52,23 +52,25 @@ public record GetOrderStatusSlice() implements Slice {
         return repository()
                .findById(validRequest.orderId()
                                      .value())
-               .fold(() -> new GetOrderStatusError.OrderNotFound(validRequest.orderId()
-                                                                             .value()).<GetOrderStatusResponse>promise(),
-                     order -> {
-                         var items = order.items()
-                                          .stream()
-                                          .map(item -> new GetOrderStatusResponse.OrderItem(
-        item.productId(),
-        item.quantity(),
-        item.unitPrice()))
-                                          .toList();
-                         return Promise.success(new GetOrderStatusResponse(
-        order.orderId(),
-        order.status(),
-        order.total(),
-        items,
-        order.createdAt(),
-        order.updatedAt()));
-                     });
+               .fold(() -> orderNotFound(validRequest),
+                     this::toResponse);
+    }
+
+    private Promise<GetOrderStatusResponse> orderNotFound(ValidGetOrderStatusRequest validRequest) {
+        return new GetOrderStatusError.OrderNotFound(validRequest.orderId()
+                                                                 .value()).promise();
+    }
+
+    private Promise<GetOrderStatusResponse> toResponse(OrderRepository.StoredOrder order) {
+        var items = order.items()
+                         .stream()
+                         .map(this::toOrderItem)
+                         .toList();
+        return Promise.success(new GetOrderStatusResponse(
+        order.orderId(), order.status(), order.total(), items, order.createdAt(), order.updatedAt()));
+    }
+
+    private GetOrderStatusResponse.OrderItem toOrderItem(OrderRepository.OrderItem item) {
+        return new GetOrderStatusResponse.OrderItem(item.productId(), item.quantity(), item.unitPrice());
     }
 }

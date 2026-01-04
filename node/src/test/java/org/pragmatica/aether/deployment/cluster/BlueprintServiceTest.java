@@ -21,6 +21,7 @@ import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.utils.Causes;
 
 import java.util.HashMap;
 import java.util.List;
@@ -41,7 +42,7 @@ class BlueprintServiceTest {
         store = new TestKVStore();
         cluster.setStore(store);
         // Repository is not used in tests since we test get/list/delete directly
-        repository = artifact -> Promise.failure(null);
+        repository = artifact -> Causes.cause("Repository not used in tests").promise();
 
         service = BlueprintServiceImpl.blueprintService(cluster, store, repository);
     }

@@ -11,6 +11,9 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.stream.IntStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Generates Kubernetes manifests for Aether cluster deployment.
  *
@@ -26,6 +29,8 @@ import java.util.stream.IntStream;
  * </ul>
  */
 public final class KubernetesGenerator implements Generator {
+    private static final Logger log = LoggerFactory.getLogger(KubernetesGenerator.class);
+
     @Override
     public boolean supports(AetherConfig config) {
         return config.environment() == Environment.KUBERNETES;
@@ -360,6 +365,9 @@ public final class KubernetesGenerator implements Generator {
     private void makeExecutable(Path path) throws IOException {
         try{
             Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rwxr-xr-x"));
-        } catch (UnsupportedOperationException e) {}
+        } catch (UnsupportedOperationException e) {
+            // POSIX permissions not supported on this filesystem (e.g., Windows)
+            log.debug("Cannot set POSIX permissions on {}: {}", path, e.getMessage());
+        }
     }
 }

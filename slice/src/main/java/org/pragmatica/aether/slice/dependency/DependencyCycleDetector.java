@@ -3,6 +3,7 @@ package org.pragmatica.aether.slice.dependency;
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Result;
+import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 
 import java.util.*;
@@ -23,7 +24,7 @@ public interface DependencyCycleDetector {
      *
      * @return Success with Unit if no cycles, failure with cycle path if cycle detected
      */
-    static Result<Void> checkForCycles(Map<String, List<String>> dependencies) {
+    static Result<Unit> checkForCycles(Map<String, List<String>> dependencies) {
         var visited = new HashSet<String>();
         var visiting = new HashSet<String>();
         var path = new ArrayList<String>();
@@ -35,10 +36,10 @@ public interface DependencyCycleDetector {
                 }
             }
         }
-        return Result.success(null);
+        return Result.unitResult();
     }
 
-    private static Result<Void> dfs(String node,
+    private static Result<Unit> dfs(String node,
                                     Map<String, List<String>> dependencies,
                                     Set<String> visited,
                                     Set<String> visiting,
@@ -63,7 +64,7 @@ public interface DependencyCycleDetector {
         visiting.remove(node);
         visited.add(node);
         path.removeLast();
-        return Result.success(null);
+        return Result.unitResult();
     }
 
     private static String buildCyclePath(List<String> path, String cycleStart) {

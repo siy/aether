@@ -62,11 +62,12 @@ public enum SimulatorMode {
     /**
      * Get the default backend simulation for this mode.
      */
-    public BackendSimulation defaultBackendSimulation() {
+    public Result<BackendSimulation> defaultBackendSimulation() {
         if (!realisticLatency) {
-            return BackendSimulation.NoOp.INSTANCE;
+            return Result.success(BackendSimulation.NoOp.INSTANCE);
         }
-        return BackendSimulation.LatencySimulation.withSpikes(10, 5, 0.01, 100);
+        return BackendSimulation.LatencySimulation.withSpikes(10, 5, 0.01, 100)
+                                .map(sim -> sim);
     }
     /**
      * Create a SimulatorConfig for this mode based on a template config.

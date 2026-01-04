@@ -8,6 +8,7 @@ import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.cluster.node.rabia.RabiaNode;
+import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
@@ -96,12 +97,18 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
         }
         log.info("Adjusting routing for {} to {}", updateId, newRouting);
         var withRouting = update.withRouting(newRouting);
-        var updated = update.state() == RollingUpdateState.DEPLOYED
-                      ? withRouting.transitionTo(RollingUpdateState.ROUTING)
-                      : withRouting;
-        updates.put(updateId, updated);
-        return persistRouting(updated)
-               .map(_ -> updated);
+        if (update.state() == RollingUpdateState.DEPLOYED) {
+            return withRouting.transitionTo(RollingUpdateState.ROUTING)
+                              .fold(Cause::promise,
+                                    transitioned -> {
+                                        updates.put(updateId, transitioned);
+                                        return persistRouting(transitioned)
+                                               .map(_ -> transitioned);
+                                    });
+        }
+        updates.put(updateId, withRouting);
+        return persistRouting(withRouting)
+               .map(_ -> withRouting);
     }
 
     @Override
@@ -261,11 +268,14 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
     @SuppressWarnings("unchecked")
     private Promise<RollingUpdate> persistAndTransition(RollingUpdate update,
                                                         RollingUpdateState newState) {
-        var transitioned = update.transitionTo(newState);
-        updates.put(update.updateId(), transitioned);
-        // Store in KV-Store
+        return update.transitionTo(newState)
+                     .fold(Cause::promise,
+                           transitioned -> {
+                               updates.put(update.updateId(),
+                                           transitioned);
+                               // Store in KV-Store
         var key = new AetherKey.RollingUpdateKey(update.updateId());
-        var value = new AetherValue.RollingUpdateValue(
+                               var value = new AetherValue.RollingUpdateValue(
         transitioned.updateId(),
         transitioned.artifactBase(),
         transitioned.oldVersion(),
@@ -287,9 +297,10 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
                     .name(),
         transitioned.createdAt(),
         System.currentTimeMillis());
-        var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Put<>(key, value);
-        return clusterNode.<Unit> apply(List.of(command))
-               .map(_ -> transitioned);
+                               var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Put<>(key, value);
+                               return clusterNode.<Unit> apply(List.of(command))
+                                      .map(_ -> transitioned);
+                           });
     }
 
     @SuppressWarnings("unchecked")

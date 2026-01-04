@@ -1,5 +1,9 @@
 package org.pragmatica.aether.forge.simulator;
 
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.utils.Causes;
+
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -30,21 +34,19 @@ public sealed interface DataGenerator {
      * Range for integer values.
      */
     record IntRange(int min, int max) {
-        public IntRange {
-            if (min > max) {
-                throw new IllegalArgumentException("min must be <= max");
-            }
-        }
+        private static final Cause MIN_GREATER_THAN_MAX = Causes.cause("min must be <= max");
 
         public int random(Random random) {
-            if (min == max) {
-                return min;
-            }
-            return min + random.nextInt(max - min + 1);
+            return min == max
+                   ? min
+                   : min + random.nextInt(max - min + 1);
         }
 
-        public static IntRange of(int min, int max) {
-            return new IntRange(min, max);
+        public static Result<IntRange> of(int min, int max) {
+            if (min > max) {
+                return MIN_GREATER_THAN_MAX.result();
+            }
+            return Result.success(new IntRange(min, max));
         }
 
         public static IntRange exactly(int value) {
@@ -56,15 +58,24 @@ public sealed interface DataGenerator {
      * Generates random product IDs from a configured list.
      */
     record ProductIdGenerator(List<String> productIds) implements DataGenerator {
-        public ProductIdGenerator {
-            if (productIds == null || productIds.isEmpty()) {
-                throw new IllegalArgumentException("productIds cannot be null or empty");
-            }
+        private static final Cause PRODUCT_IDS_EMPTY = Causes.cause("productIds cannot be null or empty");
+
+        public ProductIdGenerator(List<String> productIds) {
+            this.productIds = productIds == null
+                              ? List.of()
+                              : List.copyOf(productIds);
         }
 
         @Override
         public String generate(Random random) {
             return productIds.get(random.nextInt(productIds.size()));
+        }
+
+        public static Result<ProductIdGenerator> productIdGenerator(List<String> productIds) {
+            if (productIds == null || productIds.isEmpty()) {
+                return PRODUCT_IDS_EMPTY.result();
+            }
+            return Result.success(new ProductIdGenerator(productIds));
         }
 
         public static ProductIdGenerator withDefaults() {
@@ -76,18 +87,22 @@ public sealed interface DataGenerator {
      * Generates random customer IDs.
      */
     record CustomerIdGenerator(String prefix, int maxId) implements DataGenerator {
-        public CustomerIdGenerator {
-            if (prefix == null) {
-                throw new IllegalArgumentException("prefix cannot be null");
-            }
-            if (maxId <= 0) {
-                throw new IllegalArgumentException("maxId must be positive");
-            }
-        }
+        private static final Cause PREFIX_NULL = Causes.cause("prefix cannot be null");
+        private static final Cause MAX_ID_NOT_POSITIVE = Causes.cause("maxId must be positive");
 
         @Override
         public String generate(Random random) {
             return String.format("%s%08d", prefix, random.nextInt(maxId));
+        }
+
+        public static Result<CustomerIdGenerator> customerIdGenerator(String prefix, int maxId) {
+            if (prefix == null) {
+                return PREFIX_NULL.result();
+            }
+            if (maxId <= 0) {
+                return MAX_ID_NOT_POSITIVE.result();
+            }
+            return Result.success(new CustomerIdGenerator(prefix, maxId));
         }
 
         public static CustomerIdGenerator withDefaults() {
@@ -102,11 +117,7 @@ public sealed interface DataGenerator {
     ProductIdGenerator productGenerator,
     CustomerIdGenerator customerGenerator,
     IntRange quantityRange) implements DataGenerator {
-        public OrderRequestGenerator {
-            if (productGenerator == null || customerGenerator == null || quantityRange == null) {
-                throw new IllegalArgumentException("All generators must be non-null");
-            }
-        }
+        private static final Cause GENERATORS_NULL = Causes.cause("All generators must be non-null");
 
         @Override
         public OrderRequestData generate(Random random) {
@@ -114,9 +125,18 @@ public sealed interface DataGenerator {
             customerGenerator.generate(random), productGenerator.generate(random), quantityRange.random(random));
         }
 
+        public static Result<OrderRequestGenerator> orderRequestGenerator(ProductIdGenerator productGenerator,
+                                                                          CustomerIdGenerator customerGenerator,
+                                                                          IntRange quantityRange) {
+            if (productGenerator == null || customerGenerator == null || quantityRange == null) {
+                return GENERATORS_NULL.result();
+            }
+            return Result.success(new OrderRequestGenerator(productGenerator, customerGenerator, quantityRange));
+        }
+
         public static OrderRequestGenerator withDefaults() {
             return new OrderRequestGenerator(
-            ProductIdGenerator.withDefaults(), CustomerIdGenerator.withDefaults(), IntRange.of(1, 5));
+            ProductIdGenerator.withDefaults(), CustomerIdGenerator.withDefaults(), IntRange.exactly(1));
         }
 
         /**
@@ -141,25 +161,16 @@ public sealed interface DataGenerator {
     record OrderIdGenerator(Queue<String> orderIdPool, int maxPoolSize) implements DataGenerator {
         private static final Queue<String>SHARED_POOL = new ConcurrentLinkedQueue<>();
         private static final int DEFAULT_MAX_POOL_SIZE = 1000;
-
-        public OrderIdGenerator {
-            if (orderIdPool == null) {
-                throw new IllegalArgumentException("orderIdPool cannot be null");
-            }
-            if (maxPoolSize <= 0) {
-                throw new IllegalArgumentException("maxPoolSize must be positive");
-            }
-        }
+        private static final Cause POOL_NULL = Causes.cause("orderIdPool cannot be null");
+        private static final Cause MAX_POOL_NOT_POSITIVE = Causes.cause("maxPoolSize must be positive");
 
         @Override
         public String generate(Random random) {
             var orderId = orderIdPool.poll();
             if (orderId != null) {
-                // Re-add to pool for reuse (simulates recent orders)
                 orderIdPool.offer(orderId);
                 return orderId;
             }
-            // Generate synthetic order ID
             return "ORD-" + String.format("%08d", random.nextInt(100_000_000));
         }
 
@@ -170,6 +181,16 @@ public sealed interface DataGenerator {
             if (orderIdPool.size() < maxPoolSize) {
                 orderIdPool.offer(orderId);
             }
+        }
+
+        public static Result<OrderIdGenerator> orderIdGenerator(Queue<String> orderIdPool, int maxPoolSize) {
+            if (orderIdPool == null) {
+                return POOL_NULL.result();
+            }
+            if (maxPoolSize <= 0) {
+                return MAX_POOL_NOT_POSITIVE.result();
+            }
+            return Result.success(new OrderIdGenerator(orderIdPool, maxPoolSize));
         }
 
         public static OrderIdGenerator withSharedPool() {
@@ -194,15 +215,18 @@ public sealed interface DataGenerator {
      * Generates stock check request data.
      */
     record StockCheckGenerator(ProductIdGenerator productGenerator) implements DataGenerator {
-        public StockCheckGenerator {
-            if (productGenerator == null) {
-                throw new IllegalArgumentException("productGenerator cannot be null");
-            }
-        }
+        private static final Cause GENERATOR_NULL = Causes.cause("productGenerator cannot be null");
 
         @Override
         public StockCheckData generate(Random random) {
             return new StockCheckData(productGenerator.generate(random));
+        }
+
+        public static Result<StockCheckGenerator> stockCheckGenerator(ProductIdGenerator productGenerator) {
+            if (productGenerator == null) {
+                return GENERATOR_NULL.result();
+            }
+            return Result.success(new StockCheckGenerator(productGenerator));
         }
 
         public static StockCheckGenerator withDefaults() {
@@ -216,15 +240,18 @@ public sealed interface DataGenerator {
      * Generates price check request data.
      */
     record PriceCheckGenerator(ProductIdGenerator productGenerator) implements DataGenerator {
-        public PriceCheckGenerator {
-            if (productGenerator == null) {
-                throw new IllegalArgumentException("productGenerator cannot be null");
-            }
-        }
+        private static final Cause GENERATOR_NULL = Causes.cause("productGenerator cannot be null");
 
         @Override
         public PriceCheckData generate(Random random) {
             return new PriceCheckData(productGenerator.generate(random));
+        }
+
+        public static Result<PriceCheckGenerator> priceCheckGenerator(ProductIdGenerator productGenerator) {
+            if (productGenerator == null) {
+                return GENERATOR_NULL.result();
+            }
+            return Result.success(new PriceCheckGenerator(productGenerator));
         }
 
         public static PriceCheckGenerator withDefaults() {

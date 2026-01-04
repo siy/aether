@@ -279,6 +279,36 @@ Get current slow invocation threshold strategy.
 }
 ```
 
+### POST /invocation-metrics/strategy
+
+Set the slow invocation threshold strategy.
+
+**Request (Fixed):**
+```json
+{
+  "type": "fixed",
+  "thresholdMs": 100
+}
+```
+
+**Request (Adaptive):**
+```json
+{
+  "type": "adaptive",
+  "minMs": 10,
+  "maxMs": 1000
+}
+```
+
+**Response:**
+```json
+{
+  "status": "strategy_updated",
+  "type": "fixed",
+  "thresholdMs": 100
+}
+```
+
 ### GET /metrics/prometheus
 
 Get Prometheus-format metrics for scraping.
@@ -595,6 +625,41 @@ Download an artifact.
 ### GET /repository/artifacts
 
 List all artifacts.
+
+---
+
+## Dashboard
+
+### GET /dashboard
+
+Serves the built-in cluster monitoring dashboard.
+
+**Content-Type**: `text/html`
+
+Open in browser: `http://localhost:8080/dashboard`
+
+### WebSocket /ws/dashboard
+
+Real-time metrics streaming via WebSocket.
+
+**Connection:**
+```javascript
+const ws = new WebSocket('ws://localhost:8080/ws/dashboard');
+ws.onmessage = (event) => {
+  const metrics = JSON.parse(event.data);
+  console.log(metrics);
+};
+```
+
+**Message Format:**
+```json
+{
+  "timestamp": 1704067200000,
+  "nodes": [...],
+  "metrics": {...},
+  "alerts": [...]
+}
+```
 
 ---
 

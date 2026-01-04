@@ -2,6 +2,10 @@ package org.pragmatica.aether.update;
 
 import org.pragmatica.aether.artifact.ArtifactBase;
 import org.pragmatica.aether.artifact.Version;
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Functions.Fn1;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.utils.Causes;
 
 /**
  * Represents a rolling update operation.
@@ -39,6 +43,8 @@ public record RollingUpdate(
  int newInstances,
  long createdAt,
  long updatedAt) {
+    private static final Fn1<Cause, String>INVALID_TRANSITION = Causes.forOneValue("Invalid state transition: {}");
+
     /**
      * Creates a new rolling update in PENDING state.
      *
@@ -77,16 +83,15 @@ public record RollingUpdate(
      * Transitions to a new state.
      *
      * @param newState the new state
-     * @return updated rolling update
-     * @throws IllegalStateException if transition is invalid
+     * @return updated rolling update, or failure if transition is invalid
      */
-    public RollingUpdate transitionTo(RollingUpdateState newState) {
+    public Result<RollingUpdate> transitionTo(RollingUpdateState newState) {
         if (!state.validTransitions()
                   .contains(newState)) {
-            throw new IllegalStateException(
-            "Invalid transition from " + state + " to " + newState);
+            return INVALID_TRANSITION.apply(state + " -> " + newState)
+                                     .result();
         }
-        return new RollingUpdate(
+        return Result.success(new RollingUpdate(
         updateId,
         artifactBase,
         oldVersion,
@@ -97,7 +102,7 @@ public record RollingUpdate(
         cleanupPolicy,
         newInstances,
         createdAt,
-        System.currentTimeMillis());
+        System.currentTimeMillis()));
     }
 
     /**

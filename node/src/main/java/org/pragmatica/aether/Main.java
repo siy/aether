@@ -2,12 +2,15 @@ package org.pragmatica.aether;
 
 import org.pragmatica.aether.config.AetherConfig;
 import org.pragmatica.aether.config.ConfigLoader;
+import org.pragmatica.aether.config.Environment;
 import org.pragmatica.aether.node.AetherNode;
 import org.pragmatica.aether.node.AetherNodeConfig;
 import org.pragmatica.consensus.NodeId;
 import org.pragmatica.consensus.net.NodeInfo;
+import org.pragmatica.lang.Option;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -43,59 +46,89 @@ public record Main(String[] args) {
     }
 
     private void run() {
-        // Check for config file first
-        var configPath = findArg("--config=");
-        AetherConfig aetherConfig = configPath.map(Path::of)
-                                              .filter(p -> p.toFile()
-                                                            .exists())
-                                              .flatMap(p -> ConfigLoader.load(p)
-                                                                        .fold(cause -> {
-                                                                                  log.error("Failed to load config: {}",
-                                                                                            cause.message());
-                                                                                  return java.util.Optional.<AetherConfig>empty();
-                                                                              },
-                                                                              java.util.Optional::of))
-                                              .orElse(null);
+        var aetherConfig = loadConfig();
         var nodeId = parseNodeId(aetherConfig);
         var port = parsePort(aetherConfig);
         var managementPort = parseManagementPort(aetherConfig);
         var peers = parsePeers(nodeId, port, aetherConfig);
-        log.info("Starting Aether node {} on port {}", nodeId, port);
-        log.info("Management API on port {}", managementPort);
-        log.info("Peers: {}", peers);
-        if (aetherConfig != null) {
-            log.info("Config: environment={}, nodes={}, heap={}",
-                     aetherConfig.environment()
-                                 .displayName(),
-                     aetherConfig.cluster()
-                                 .nodes(),
-                     aetherConfig.node()
-                                 .heap());
-        }
+        logStartupInfo(nodeId, port, managementPort, peers, aetherConfig);
         var config = AetherNodeConfig.aetherNodeConfig(nodeId,
                                                        port,
                                                        peers,
                                                        AetherNodeConfig.defaultSliceConfig(),
                                                        managementPort);
-        var node = AetherNode.aetherNode(config);
-        // Register shutdown hook
+        var node = AetherNode.aetherNode(config)
+                             .unwrap();
+        registerShutdownHook(node);
+        startNodeAndWait(node, nodeId);
+    }
+
+    private Option<AetherConfig> loadConfig() {
+        return findArg("--config=")
+               .map(Path::of)
+               .filter(p -> p.toFile()
+                             .exists())
+               .flatMap(this::loadConfigFile);
+    }
+
+    private Option<AetherConfig> loadConfigFile(Path path) {
+        return ConfigLoader.load(path)
+                           .fold(cause -> logConfigError(cause.message()),
+                                 Option::option);
+    }
+
+    private Option<AetherConfig> logConfigError(String message) {
+        log.error("Failed to load config: {}", message);
+        return Option.none();
+    }
+
+    private void logStartupInfo(NodeId nodeId,
+                                int port,
+                                int managementPort,
+                                List<NodeInfo> peers,
+                                Option<AetherConfig> aetherConfig) {
+        log.info("Starting Aether node {} on port {}", nodeId, port);
+        log.info("Management API on port {}", managementPort);
+        log.info("Peers: {}", peers);
+        aetherConfig.onPresent(cfg -> logConfigDetails(cfg));
+    }
+
+    private void logConfigDetails(AetherConfig cfg) {
+        log.info("Config: environment={}, nodes={}, heap={}",
+                 cfg.environment()
+                    .displayName(),
+                 cfg.cluster()
+                    .nodes(),
+                 cfg.node()
+                    .heap());
+    }
+
+    private void registerShutdownHook(AetherNode node) {
         Runtime.getRuntime()
-               .addShutdownHook(new Thread(() -> {
-                                               log.info("Shutdown requested, stopping node...");
-                                               node.stop()
-                                                   .await();
-                                               log.info("Node stopped");
-                                           }));
-        // Start the node
+               .addShutdownHook(new Thread(() -> shutdownNode(node)));
+    }
+
+    private void shutdownNode(AetherNode node) {
+        log.info("Shutdown requested, stopping node...");
+        node.stop()
+            .await();
+        log.info("Node stopped");
+    }
+
+    private void startNodeAndWait(AetherNode node, NodeId nodeId) {
         node.start()
             .onSuccess(_ -> log.info("Node {} is running. Press Ctrl+C to stop.", nodeId))
-            .onFailure(cause -> {
-                log.error("Failed to start node: {}",
-                          cause.message());
-                System.exit(1);
-            })
+            .onFailure(cause -> exitWithError(cause.message()))
             .await();
-        // Keep main thread alive
+        waitForInterrupt();
+    }
+
+    private void exitWithError(String message) {
+        log.error("Failed to start node: {}", message);
+        System.exit(1);
+    }
+
+    private void waitForInterrupt() {
         try{
             Thread.currentThread()
                   .join();
@@ -105,83 +138,74 @@ public record Main(String[] args) {
         }
     }
 
-    private NodeId parseNodeId(AetherConfig aetherConfig) {
-        // Command-line takes precedence
+    private NodeId parseNodeId(Option<AetherConfig> aetherConfig) {
         return findArg("--node-id=")
                .map(NodeId::nodeId)
-               .or(() -> findEnv("NODE_ID")
-                         .map(NodeId::nodeId))
-               .orElseGet(NodeId::randomNodeId);
+               .orElse(findEnv("NODE_ID")
+                       .map(NodeId::nodeId))
+               .or(NodeId::randomNodeId);
     }
 
-    private int parsePort(AetherConfig aetherConfig) {
-        // Command-line takes precedence, then env, then config, then default
+    private int parsePort(Option<AetherConfig> aetherConfig) {
         return findArg("--port=")
                .map(Integer::parseInt)
-               .or(() -> findEnv("CLUSTER_PORT")
-                         .map(Integer::parseInt))
-               .orElseGet(() -> {
-                              if (aetherConfig != null) {
-                              return aetherConfig.cluster()
-                                                 .ports()
-                                                 .cluster();
-                          }
-                              return DEFAULT_CLUSTER_PORT;
-                          });
+               .orElse(findEnv("CLUSTER_PORT")
+                       .map(Integer::parseInt))
+               .or(() -> portFromConfig(aetherConfig));
     }
 
-    private int parseManagementPort(AetherConfig aetherConfig) {
+    private int portFromConfig(Option<AetherConfig> aetherConfig) {
+        return aetherConfig.map(cfg -> cfg.cluster()
+                                          .ports()
+                                          .cluster())
+                           .or(DEFAULT_CLUSTER_PORT);
+    }
+
+    private int parseManagementPort(Option<AetherConfig> aetherConfig) {
         return findArg("--management-port=")
                .map(Integer::parseInt)
-               .or(() -> findEnv("MANAGEMENT_PORT")
-                         .map(Integer::parseInt))
-               .orElseGet(() -> {
-                              if (aetherConfig != null) {
-                              return aetherConfig.cluster()
-                                                 .ports()
-                                                 .management();
-                          }
-                              return AetherNodeConfig.DEFAULT_MANAGEMENT_PORT;
-                          });
+               .orElse(findEnv("MANAGEMENT_PORT")
+                       .map(Integer::parseInt))
+               .or(() -> managementPortFromConfig(aetherConfig));
     }
 
-    private List<NodeInfo> parsePeers(NodeId self, int selfPort, AetherConfig aetherConfig) {
-        var selfInfo = nodeInfo(self, nodeAddress("localhost", selfPort));
-        // Check command-line first
-        var peersArg = findArg("--peers=");
-        if (peersArg.isPresent()) {
-            return parsePeersFromString(peersArg.get(), self, selfInfo);
-        }
-        // Check environment variable
-        var peersEnv = findEnv("CLUSTER_PEERS");
-        if (peersEnv.isPresent()) {
-            return parsePeersFromString(peersEnv.get(), self, selfInfo);
-        }
-        // If config is provided, generate peer list from node count
-        if (aetherConfig != null) {
-            var nodes = aetherConfig.cluster()
-                                    .nodes();
-            var clusterPort = aetherConfig.cluster()
+    private int managementPortFromConfig(Option<AetherConfig> aetherConfig) {
+        return aetherConfig.map(cfg -> cfg.cluster()
                                           .ports()
-                                          .cluster();
-            // Generate peer addresses for all nodes
-            return IntStream.range(0, nodes)
-                            .mapToObj(i -> {
-                                          var host = aetherConfig.environment() == org.pragmatica.aether.config.Environment.DOCKER
-                                                     ? "aether-node-" + i
-                                                     : "localhost";
-                                          // Local deployment
-            var port = clusterPort + (aetherConfig.environment() == org.pragmatica.aether.config.Environment.LOCAL
-                                      ? i
-                                      : 0);
-                                          var nodeIdStr = "node-" + i;
-                                          return nodeInfo(NodeId.nodeId(nodeIdStr),
-                                                          nodeAddress(host, port));
-                                      })
-                            .toList();
-        }
-        // Default: just self
-        return List.of(selfInfo);
+                                          .management())
+                           .or(AetherNodeConfig.DEFAULT_MANAGEMENT_PORT);
+    }
+
+    private List<NodeInfo> parsePeers(NodeId self, int selfPort, Option<AetherConfig> aetherConfig) {
+        var selfInfo = nodeInfo(self, nodeAddress("localhost", selfPort));
+        return findArg("--peers=")
+               .map(peersStr -> parsePeersFromString(peersStr, self, selfInfo))
+               .orElse(findEnv("CLUSTER_PEERS")
+                       .map(peersStr -> parsePeersFromString(peersStr, self, selfInfo)))
+               .orElse(aetherConfig.map(this::generatePeersFromConfig))
+               .or(() -> List.of(selfInfo));
+    }
+
+    private List<NodeInfo> generatePeersFromConfig(AetherConfig aetherConfig) {
+        var nodes = aetherConfig.cluster()
+                                .nodes();
+        var clusterPort = aetherConfig.cluster()
+                                      .ports()
+                                      .cluster();
+        var env = aetherConfig.environment();
+        return IntStream.range(0, nodes)
+                        .mapToObj(i -> createNodeInfoForIndex(i, clusterPort, env))
+                        .toList();
+    }
+
+    private NodeInfo createNodeInfoForIndex(int index, int clusterPort, Environment env) {
+        var host = env == Environment.DOCKER
+                   ? "aether-node-" + index
+                   : "localhost";
+        var port = clusterPort + (env == Environment.LOCAL
+                                  ? index
+                                  : 0);
+        return nodeInfo(NodeId.nodeId("node-" + index), nodeAddress(host, port));
     }
 
     private List<NodeInfo> parsePeersFromString(String peersStr, NodeId self, NodeInfo selfInfo) {
@@ -191,45 +215,58 @@ public record Main(String[] args) {
                           .flatMap(peerStr -> parsePeerAddress(peerStr)
                                               .stream())
                           .toList();
-        // Include self in the peer list if not already there
-        if (peers.stream()
-                 .noneMatch(p -> p.id()
-                                  .equals(self))) {
-            var allPeers = new java.util.ArrayList<>(peers);
+        return ensureSelfIncluded(peers, self, selfInfo);
+    }
+
+    private List<NodeInfo> ensureSelfIncluded(List<NodeInfo> peers, NodeId self, NodeInfo selfInfo) {
+        var selfMissing = peers.stream()
+                               .noneMatch(p -> p.id()
+                                                .equals(self));
+        if (selfMissing) {
+            var allPeers = new ArrayList<>(peers);
             allPeers.add(selfInfo);
             return List.copyOf(allPeers);
         }
         return peers;
     }
 
-    private java.util.Optional<NodeInfo> parsePeerAddress(String peerStr) {
+    private Option<NodeInfo> parsePeerAddress(String peerStr) {
         var parts = peerStr.split(":");
-        if (parts.length == 2) {
-            var host = parts[0];
-            var port = Integer.parseInt(parts[1]);
-            // Generate node ID from address for discovery
-            var nodeId = NodeId.nodeId("node-" + host + "-" + port);
-            return java.util.Optional.of(nodeInfo(nodeId, nodeAddress(host, port)));
-        }else if (parts.length == 3) {
-            // Format: nodeId:host:port
-            var nodeId = NodeId.nodeId(parts[0]);
-            var host = parts[1];
-            var port = Integer.parseInt(parts[2]);
-            return java.util.Optional.of(nodeInfo(nodeId, nodeAddress(host, port)));
-        }
+        return switch (parts.length) {
+            case 2 -> parseHostPortPeer(parts);
+            case 3 -> parseIdHostPortPeer(parts);
+            default -> logInvalidPeerFormat(peerStr);
+        };
+    }
+
+    private Option<NodeInfo> parseHostPortPeer(String[] parts) {
+        var host = parts[0];
+        var port = Integer.parseInt(parts[1]);
+        var nodeId = NodeId.nodeId("node-" + host + "-" + port);
+        return Option.option(nodeInfo(nodeId, nodeAddress(host, port)));
+    }
+
+    private Option<NodeInfo> parseIdHostPortPeer(String[] parts) {
+        var nodeId = NodeId.nodeId(parts[0]);
+        var host = parts[1];
+        var port = Integer.parseInt(parts[2]);
+        return Option.option(nodeInfo(nodeId, nodeAddress(host, port)));
+    }
+
+    private Option<NodeInfo> logInvalidPeerFormat(String peerStr) {
         log.warn("Invalid peer format: {}. Expected host:port or nodeId:host:port", peerStr);
-        return java.util.Optional.empty();
+        return Option.none();
     }
 
-    private java.util.Optional<String> findArg(String prefix) {
-        return Arrays.stream(args)
-                     .filter(arg -> arg.startsWith(prefix))
-                     .map(arg -> arg.substring(prefix.length()))
-                     .findFirst();
+    private Option<String> findArg(String prefix) {
+        return Option.from(Arrays.stream(args)
+                                 .filter(arg -> arg.startsWith(prefix))
+                                 .map(arg -> arg.substring(prefix.length()))
+                                 .findFirst());
     }
 
-    private java.util.Optional<String> findEnv(String name) {
-        return java.util.Optional.ofNullable(System.getenv(name))
-                   .filter(s -> !s.isBlank());
+    private Option<String> findEnv(String name) {
+        return Option.option(System.getenv(name))
+                     .filter(s -> !s.isBlank());
     }
 }

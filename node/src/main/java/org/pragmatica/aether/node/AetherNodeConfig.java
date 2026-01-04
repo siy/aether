@@ -8,7 +8,11 @@ import org.pragmatica.consensus.NodeId;
 import org.pragmatica.consensus.net.NodeInfo;
 import org.pragmatica.consensus.topology.TopologyConfig;
 import org.pragmatica.dht.DHTConfig;
+import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.net.tcp.TlsConfig;
 
 import java.util.List;
@@ -149,5 +153,23 @@ public record AetherNodeConfig(
 
     public NodeId self() {
         return topology.self();
+    }
+
+    /**
+     * Validates the configuration.
+     *
+     * @return success if valid, failure with cause otherwise
+     */
+    public Result<Unit> validate() {
+        if (managementPort < 0 || managementPort > 65535) {
+            return Causes.cause("Invalid management port: " + managementPort)
+                         .result();
+        }
+        if (managementPort != MANAGEMENT_DISABLED && topology.coreNodes()
+                                                             .isEmpty()) {
+            return Causes.cause("At least one core node required when management is enabled")
+                         .result();
+        }
+        return Result.unitResult();
     }
 }

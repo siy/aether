@@ -108,23 +108,11 @@ public final class ConfigValidator {
         if (!tls.autoGenerate()) {
             // User-provided certificates - check paths exist
             tls.certFile()
-               .ifPresent(path -> {
-                   if (!Files.exists(path)) {
-                   errors.add("Certificate file not found: " + path);
-               }
-               });
+               .onPresent(path -> validateFileExists(path, "Certificate file", errors));
             tls.keyFile()
-               .ifPresent(path -> {
-                   if (!Files.exists(path)) {
-                   errors.add("Private key file not found: " + path);
-               }
-               });
+               .onPresent(path -> validateFileExists(path, "Private key file", errors));
             tls.caFile()
-               .ifPresent(path -> {
-                   if (!Files.exists(path)) {
-                   errors.add("CA certificate file not found: " + path);
-               }
-               });
+               .onPresent(path -> validateFileExists(path, "CA certificate file", errors));
             // If not auto-generating, cert and key are required
             if (tls.certPath()
                    .isBlank()) {
@@ -134,6 +122,12 @@ public final class ConfigValidator {
                    .isBlank()) {
                 errors.add("TLS enabled but no key path provided. Set tls.auto_generate = true or provide tls.key_path");
             }
+        }
+    }
+
+    private static void validateFileExists(java.nio.file.Path path, String fileType, List<String> errors) {
+        if (!java.nio.file.Files.exists(path)) {
+            errors.add(fileType + " not found: " + path);
         }
     }
 

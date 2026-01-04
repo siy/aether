@@ -63,12 +63,18 @@ public final class ConfigLoader {
 
     private static Result<AetherConfig> fromDocumentWithOverrides(TomlDocument doc,
                                                                   Map<String, String> overrides) {
+        // Determine environment first
+        var envStr = overrides.getOrDefault("environment",
+                                            doc.getString("cluster", "environment")
+                                               .or("docker"));
+        return Environment.fromString(envStr)
+                          .flatMap(environment -> buildConfig(doc, overrides, environment));
+    }
+
+    private static Result<AetherConfig> buildConfig(TomlDocument doc,
+                                                    Map<String, String> overrides,
+                                                    Environment environment) {
         try{
-            // Determine environment
-            var envStr = overrides.getOrDefault("environment",
-                                                doc.getString("cluster", "environment")
-                                                   .or("docker"));
-            var environment = Environment.fromString(envStr);
             // Start with environment defaults
             var builder = AetherConfig.builder()
                                       .environment(environment);

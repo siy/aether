@@ -1,5 +1,9 @@
 package org.pragmatica.aether.forge.simulator;
 
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.utils.Causes;
+
 import java.time.Duration;
 import java.util.Set;
 
@@ -23,6 +27,11 @@ public sealed interface ChaosEvent {
      */
     Duration duration();
 
+    // Shared validation causes
+    Cause NODE_ID_REQUIRED = Causes.cause("nodeId cannot be null or blank");
+    Cause LEVEL_OUT_OF_RANGE = Causes.cause("level must be between 0 and 1");
+    Cause FAILURE_RATE_OUT_OF_RANGE = Causes.cause("failureRate must be between 0 and 1");
+
     /**
      * Kill a specific node (simulates crash).
      */
@@ -37,12 +46,15 @@ public sealed interface ChaosEvent {
             return "Kill node " + nodeId;
         }
 
-        public static NodeKill kill(String nodeId, Duration duration) {
-            return new NodeKill(nodeId, duration);
+        public static Result<NodeKill> kill(String nodeId, Duration duration) {
+            if (nodeId == null || nodeId.isBlank()) {
+                return NODE_ID_REQUIRED.result();
+            }
+            return Result.success(new NodeKill(nodeId, duration));
         }
 
-        public static NodeKill killFor(String nodeId, long seconds) {
-            return new NodeKill(nodeId, Duration.ofSeconds(seconds));
+        public static Result<NodeKill> killFor(String nodeId, long seconds) {
+            return kill(nodeId, Duration.ofSeconds(seconds));
         }
     }
 
@@ -50,15 +62,17 @@ public sealed interface ChaosEvent {
      * Simulate network partition between node groups.
      */
     record NetworkPartition(Set<String> group1, Set<String> group2, Duration duration) implements ChaosEvent {
-        public NetworkPartition {
-            if (group1 == null || group1.isEmpty()) {
-                throw new IllegalArgumentException("group1 cannot be null or empty");
-            }
-            if (group2 == null || group2.isEmpty()) {
-                throw new IllegalArgumentException("group2 cannot be null or empty");
-            }
-            group1 = Set.copyOf(group1);
-            group2 = Set.copyOf(group2);
+        private static final Cause GROUP1_EMPTY = Causes.cause("group1 cannot be null or empty");
+        private static final Cause GROUP2_EMPTY = Causes.cause("group2 cannot be null or empty");
+
+        public NetworkPartition(Set<String> group1, Set<String> group2, Duration duration) {
+            this.group1 = group1 == null
+                          ? Set.of()
+                          : Set.copyOf(group1);
+            this.group2 = group2 == null
+                          ? Set.of()
+                          : Set.copyOf(group2);
+            this.duration = duration;
         }
 
         @Override
@@ -71,8 +85,14 @@ public sealed interface ChaosEvent {
             return "Network partition between " + group1 + " and " + group2;
         }
 
-        public static NetworkPartition between(Set<String> group1, Set<String> group2, Duration duration) {
-            return new NetworkPartition(group1, group2, duration);
+        public static Result<NetworkPartition> between(Set<String> group1, Set<String> group2, Duration duration) {
+            if (group1 == null || group1.isEmpty()) {
+                return GROUP1_EMPTY.result();
+            }
+            if (group2 == null || group2.isEmpty()) {
+                return GROUP2_EMPTY.result();
+            }
+            return Result.success(new NetworkPartition(group1, group2, duration));
         }
     }
 
@@ -80,14 +100,7 @@ public sealed interface ChaosEvent {
      * Add latency to a specific node's responses.
      */
     record LatencySpike(String nodeId, long latencyMs, Duration duration) implements ChaosEvent {
-        public LatencySpike {
-            if (nodeId == null || nodeId.isBlank()) {
-                throw new IllegalArgumentException("nodeId cannot be null or blank");
-            }
-            if (latencyMs < 0) {
-                throw new IllegalArgumentException("latencyMs must be >= 0");
-            }
-        }
+        private static final Cause LATENCY_NEGATIVE = Causes.cause("latencyMs must be >= 0");
 
         @Override
         public String type() {
@@ -99,8 +112,14 @@ public sealed interface ChaosEvent {
             return "Add " + latencyMs + "ms latency to node " + nodeId;
         }
 
-        public static LatencySpike addLatency(String nodeId, long latencyMs, Duration duration) {
-            return new LatencySpike(nodeId, latencyMs, duration);
+        public static Result<LatencySpike> addLatency(String nodeId, long latencyMs, Duration duration) {
+            if (nodeId == null || nodeId.isBlank()) {
+                return NODE_ID_REQUIRED.result();
+            }
+            if (latencyMs < 0) {
+                return LATENCY_NEGATIVE.result();
+            }
+            return Result.success(new LatencySpike(nodeId, latencyMs, duration));
         }
     }
 
@@ -108,11 +127,7 @@ public sealed interface ChaosEvent {
      * Crash a specific slice on a node.
      */
     record SliceCrash(String sliceArtifact, String nodeId, Duration duration) implements ChaosEvent {
-        public SliceCrash {
-            if (sliceArtifact == null || sliceArtifact.isBlank()) {
-                throw new IllegalArgumentException("sliceArtifact cannot be null or blank");
-            }
-        }
+        private static final Cause ARTIFACT_REQUIRED = Causes.cause("sliceArtifact cannot be null or blank");
 
         @Override
         public String type() {
@@ -127,12 +142,15 @@ public sealed interface ChaosEvent {
             return "Crash slice " + sliceArtifact + target;
         }
 
-        public static SliceCrash crashSlice(String artifact, String nodeId, Duration duration) {
-            return new SliceCrash(artifact, nodeId, duration);
+        public static Result<SliceCrash> crashSlice(String artifact, String nodeId, Duration duration) {
+            if (artifact == null || artifact.isBlank()) {
+                return ARTIFACT_REQUIRED.result();
+            }
+            return Result.success(new SliceCrash(artifact, nodeId, duration));
         }
 
-        public static SliceCrash crashSliceEverywhere(String artifact, Duration duration) {
-            return new SliceCrash(artifact, null, duration);
+        public static Result<SliceCrash> crashSliceEverywhere(String artifact, Duration duration) {
+            return crashSlice(artifact, null, duration);
         }
     }
 
@@ -140,15 +158,6 @@ public sealed interface ChaosEvent {
      * Simulate memory pressure on a node.
      */
     record MemoryPressure(String nodeId, double level, Duration duration) implements ChaosEvent {
-        public MemoryPressure {
-            if (nodeId == null || nodeId.isBlank()) {
-                throw new IllegalArgumentException("nodeId cannot be null or blank");
-            }
-            if (level < 0 || level > 1) {
-                throw new IllegalArgumentException("level must be between 0 and 1");
-            }
-        }
-
         @Override
         public String type() {
             return "MEMORY_PRESSURE";
@@ -159,8 +168,14 @@ public sealed interface ChaosEvent {
             return String.format("Simulate %.0f%% memory pressure on node %s", level * 100, nodeId);
         }
 
-        public static MemoryPressure onNode(String nodeId, double level, Duration duration) {
-            return new MemoryPressure(nodeId, level, duration);
+        public static Result<MemoryPressure> onNode(String nodeId, double level, Duration duration) {
+            if (nodeId == null || nodeId.isBlank()) {
+                return NODE_ID_REQUIRED.result();
+            }
+            if (level < 0 || level > 1) {
+                return LEVEL_OUT_OF_RANGE.result();
+            }
+            return Result.success(new MemoryPressure(nodeId, level, duration));
         }
     }
 
@@ -168,15 +183,6 @@ public sealed interface ChaosEvent {
      * Simulate CPU spike on a node.
      */
     record CpuSpike(String nodeId, double level, Duration duration) implements ChaosEvent {
-        public CpuSpike {
-            if (nodeId == null || nodeId.isBlank()) {
-                throw new IllegalArgumentException("nodeId cannot be null or blank");
-            }
-            if (level < 0 || level > 1) {
-                throw new IllegalArgumentException("level must be between 0 and 1");
-            }
-        }
-
         @Override
         public String type() {
             return "CPU_SPIKE";
@@ -187,8 +193,14 @@ public sealed interface ChaosEvent {
             return String.format("Simulate %.0f%% CPU usage on node %s", level * 100, nodeId);
         }
 
-        public static CpuSpike onNode(String nodeId, double level, Duration duration) {
-            return new CpuSpike(nodeId, level, duration);
+        public static Result<CpuSpike> onNode(String nodeId, double level, Duration duration) {
+            if (nodeId == null || nodeId.isBlank()) {
+                return NODE_ID_REQUIRED.result();
+            }
+            if (level < 0 || level > 1) {
+                return LEVEL_OUT_OF_RANGE.result();
+            }
+            return Result.success(new CpuSpike(nodeId, level, duration));
         }
     }
 
@@ -196,12 +208,6 @@ public sealed interface ChaosEvent {
      * Inject random failures into slice invocations.
      */
     record InvocationFailure(String sliceArtifact, double failureRate, Duration duration) implements ChaosEvent {
-        public InvocationFailure {
-            if (failureRate < 0 || failureRate > 1) {
-                throw new IllegalArgumentException("failureRate must be between 0 and 1");
-            }
-        }
-
         @Override
         public String type() {
             return "INVOCATION_FAILURE";
@@ -215,12 +221,15 @@ public sealed interface ChaosEvent {
             return String.format("Inject %.0f%% failure rate for %s", failureRate * 100, target);
         }
 
-        public static InvocationFailure forSlice(String artifact, double rate, Duration duration) {
-            return new InvocationFailure(artifact, rate, duration);
+        public static Result<InvocationFailure> forSlice(String artifact, double rate, Duration duration) {
+            if (rate < 0 || rate > 1) {
+                return FAILURE_RATE_OUT_OF_RANGE.result();
+            }
+            return Result.success(new InvocationFailure(artifact, rate, duration));
         }
 
-        public static InvocationFailure forAllSlices(double rate, Duration duration) {
-            return new InvocationFailure(null, rate, duration);
+        public static Result<InvocationFailure> forAllSlices(double rate, Duration duration) {
+            return forSlice(null, rate, duration);
         }
     }
 
@@ -228,14 +237,8 @@ public sealed interface ChaosEvent {
      * Custom chaos event with arbitrary action.
      */
     record CustomChaos(String name, String description, Runnable action, Duration duration) implements ChaosEvent {
-        public CustomChaos {
-            if (name == null || name.isBlank()) {
-                throw new IllegalArgumentException("name cannot be null or blank");
-            }
-            if (action == null) {
-                throw new IllegalArgumentException("action cannot be null");
-            }
-        }
+        private static final Cause NAME_REQUIRED = Causes.cause("name cannot be null or blank");
+        private static final Cause ACTION_REQUIRED = Causes.cause("action cannot be null");
 
         @Override
         public String type() {
@@ -249,8 +252,14 @@ public sealed interface ChaosEvent {
                    : name;
         }
 
-        public static CustomChaos custom(String name, String description, Runnable action, Duration duration) {
-            return new CustomChaos(name, description, action, duration);
+        public static Result<CustomChaos> custom(String name, String description, Runnable action, Duration duration) {
+            if (name == null || name.isBlank()) {
+                return NAME_REQUIRED.result();
+            }
+            if (action == null) {
+                return ACTION_REQUIRED.result();
+            }
+            return Result.success(new CustomChaos(name, description, action, duration));
         }
     }
 }

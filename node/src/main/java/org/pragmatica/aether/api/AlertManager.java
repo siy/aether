@@ -6,6 +6,7 @@ import org.pragmatica.cluster.node.rabia.RabiaNode;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.consensus.NodeId;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 
@@ -156,23 +157,43 @@ public class AlertManager {
     /**
      * Check if a metric value exceeds threshold and return alert JSON if triggered.
      */
-    public String checkThreshold(String metric, NodeId nodeId, double value) {
+    public Option<String> checkThreshold(String metric, NodeId nodeId, double value) {
         var threshold = thresholds.get(metric);
         if (threshold == null) {
-            return null;
+            return Option.none();
         }
         var alertKey = metric + ":" + nodeId.id();
         var existing = activeAlerts.get(alertKey);
-        var severity = threshold.severity(value);
-        if (severity == null) {
-            // Value is normal, clear any existing alert
-            if (existing != null) {
-                activeAlerts.remove(alertKey);
-                addToHistory(metric, nodeId, value, existing.severity, "RESOLVED");
-            }
-            return null;
+        return threshold.severity(value)
+                        .fold(() -> handleNormalValue(alertKey, existing, metric, nodeId, value),
+                              severity -> handleAlertValue(alertKey,
+                                                           existing,
+                                                           severity,
+                                                           metric,
+                                                           nodeId,
+                                                           value,
+                                                           threshold));
+    }
+
+    private Option<String> handleNormalValue(String alertKey,
+                                             ActiveAlert existing,
+                                             String metric,
+                                             NodeId nodeId,
+                                             double value) {
+        if (existing != null) {
+            activeAlerts.remove(alertKey);
+            addToHistory(metric, nodeId, value, existing.severity, "RESOLVED");
         }
-        // Check if this is a new alert or severity change
+        return Option.none();
+    }
+
+    private Option<String> handleAlertValue(String alertKey,
+                                            ActiveAlert existing,
+                                            String severity,
+                                            String metric,
+                                            NodeId nodeId,
+                                            double value,
+                                            Threshold threshold) {
         if (existing == null || !existing.severity.equals(severity)) {
             var alert = new ActiveAlert(metric,
                                         nodeId,
@@ -182,10 +203,9 @@ public class AlertManager {
                                         System.currentTimeMillis());
             activeAlerts.put(alertKey, alert);
             addToHistory(metric, nodeId, value, severity, "TRIGGERED");
-            // Return alert message to broadcast
-            return buildAlertMessage(alert);
+            return Option.option(buildAlertMessage(alert));
         }
-        return null;
+        return Option.none();
     }
 
     /**
@@ -327,10 +347,10 @@ public class AlertManager {
     }
 
     private record Threshold(double warning, double critical) {
-        String severity(double value) {
-            if (value >= critical) return "CRITICAL";
-            if (value >= warning) return "WARNING";
-            return null;
+        Option<String> severity(double value) {
+            if (value >= critical) return Option.option("CRITICAL");
+            if (value >= warning) return Option.option("WARNING");
+            return Option.none();
         }
 
         double forSeverity(String severity) {

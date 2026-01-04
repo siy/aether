@@ -48,6 +48,7 @@ import org.pragmatica.dht.DHTNode;
 import org.pragmatica.dht.LocalDHTClient;
 import org.pragmatica.dht.storage.MemoryStorageEngine;
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.messaging.MessageRouter;
@@ -139,17 +140,25 @@ public interface AetherNode {
      */
     <R> Promise<List<R>> apply(List<KVCommand<AetherKey>> commands);
 
-    static AetherNode aetherNode(AetherNodeConfig config) {
+    static Result<AetherNode> aetherNode(AetherNodeConfig config) {
         var router = MessageRouter.mutable();
         var serializer = furySerializer(AetherCustomClasses::configure);
         var deserializer = furyDeserializer(AetherCustomClasses::configure);
         return aetherNode(config, router, serializer, deserializer);
     }
 
-    static AetherNode aetherNode(AetherNodeConfig config,
-                                 MessageRouter.MutableRouter router,
-                                 Serializer serializer,
-                                 Deserializer deserializer) {
+    static Result<AetherNode> aetherNode(AetherNodeConfig config,
+                                         MessageRouter.MutableRouter router,
+                                         Serializer serializer,
+                                         Deserializer deserializer) {
+        return config.validate()
+                     .map(_ -> createNode(config, router, serializer, deserializer));
+    }
+
+    private static AetherNode createNode(AetherNodeConfig config,
+                                         MessageRouter.MutableRouter router,
+                                         Serializer serializer,
+                                         Deserializer deserializer) {
         record aetherNode(
         AetherNodeConfig config,
         MessageRouter.MutableRouter router,
@@ -195,16 +204,7 @@ public interface AetherNode {
                                        .flatMap(_ -> httpRouter.fold(
                 () -> Promise.success(Unit.unit()),
                 HttpRouter::start))
-                                       .flatMap(_ -> {
-                                                    // Start cluster node asynchronously - don't block on cluster formation
-                // This allows health checks to work while cluster is forming
-                clusterNode.start()
-                           .onSuccess(_ -> log.info("Aether node {} cluster formation complete",
-                                                    self()))
-                           .onFailure(cause -> log.error("Cluster formation failed: {}",
-                                                         cause.message()));
-                                                    return Promise.success(Unit.unit());
-                                                })
+                                       .flatMap(_ -> startClusterAsync())
                                        .onSuccess(_ -> log.info("Aether node {} HTTP server started, cluster forming...",
                                                                 self()));
             }
@@ -225,6 +225,17 @@ public interface AetherNode {
                                  .flatMap(_ -> clusterNode.stop())
                                  .onSuccess(_ -> log.info("Aether node {} stopped",
                                                           self()));
+            }
+
+            private Promise<Unit> startClusterAsync() {
+                // Start cluster node asynchronously - don't block on cluster formation
+                // This allows health checks to work while cluster is forming
+                clusterNode.start()
+                           .onSuccess(_ -> log.info("Aether node {} cluster formation complete",
+                                                    self()))
+                           .onFailure(cause -> log.error("Cluster formation failed: {}",
+                                                         cause.message()));
+                return Promise.success(Unit.unit());
             }
 
             @Override

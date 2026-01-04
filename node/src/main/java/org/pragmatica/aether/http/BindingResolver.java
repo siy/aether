@@ -66,29 +66,25 @@ class BindingResolverImpl implements BindingResolver {
                                                   .toResult(new HttpRouterError.BindingFailed(binding.param(),
                                                                                               "Header not found: " + h.name()));
             case BindingSource.Body ignored -> parseBody(context.body());
-            case BindingSource.Cookie c -> Result.failure(
-            new HttpRouterError.BindingFailed(binding.param(), "Cookie binding not implemented: " + c.name()));
-            case BindingSource.Value ignored -> Result.failure(
-            new HttpRouterError.BindingFailed(binding.param(), "Unsupported binding source for HTTP: value"));
-            case BindingSource.Key ignored -> Result.failure(
-            new HttpRouterError.BindingFailed(binding.param(), "Unsupported binding source for HTTP: key"));
-            case BindingSource.Metadata ignored -> Result.failure(
-            new HttpRouterError.BindingFailed(binding.param(), "Unsupported binding source for HTTP: metadata"));
-            case BindingSource.RequestField ignored -> Result.failure(
-            new HttpRouterError.BindingFailed(binding.param(), "Unsupported binding source for HTTP: request"));
+            case BindingSource.Cookie c -> new HttpRouterError.BindingFailed(
+            binding.param(), "Cookie binding not implemented: " + c.name()).result();
+            case BindingSource.Value ignored -> new HttpRouterError.BindingFailed(
+            binding.param(), "Unsupported binding source for HTTP: value").result();
+            case BindingSource.Key ignored -> new HttpRouterError.BindingFailed(
+            binding.param(), "Unsupported binding source for HTTP: key").result();
+            case BindingSource.Metadata ignored -> new HttpRouterError.BindingFailed(
+            binding.param(), "Unsupported binding source for HTTP: metadata").result();
+            case BindingSource.RequestField ignored -> new HttpRouterError.BindingFailed(
+            binding.param(), "Unsupported binding source for HTTP: request").result();
         };
     }
 
     private Result<Object> parseBody(byte[] body) {
         if (body == null || body.length == 0) {
-            return Result.failure(new HttpRouterError.BindingFailed("body", "Request body is empty"));
+            return new HttpRouterError.BindingFailed("body", "Request body is empty").result();
         }
-        try{
-            var buf = io.netty.buffer.Unpooled.wrappedBuffer(body);
-            return Result.success(deserializer.read(buf));
-        } catch (Exception e) {
-            return Result.failure(new HttpRouterError.DeserializationFailed(
-            org.pragmatica.lang.utils.Causes.fromThrowable(e)));
-        }
+        return Result.lift(
+        ex -> new HttpRouterError.DeserializationFailed(org.pragmatica.lang.utils.Causes.fromThrowable(ex)),
+        () -> deserializer.read(io.netty.buffer.Unpooled.wrappedBuffer(body)));
     }
 }

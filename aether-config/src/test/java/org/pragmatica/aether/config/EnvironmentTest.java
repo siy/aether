@@ -35,39 +35,38 @@ class EnvironmentTest {
 
     @Test
     void fromString_parsesLocalVariants() {
-        assertThat(Environment.fromString("local")).isEqualTo(Environment.LOCAL);
-        assertThat(Environment.fromString("LOCAL")).isEqualTo(Environment.LOCAL);
-        assertThat(Environment.fromString("Local")).isEqualTo(Environment.LOCAL);
+        assertThat(Environment.fromString("local").unwrap()).isEqualTo(Environment.LOCAL);
+        assertThat(Environment.fromString("LOCAL").unwrap()).isEqualTo(Environment.LOCAL);
+        assertThat(Environment.fromString("Local").unwrap()).isEqualTo(Environment.LOCAL);
     }
 
     @Test
     void fromString_parsesDockerVariants() {
-        assertThat(Environment.fromString("docker")).isEqualTo(Environment.DOCKER);
-        assertThat(Environment.fromString("DOCKER")).isEqualTo(Environment.DOCKER);
-        assertThat(Environment.fromString("Docker")).isEqualTo(Environment.DOCKER);
+        assertThat(Environment.fromString("docker").unwrap()).isEqualTo(Environment.DOCKER);
+        assertThat(Environment.fromString("DOCKER").unwrap()).isEqualTo(Environment.DOCKER);
+        assertThat(Environment.fromString("Docker").unwrap()).isEqualTo(Environment.DOCKER);
     }
 
     @Test
     void fromString_parsesKubernetesVariants() {
-        assertThat(Environment.fromString("kubernetes")).isEqualTo(Environment.KUBERNETES);
-        assertThat(Environment.fromString("KUBERNETES")).isEqualTo(Environment.KUBERNETES);
-        assertThat(Environment.fromString("k8s")).isEqualTo(Environment.KUBERNETES);
-        assertThat(Environment.fromString("K8S")).isEqualTo(Environment.KUBERNETES);
+        assertThat(Environment.fromString("kubernetes").unwrap()).isEqualTo(Environment.KUBERNETES);
+        assertThat(Environment.fromString("KUBERNETES").unwrap()).isEqualTo(Environment.KUBERNETES);
+        assertThat(Environment.fromString("k8s").unwrap()).isEqualTo(Environment.KUBERNETES);
+        assertThat(Environment.fromString("K8S").unwrap()).isEqualTo(Environment.KUBERNETES);
     }
 
     @Test
     void fromString_defaultsToDockerForBlank() {
-        assertThat(Environment.fromString("")).isEqualTo(Environment.DOCKER);
-        assertThat(Environment.fromString(null)).isEqualTo(Environment.DOCKER);
-        assertThat(Environment.fromString("  ")).isEqualTo(Environment.DOCKER);
+        assertThat(Environment.fromString("").unwrap()).isEqualTo(Environment.DOCKER);
+        assertThat(Environment.fromString(null).unwrap()).isEqualTo(Environment.DOCKER);
+        assertThat(Environment.fromString("  ").unwrap()).isEqualTo(Environment.DOCKER);
     }
 
     @Test
-    void fromString_throwsForUnknown() {
-        org.junit.jupiter.api.Assertions.assertThrows(
-            IllegalArgumentException.class,
-            () -> Environment.fromString("unknown")
-        );
+    void fromString_failsForUnknown() {
+        Environment.fromString("unknown")
+            .onSuccessRun(org.junit.jupiter.api.Assertions::fail)
+            .onFailure(cause -> assertThat(cause.message()).contains("Unknown environment"));
     }
 
     @Test

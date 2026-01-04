@@ -134,18 +134,20 @@ class HttpRouterImpl implements HttpRouter {
         return Promise.promise(promise -> {
                                    if (serverChannel != null) {
                                    serverChannel.close()
-                                                .addListener(f -> {
-                                                                 bossGroup.shutdownGracefully();
-                                                                 workerGroup.shutdownGracefully();
-                                                                 log.info("HTTP router stopped");
-                                                                 promise.succeed(unit());
-                                                             });
+                                                .addListener(_ -> shutdownEventLoops(promise));
                                }else {
-                                   bossGroup.shutdownGracefully();
-                                   workerGroup.shutdownGracefully();
-                                   promise.succeed(unit());
+                                   shutdownEventLoops(promise);
                                }
                                });
+    }
+
+    private void shutdownEventLoops(Promise<Unit> promise) {
+        var bossFuture = bossGroup.shutdownGracefully();
+        var workerFuture = workerGroup.shutdownGracefully();
+        bossFuture.addListener(_ -> workerFuture.addListener(_ -> {
+                                                                 log.info("HTTP router stopped");
+                                                                 promise.succeed(unit());
+                                                             }));
     }
 }
 
@@ -185,16 +187,15 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                   .onPresent(method -> {
                                  log.debug("Received {} {}", method, path);
                                  routeRegistry.match(method, path)
-                                              .fold(() -> {
-                                                        responseWriter.writeError(ctx,
-                                                                                  HttpResponseStatus.NOT_FOUND,
-                                                                                  new HttpRouterError.RouteNotFound(path));
-                                                        return null;
-                                                    },
-                                                    match -> {
-                                                        handleMatchedRoute(ctx, method, path, decoder, request, match);
-                                                        return null;
-                                                    });
+                                              .onEmpty(() -> responseWriter.writeError(ctx,
+                                                                                       HttpResponseStatus.NOT_FOUND,
+                                                                                       new HttpRouterError.RouteNotFound(path)))
+                                              .onPresent(match -> handleMatchedRoute(ctx,
+                                                                                     method,
+                                                                                     path,
+                                                                                     decoder,
+                                                                                     request,
+                                                                                     match));
                              });
     }
 

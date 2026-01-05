@@ -2,6 +2,7 @@ package org.pragmatica.aether.node;
 
 import org.pragmatica.aether.http.RouterConfig;
 import org.pragmatica.aether.slice.SliceActionConfig;
+import org.pragmatica.aether.config.TTMConfig;
 import org.pragmatica.aether.slice.serialization.FurySerializerFactoryProvider;
 import org.pragmatica.consensus.rabia.ProtocolConfig;
 import org.pragmatica.consensus.NodeId;
@@ -30,6 +31,7 @@ import static org.pragmatica.lang.io.TimeSpan.timeSpan;
  * @param httpRouter      HTTP router configuration (empty to disable)
  * @param artifactRepo    DHT configuration for artifact repository (replication factor, 0 = full)
  * @param tls             TLS configuration for secure connections (empty for plain TCP/HTTP)
+ * @param ttm             TTM (Tiny Time Mixers) predictive scaling configuration
  */
 public record AetherNodeConfig(
  TopologyConfig topology,
@@ -38,7 +40,8 @@ public record AetherNodeConfig(
  int managementPort,
  Option<RouterConfig> httpRouter,
  DHTConfig artifactRepo,
- Option<TlsConfig> tls) {
+ Option<TlsConfig> tls,
+ TTMConfig ttm) {
     public static final int DEFAULT_MANAGEMENT_PORT = 8080;
     public static final int MANAGEMENT_DISABLED = 0;
 
@@ -111,7 +114,8 @@ public record AetherNodeConfig(
                                     managementPort,
                                     httpRouter,
                                     artifactRepoConfig,
-                                    Option.empty());
+                                    Option.empty(),
+                                    TTMConfig.DISABLED);
     }
 
     public static AetherNodeConfig testConfig(NodeId self, int port, List<NodeInfo> coreNodes) {
@@ -126,7 +130,8 @@ public record AetherNodeConfig(
                                     MANAGEMENT_DISABLED,
                                     Option.empty(),
                                     DHTConfig.FULL,
-                                    Option.empty());
+                                    Option.empty(),
+                                    TTMConfig.DISABLED);
     }
 
     /**
@@ -148,7 +153,22 @@ public record AetherNodeConfig(
                                     managementPort,
                                     httpRouter,
                                     artifactRepo,
-                                    tlsOption);
+                                    tlsOption,
+                                    ttm);
+    }
+
+    /**
+     * Create a new configuration with TTM enabled.
+     */
+    public AetherNodeConfig withTTM(TTMConfig ttmConfig) {
+        return new AetherNodeConfig(topology,
+                                    protocol,
+                                    sliceAction,
+                                    managementPort,
+                                    httpRouter,
+                                    artifactRepo,
+                                    tls,
+                                    ttmConfig);
     }
 
     public NodeId self() {

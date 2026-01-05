@@ -23,8 +23,10 @@ intelligent orchestration, and seamless multi-cloud deployment without requiring
 
 - **slice-api/** - Slice interface definitions (`Slice`, `SliceMethod`, `SliceRoute`)
 - **slice/** - Slice management (`SliceStore`, `SliceState`, `Artifact` types, KV schema)
-- **node/** - Runtime node implementation (`NodeDeploymentManager`, `ManagementServer`, metrics, controller)
+- **node/** - Runtime node implementation (`NodeDeploymentManager`, `ManagementServer`, metrics, controller, TTM integration)
 - **cluster/** - Cluster networking and KVStore (`NettyClusterNetwork`, `KVStore`)
+- **aether-ttm/** - TTM (Tiny Time Mixers) ONNX inference for predictive scaling
+- **aether-config/** - Configuration types (`AetherConfig`, `TTMConfig`)
 - **example-slice/** - Reference implementation (`StringProcessorSlice`)
 - **forge/** - Aether Forge: Standalone simulator CLI with visual dashboard for load/chaos testing
 - **examples/order-demo/** - Complete order domain demo (5 slices)
@@ -161,8 +163,44 @@ Desired cluster configuration stored in consensus KV-Store. Created by:
 **Controller Types:**
 
 - **DecisionTreeController** (Layer 1): Deterministic rules, always running, evaluated every 1 second
-- **Future: SLM integration** (Layer 2): Local pattern learning, evaluated every 2-5 seconds
+- **TTM/AdaptiveDecisionTree** (Layer 2): ONNX-based predictions, leader-only, evaluated every 60 seconds
 - **Future: LLM integration** (Layer 3): Cloud-based strategic planning, evaluated every 30-60 seconds
+
+**TTM Two-Tier Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Tier 2: TTM Model (Proactive)                          │
+│  Frequency: 60 seconds                                   │
+│  Scope: Leader-only                                      │
+│  Input: MinuteAggregator (60-minute sliding window)     │
+│  Output: ScalingRecommendation, threshold adjustments   │
+├─────────────────────────────────────────────────────────┤
+│  Tier 1: Decision Tree (Reactive)                       │
+│  Frequency: 1 second                                     │
+│  Scope: Leader-only                                      │
+│  Input: ClusterMetricsSnapshot                          │
+│  Output: BlueprintChanges                               │
+└─────────────────────────────────────────────────────────┘
+```
+
+**TTM Components:**
+- `TTMPredictor` - ONNX Runtime wrapper for model inference
+- `TTMManager` - Leader-aware lifecycle, periodic evaluation
+- `ForecastAnalyzer` - Converts predictions to `ScalingRecommendation`
+- `AdaptiveDecisionTree` - Wraps `DecisionTreeController`, adjusts thresholds on forecast
+
+**TTM Configuration (aether.toml):**
+
+```toml
+[ttm]
+enabled = true
+model_path = "models/ttm-aether.onnx"
+input_window_minutes = 60          # 1-120
+evaluation_interval_ms = 60000     # 10000-300000
+confidence_threshold = 0.7         # 0.0-1.0
+prediction_horizon = 1             # 1-10
+```
 
 **Controller Responsibilities**:
 
@@ -453,13 +491,29 @@ public enum SliceState {
 
 ### Message Router Pattern
 
-For decoupled component communication:
+For decoupled component communication using ImmutableRouter with Entry-based configuration:
 
 ```java
-router.addRoute(ValuePut.class, this::onValuePut);
-router.addRoute(ValueRemove.class, this::onValueRemove);
-router.addRoute(QuorumStateNotification.class, this::onQuorumStateChange);
+// Collect route entries (production code)
+var entries = new ArrayList<MessageRouter.Entry<?>>();
+entries.add(MessageRouter.Entry.route(ValuePut.class, this::onValuePut));
+entries.add(MessageRouter.Entry.route(ValueRemove.class, this::onValueRemove));
+entries.add(MessageRouter.Entry.route(QuorumStateNotification.class, this::onQuorumStateChange));
+
+// For sealed hierarchies, use SealedBuilder for compile-time validation
+var sealedEntries = SealedBuilder.from(TopologyChangeNotification.class)
+    .route(route(NodeAdded.class, this::onNodeAdded),
+           route(NodeRemoved.class, this::onNodeRemoved),
+           route(NodeDown.class, this::onNodeDown));
+
+// Build and wire router (validates sealed hierarchies)
+RabiaNode.buildAndWireRouter(delegateRouter, allEntries);
 ```
+
+**Key Points:**
+- Use `DelegateRouter` for components that need routing before router is built
+- Use `ImmutableRouter` in production (MutableRouter only for tests)
+- `SealedBuilder` validates that all sealed hierarchy variants have routes
 
 ## Development Status
 
@@ -488,12 +542,14 @@ router.addRoute(QuorumStateNotification.class, this::onQuorumStateChange);
 - InvocationHandler (server-side method dispatch)
 - ManagementServer (HTTP API for cluster management)
 - AetherCli (CLI with REPL and batch modes)
+- TTM integration (aether-ttm module, ONNX inference, AdaptiveDecisionTree)
+- MinuteAggregator for TTM input preparation
 
 ### Planned 📋
 
 - CLI polish and documentation
 - Agent API documentation for direct cluster management
-- SLM integration experiments (Layer 2)
+- TTM model training pipeline
 - LLM integration experiments (Layer 3)
 
 ## Important Implementation Notes
@@ -536,6 +592,7 @@ Use sealed interfaces for domain-specific errors:
 - `SliceError` - Slice lifecycle failures
 - `RegistrationError` - User registration failures
 - `RepositoryError` - Data access failures
+- `TTMError` - TTM inference failures (ModelLoadFailed, InferenceFailed, InsufficientData, NotLeader, Disabled)
 
 ## Testing Framework and Patterns
 
@@ -794,6 +851,11 @@ cd example-slice && mvn test
 - **SliceInvoker**: `node/src/main/java/org/pragmatica/aether/invoke/SliceInvoker.java`
 - **ManagementServer**: `node/src/main/java/org/pragmatica/aether/api/ManagementServer.java`
 - **AetherCli**: `cli/src/main/java/org/pragmatica/aether/cli/AetherCli.java`
+- **TTM Core**: `aether-ttm/src/main/java/org/pragmatica/aether/ttm/` - ONNX predictor, forecast types
+- **TTMConfig**: `aether-config/src/main/java/org/pragmatica/aether/config/TTMConfig.java`
+- **TTMManager**: `node/src/main/java/org/pragmatica/aether/ttm/TTMManager.java` - Leader-aware lifecycle
+- **AdaptiveDecisionTree**: `node/src/main/java/org/pragmatica/aether/ttm/AdaptiveDecisionTree.java`
+- **MinuteAggregator**: `node/src/main/java/org/pragmatica/aether/metrics/MinuteAggregator.java`
 - **Rabia Consensus**: pragmatica-lite `consensus` module (`org.pragmatica.consensus.rabia`)
 - **KVStore**: `cluster/src/main/java/org/pragmatica/cluster/state/kvstore/`
 - **ForgeServer**: `forge/src/main/java/org/pragmatica/aether/forge/ForgeServer.java` - Aether Forge main entry

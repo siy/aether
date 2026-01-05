@@ -75,6 +75,16 @@
                 <artifactId>artifact-repo</artifactId>
                 <version>${aether.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.pragmatica-lite.aether</groupId>
+                <artifactId>aether-ttm</artifactId>
+                <version>${aether.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.pragmatica-lite.aether</groupId>
+                <artifactId>aether-config</artifactId>
+                <version>${aether.version}</version>
+            </dependency>
 
             <!-- Pragmatica Lite -->
             <dependency>

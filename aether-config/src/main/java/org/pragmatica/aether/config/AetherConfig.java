@@ -30,13 +30,15 @@ package org.pragmatica.aether.config;
  * @param tls        TLS configuration (when cluster.tls = true)
  * @param docker     Docker-specific settings
  * @param kubernetes Kubernetes-specific settings
+ * @param ttm        TTM (Tiny Time Mixers) predictive scaling configuration
  */
 public record AetherConfig(
  ClusterConfig cluster,
  NodeConfig node,
  TlsConfig tls,
  DockerConfig docker,
- KubernetesConfig kubernetes) {
+ KubernetesConfig kubernetes,
+ TTMConfig ttm) {
     /**
      * Create configuration with defaults for specified environment.
      */
@@ -52,7 +54,8 @@ public record AetherConfig(
         : null,
         env == Environment.KUBERNETES
         ? KubernetesConfig.defaults()
-        : null);
+        : null,
+        TTMConfig.DISABLED);
     }
 
     /**
@@ -93,6 +96,7 @@ public record AetherConfig(
         private TlsConfig tlsConfig;
         private DockerConfig dockerConfig;
         private KubernetesConfig kubernetesConfig;
+        private TTMConfig ttmConfig;
 
         public Builder environment(Environment environment) {
             this.environment = environment;
@@ -139,6 +143,11 @@ public record AetherConfig(
             return this;
         }
 
+        public Builder ttm(TTMConfig ttmConfig) {
+            this.ttmConfig = ttmConfig;
+            return this;
+        }
+
         public AetherConfig build() {
             // Start with environment defaults
             var base = AetherConfig.forEnvironment(environment);
@@ -175,7 +184,10 @@ public record AetherConfig(
                            : (environment == Environment.KUBERNETES
                               ? KubernetesConfig.defaults()
                               : null);
-            return new AetherConfig(clusterConfig, nodeConfig, finalTls, finalDocker, finalK8s);
+            var finalTtm = ttmConfig != null
+                           ? ttmConfig
+                           : TTMConfig.DISABLED;
+            return new AetherConfig(clusterConfig, nodeConfig, finalTls, finalDocker, finalK8s, finalTtm);
         }
     }
 }

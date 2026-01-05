@@ -8,6 +8,8 @@ import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherKey.BlueprintKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.aether.slice.kvstore.AetherValue.BlueprintValue;
+import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValuePut;
+import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValueRemove;
 import org.pragmatica.consensus.leader.LeaderNotification.LeaderChange;
 import org.pragmatica.consensus.NodeId;
 import org.pragmatica.cluster.node.ClusterNode;
@@ -42,6 +44,18 @@ public interface ControlLoop {
 
     @MessageReceiver
     void onTopologyChange(TopologyChangeNotification topologyChange);
+
+    /**
+     * Handle blueprint creation/update from KVStore.
+     */
+    @MessageReceiver
+    void onValuePut(ValuePut<AetherKey, AetherValue> valuePut);
+
+    /**
+     * Handle blueprint removal from KVStore.
+     */
+    @MessageReceiver
+    void onValueRemove(ValueRemove<AetherKey, AetherValue> valueRemove);
 
     /**
      * Register a blueprint for controller management.
@@ -126,6 +140,26 @@ class ControlLoopImpl implements ControlLoop {
             case NodeAdded(_, List<NodeId> newTopology) -> topology.set(newTopology);
             case NodeRemoved(_, List<NodeId> newTopology) -> topology.set(newTopology);
             default -> {}
+        }
+    }
+
+    @Override
+    public void onValuePut(ValuePut<AetherKey, AetherValue> valuePut) {
+        var key = valuePut.cause()
+                          .key();
+        var value = valuePut.cause()
+                            .value();
+        if (key instanceof BlueprintKey blueprintKey && value instanceof BlueprintValue blueprintValue) {
+            registerBlueprint(blueprintKey.artifact(), (int) blueprintValue.instanceCount());
+        }
+    }
+
+    @Override
+    public void onValueRemove(ValueRemove<AetherKey, AetherValue> valueRemove) {
+        var key = valueRemove.cause()
+                             .key();
+        if (key instanceof BlueprintKey blueprintKey) {
+            unregisterBlueprint(blueprintKey.artifact());
         }
     }
 

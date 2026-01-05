@@ -8,10 +8,12 @@ import org.pragmatica.aether.slice.kvstore.AetherValue;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.cluster.state.kvstore.KVStore;
 import org.pragmatica.cluster.node.rabia.RabiaNode;
+import org.pragmatica.consensus.leader.LeaderNotification.LeaderChange;
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
+import org.pragmatica.messaging.MessageReceiver;
 import org.pragmatica.utility.KSUID;
 
 import java.util.List;
@@ -37,12 +39,72 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
     // Local cache of rolling updates (authoritative source is KV-Store)
     private final Map<String, RollingUpdate> updates = new ConcurrentHashMap<>();
 
+    // Leader tracking for write operations
+    private volatile boolean isLeader = false;
+
     private RollingUpdateManagerImpl(RabiaNode<KVCommand<AetherKey>> clusterNode,
                                      KVStore<AetherKey, AetherValue> kvStore,
                                      InvocationMetricsCollector metricsCollector) {
         this.clusterNode = clusterNode;
         this.kvStore = kvStore;
         this.metricsCollector = metricsCollector;
+        // Restore state from KV-Store
+        restoreState();
+    }
+
+    /**
+     * Handle leader change notifications.
+     */
+    @MessageReceiver
+    public void onLeaderChange(LeaderChange leaderChange) {
+        isLeader = leaderChange.localNodeIsLeader();
+        if (isLeader) {
+            log.info("Rolling update manager active (leader)");
+            restoreState();
+        } else {
+            log.info("Rolling update manager passive (follower)");
+        }
+    }
+
+    /**
+     * Restore rolling update state from KV-Store on startup or leader change.
+     */
+    private void restoreState() {
+        var snapshot = kvStore.snapshot();
+        int restoredCount = 0;
+        for (var entry : snapshot.entrySet()) {
+            if (entry.getKey() instanceof AetherKey.RollingUpdateKey ruk && entry.getValue() instanceof AetherValue.RollingUpdateValue ruv) {
+                var state = RollingUpdateState.valueOf(ruv.state());
+                var routing = new VersionRouting(ruv.newWeight(), ruv.oldWeight());
+                var thresholds = new HealthThresholds(ruv.maxErrorRate(),
+                                                      ruv.maxLatencyMs(),
+                                                      ruv.requireManualApproval());
+                var cleanupPolicy = CleanupPolicy.valueOf(ruv.cleanupPolicy());
+                var update = new RollingUpdate(ruv.updateId(),
+                                               ruv.artifactBase(),
+                                               ruv.oldVersion(),
+                                               ruv.newVersion(),
+                                               state,
+                                               routing,
+                                               thresholds,
+                                               cleanupPolicy,
+                                               ruv.newInstances(),
+                                               ruv.createdAt(),
+                                               ruv.updatedAt());
+                updates.put(update.updateId(), update);
+                restoredCount++;
+            }
+        }
+        if (restoredCount > 0) {
+            log.info("Restored {} rolling updates from KV-Store", restoredCount);
+        }
+    }
+
+    private Promise<Unit> requireLeader() {
+        if (!isLeader) {
+            return RollingUpdateError.NotLeader.INSTANCE.promise();
+        }
+        return Promise.success(Unit.unit());
     }
 
     /**
@@ -60,12 +122,14 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
                                               int instances,
                                               HealthThresholds thresholds,
                                               CleanupPolicy cleanupPolicy) {
-        // Check for existing active update
+        return requireLeader()
+                            .flatMap(_ -> {
+                                         // Check for existing active update
         var existing = getActiveUpdate(artifactBase);
-        if (existing.isPresent()) {
-            return new RollingUpdateError.UpdateAlreadyExists(artifactBase).promise();
-        }
-        // Find current version from KV-Store
+                                         if (existing.isPresent()) {
+                                             return new RollingUpdateError.UpdateAlreadyExists(artifactBase).promise();
+                                         }
+                                         // Find current version from KV-Store
         return findCurrentVersion(artifactBase)
                                  .flatMap(oldVersion -> {
                                               var updateId = KSUID.ksuid()
@@ -87,74 +151,91 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
                                               return persistAndTransition(update, RollingUpdateState.DEPLOYING)
                                                                          .flatMap(u -> deployNewVersion(u, instances));
                                           });
+                                     });
     }
 
     @Override
     public Promise<RollingUpdate> adjustRouting(String updateId, VersionRouting newRouting) {
-        var update = updates.get(updateId);
-        if (update == null) {
-            return new RollingUpdateError.UpdateNotFound(updateId).promise();
-        }
-        if (!update.state()
-                   .allowsNewVersionTraffic() && update.state() != RollingUpdateState.DEPLOYED) {
-            return new RollingUpdateError.InvalidStateTransition(update.state(), RollingUpdateState.ROUTING).promise();
-        }
-        log.info("Adjusting routing for {} to {}", updateId, newRouting);
-        var withRouting = update.withRouting(newRouting);
-        if (update.state() == RollingUpdateState.DEPLOYED) {
-            return withRouting.transitionTo(RollingUpdateState.ROUTING)
-                              .fold(Cause::promise,
-                                    transitioned -> {
-                                        updates.put(updateId, transitioned);
-                                        return persistRouting(transitioned)
-                                                             .map(_ -> transitioned);
-                                    });
-        }
-        updates.put(updateId, withRouting);
-        return persistRouting(withRouting)
-                             .map(_ -> withRouting);
+        return requireLeader()
+                            .flatMap(_ -> {
+                                         var update = updates.get(updateId);
+                                         if (update == null) {
+                                             return new RollingUpdateError.UpdateNotFound(updateId).promise();
+                                         }
+                                         if (!update.state()
+                                                    .allowsNewVersionTraffic() && update.state() != RollingUpdateState.DEPLOYED) {
+                                             return new RollingUpdateError.InvalidStateTransition(update.state(),
+                                                                                                  RollingUpdateState.ROUTING).promise();
+                                         }
+                                         log.info("Adjusting routing for {} to {}", updateId, newRouting);
+                                         var withRouting = update.withRouting(newRouting);
+                                         if (update.state() == RollingUpdateState.DEPLOYED) {
+                                             return withRouting.transitionTo(RollingUpdateState.ROUTING)
+                                                               .fold(Cause::promise,
+                                                                     transitioned -> {
+                                                                         updates.put(updateId, transitioned);
+                                                                         return persistRouting(transitioned)
+                                                                                              .map(_ -> transitioned);
+                                                                     });
+                                         }
+                                         updates.put(updateId, withRouting);
+                                         return persistRouting(withRouting)
+                                                              .map(_ -> withRouting);
+                                     });
     }
 
     @Override
     public Promise<RollingUpdate> approveRouting(String updateId) {
-        var update = updates.get(updateId);
-        if (update == null) {
-            return new RollingUpdateError.UpdateNotFound(updateId).promise();
-        }
-        if (update.state() != RollingUpdateState.VALIDATING) {
-            return new RollingUpdateError.InvalidStateTransition(update.state(), RollingUpdateState.VALIDATING).promise();
-        }
-        log.info("Manual approval for routing on {}", updateId);
-        return Promise.success(update);
+        return requireLeader()
+                            .flatMap(_ -> {
+                                         var update = updates.get(updateId);
+                                         if (update == null) {
+                                             return new RollingUpdateError.UpdateNotFound(updateId).promise();
+                                         }
+                                         if (update.state() != RollingUpdateState.VALIDATING) {
+                                             return new RollingUpdateError.InvalidStateTransition(update.state(),
+                                                                                                  RollingUpdateState.VALIDATING).promise();
+                                         }
+                                         log.info("Manual approval for routing on {}", updateId);
+                                         return Promise.success(update);
+                                     });
     }
 
     @Override
     public Promise<RollingUpdate> completeUpdate(String updateId) {
-        var update = updates.get(updateId);
-        if (update == null) {
-            return new RollingUpdateError.UpdateNotFound(updateId).promise();
-        }
-        if (!update.routing()
-                   .isAllNew()) {
-            return new RollingUpdateError.InvalidStateTransition(update.state(), RollingUpdateState.COMPLETING).promise();
-        }
-        log.info("Completing rolling update {}", updateId);
-        return persistAndTransition(update, RollingUpdateState.COMPLETING)
-                                   .flatMap(this::cleanupOldVersion);
+        return requireLeader()
+                            .flatMap(_ -> {
+                                         var update = updates.get(updateId);
+                                         if (update == null) {
+                                             return new RollingUpdateError.UpdateNotFound(updateId).promise();
+                                         }
+                                         if (!update.routing()
+                                                    .isAllNew()) {
+                                             return new RollingUpdateError.InvalidStateTransition(update.state(),
+                                                                                                  RollingUpdateState.COMPLETING).promise();
+                                         }
+                                         log.info("Completing rolling update {}", updateId);
+                                         return persistAndTransition(update, RollingUpdateState.COMPLETING)
+                                                                    .flatMap(this::cleanupOldVersion);
+                                     });
     }
 
     @Override
     public Promise<RollingUpdate> rollback(String updateId) {
-        var update = updates.get(updateId);
-        if (update == null) {
-            return new RollingUpdateError.UpdateNotFound(updateId).promise();
-        }
-        if (update.isTerminal()) {
-            return new RollingUpdateError.InvalidStateTransition(update.state(), RollingUpdateState.ROLLING_BACK).promise();
-        }
-        log.info("Rolling back update {}", updateId);
-        return persistAndTransition(update, RollingUpdateState.ROLLING_BACK)
-                                   .flatMap(this::removeNewVersion);
+        return requireLeader()
+                            .flatMap(_ -> {
+                                         var update = updates.get(updateId);
+                                         if (update == null) {
+                                             return new RollingUpdateError.UpdateNotFound(updateId).promise();
+                                         }
+                                         if (update.isTerminal()) {
+                                             return new RollingUpdateError.InvalidStateTransition(update.state(),
+                                                                                                  RollingUpdateState.ROLLING_BACK).promise();
+                                         }
+                                         log.info("Rolling back update {}", updateId);
+                                         return persistAndTransition(update, RollingUpdateState.ROLLING_BACK)
+                                                                    .flatMap(this::removeNewVersion);
+                                     });
     }
 
     @Override
@@ -256,10 +337,10 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
                                          .version());
             }
         }
-        // Create a fallback version for artifacts not yet deployed
+        // Create a fallback version for artifacts not yet deployed (initial deployment)
         return Version.version("0.0.0")
                       .fold(cause -> new RollingUpdateError.VersionNotFound(artifactBase, null).promise(),
-                            version -> new RollingUpdateError.VersionNotFound(artifactBase, version).promise());
+                            Promise::success);
     }
 
     @SuppressWarnings("unchecked")

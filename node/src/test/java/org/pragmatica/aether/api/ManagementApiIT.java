@@ -86,6 +86,25 @@ class ManagementApiIT {
                        assertThat(response.statusCode()).isEqualTo(200);
                    }
                });
+
+        // Wait for cluster quorum to form
+        await().atMost(AWAIT_DURATION)
+               .untilAsserted(() -> {
+                   var response = get(BASE_MGMT_PORT, "/health");
+                   assertThat(response.statusCode()).isEqualTo(200);
+                   assertThat(response.body()).contains("\"quorum\":true");
+               });
+        log.info("Cluster quorum formed");
+
+        // Wait for consensus to activate (leader must be elected)
+        await().atMost(AWAIT_DURATION)
+               .untilAsserted(() -> {
+                   var response = get(BASE_MGMT_PORT, "/status");
+                   assertThat(response.statusCode()).isEqualTo(200);
+                   // Leader field should not be empty
+                   assertThat(response.body()).matches(".*\"leader\":\"[^\"]+\".*");
+               });
+        log.info("Consensus activated, leader elected");
     }
 
     @AfterAll
@@ -114,13 +133,16 @@ class ManagementApiIT {
         var setBody = """
             {"metric": "memory.usage", "warning": 0.6, "critical": 0.85}
             """;
-        post(BASE_MGMT_PORT, "/thresholds", setBody);
+        var setResponse = post(BASE_MGMT_PORT, "/thresholds", setBody);
+        assertThat(setResponse.statusCode()).isEqualTo(200);
 
-        // Get thresholds
-        var response = get(BASE_MGMT_PORT, "/thresholds");
-
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("memory.usage");
+        // Wait for threshold to be replicated and then get thresholds
+        await().atMost(AWAIT_DURATION)
+               .untilAsserted(() -> {
+                   var response = get(BASE_MGMT_PORT, "/thresholds");
+                   assertThat(response.statusCode()).isEqualTo(200);
+                   assertThat(response.body()).contains("memory.usage");
+               });
     }
 
     @Test
@@ -129,20 +151,27 @@ class ManagementApiIT {
         var setBody = """
             {"metric": "disk.usage", "warning": 0.7, "critical": 0.9}
             """;
-        post(BASE_MGMT_PORT, "/thresholds", setBody);
+        var setResponse = post(BASE_MGMT_PORT, "/thresholds", setBody);
+        assertThat(setResponse.statusCode()).isEqualTo(200);
 
-        // Verify it's set
-        var getResponse1 = get(BASE_MGMT_PORT, "/thresholds");
-        assertThat(getResponse1.body()).contains("disk.usage");
+        // Wait for it to be replicated and verify it's set
+        await().atMost(AWAIT_DURATION)
+               .untilAsserted(() -> {
+                   var getResponse = get(BASE_MGMT_PORT, "/thresholds");
+                   assertThat(getResponse.body()).contains("disk.usage");
+               });
 
         // Delete it
         var deleteResponse = delete(BASE_MGMT_PORT, "/thresholds/disk.usage");
         assertThat(deleteResponse.statusCode()).isEqualTo(200);
         assertThat(deleteResponse.body()).contains("threshold_removed");
 
-        // Verify it's gone
-        var getResponse2 = get(BASE_MGMT_PORT, "/thresholds");
-        assertThat(getResponse2.body()).doesNotContain("disk.usage");
+        // Wait for deletion to replicate and verify it's gone
+        await().atMost(AWAIT_DURATION)
+               .untilAsserted(() -> {
+                   var getResponse = get(BASE_MGMT_PORT, "/thresholds");
+                   assertThat(getResponse.body()).doesNotContain("disk.usage");
+               });
     }
 
     @Test
@@ -151,7 +180,8 @@ class ManagementApiIT {
         var setBody = """
             {"metric": "network.latency", "warning": 100, "critical": 500}
             """;
-        post(BASE_MGMT_PORT, "/thresholds", setBody);
+        var setResponse = post(BASE_MGMT_PORT, "/thresholds", setBody);
+        assertThat(setResponse.statusCode()).isEqualTo(200);
 
         // Wait for sync and verify on all nodes
         await().atMost(AWAIT_DURATION)

@@ -129,6 +129,23 @@ public final class ConfigLoader {
                                       .or("");
                 builder.kubernetesConfig(new KubernetesConfig(namespace, serviceType, storageClass));
             }
+            // TTM config
+            var ttmEnabled = doc.getString("ttm", "enabled")
+                                .map(s -> "true".equalsIgnoreCase(s))
+                                .or(false);
+            if (ttmEnabled) {
+                var modelPath = doc.getString("ttm", "model_path")
+                                   .or("models/ttm-aether.onnx");
+                var inputWindow = doc.getInt("ttm", "input_window_minutes")
+                                     .or(60);
+                var predictionHorizon = doc.getInt("ttm", "prediction_horizon")
+                                           .or(1);
+                var evalInterval = doc.getLong("ttm", "evaluation_interval_ms")
+                                      .or(60_000L);
+                var confidence = doc.getDouble("ttm", "confidence_threshold")
+                                    .or(0.7);
+                builder.ttm(new TTMConfig(modelPath, inputWindow, predictionHorizon, evalInterval, confidence, true));
+            }
             // Apply CLI overrides (highest priority)
             if (overrides.containsKey("nodes")) {
                 builder.nodes(Integer.parseInt(overrides.get("nodes")));

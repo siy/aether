@@ -3,6 +3,7 @@ package org.pragmatica.aether.node;
 import org.pragmatica.aether.api.AlertManager;
 import org.pragmatica.aether.api.ManagementServer;
 import org.pragmatica.aether.artifact.Artifact;
+import org.pragmatica.aether.controller.ClusterController;
 import org.pragmatica.aether.controller.ControlLoop;
 import org.pragmatica.aether.controller.DecisionTreeController;
 import org.pragmatica.aether.deployment.cluster.BlueprintService;
@@ -19,9 +20,13 @@ import org.pragmatica.aether.infra.artifact.MavenProtocolHandler;
 import org.pragmatica.aether.invoke.InvocationHandler;
 import org.pragmatica.aether.invoke.InvocationMessage;
 import org.pragmatica.aether.invoke.SliceInvoker;
+import org.pragmatica.aether.metrics.ComprehensiveSnapshotCollector;
 import org.pragmatica.aether.metrics.MetricsCollector;
 import org.pragmatica.aether.metrics.MetricsScheduler;
 import org.pragmatica.aether.metrics.MinuteAggregator;
+import org.pragmatica.aether.metrics.eventloop.EventLoopMetricsCollector;
+import org.pragmatica.aether.metrics.events.EventPublisher;
+import org.pragmatica.aether.metrics.gc.GCMetricsCollector;
 import org.pragmatica.aether.metrics.consensus.RabiaMetricsCollector;
 import org.pragmatica.aether.metrics.deployment.DeploymentEvent;
 import org.pragmatica.aether.metrics.deployment.DeploymentMetricsCollector;
@@ -203,6 +208,7 @@ public interface AetherNode {
                             sliceStore,
                             clusterNode,
                             rabiaMetricsCollector,
+                            networkMetricsHandler,
                             serializer,
                             deserializer);
     }
@@ -214,6 +220,7 @@ public interface AetherNode {
                                                    SliceStore sliceStore,
                                                    RabiaNode<KVCommand<AetherKey>> clusterNode,
                                                    RabiaMetricsCollector rabiaMetricsCollector,
+                                                   NetworkMetricsHandler networkMetricsHandler,
                                                    Serializer serializer,
                                                    Deserializer deserializer) {
         record aetherNodeImpl(AetherNodeConfig config,
@@ -239,6 +246,7 @@ public interface AetherNode {
                               RollingUpdateManager rollingUpdateManager,
                               AlertManager alertManager,
                               TTMManager ttmManager,
+                              ComprehensiveSnapshotCollector snapshotCollector,
                               Option<ManagementServer> managementServer,
                               Option<HttpRouter> httpRouter) implements AetherNode {
             private static final Logger log = LoggerFactory.getLogger(aetherNodeImpl.class);
@@ -251,6 +259,10 @@ public interface AetherNode {
             @Override
             public Promise<Unit> start() {
                 log.info("Starting Aether node {}", self());
+                // Initialize event publisher for cluster events
+                EventPublisher.initialize();
+                // Start comprehensive snapshot collection (feeds TTM pipeline)
+                snapshotCollector.start();
                 SliceRuntime.setSliceInvoker(sliceInvoker);
                 return managementServer.fold(() -> Promise.success(Unit.unit()),
                                              ManagementServer::start)
@@ -268,6 +280,8 @@ public interface AetherNode {
                 metricsScheduler.stop();
                 deploymentMetricsScheduler.stop();
                 ttmManager.stop();
+                snapshotCollector.stop();
+                EventPublisher.shutdown();
                 SliceRuntime.clear();
                 return httpRouter.fold(() -> Promise.success(Unit.unit()),
                                        HttpRouter::stop)
@@ -339,9 +353,8 @@ public interface AetherNode {
         // Create metrics components
         var metricsCollector = MetricsCollector.metricsCollector(config.self(), clusterNode.network());
         var metricsScheduler = MetricsScheduler.metricsScheduler(config.self(), clusterNode.network(), metricsCollector);
-        // Create controller and control loop
+        // Create base decision tree controller
         var controller = DecisionTreeController.decisionTreeController();
-        var controlLoop = ControlLoop.controlLoop(config.self(), controller, metricsCollector, clusterNode);
         // Create blueprint service using composite repository from configuration
         var blueprintService = BlueprintServiceImpl.blueprintService(clusterNode,
                                                                      kvStore,
@@ -368,12 +381,29 @@ public interface AetherNode {
         var alertManager = AlertManager.alertManager(clusterNode, kvStore);
         // Create minute aggregator for TTM and metrics collection
         var minuteAggregator = MinuteAggregator.minuteAggregator();
+        // Create subsystem collectors for comprehensive snapshots
+        var gcMetricsCollector = GCMetricsCollector.gcMetricsCollector();
+        var eventLoopMetricsCollector = EventLoopMetricsCollector.eventLoopMetricsCollector();
+        // Note: EventLoopGroup registration happens in NettyClusterNetwork when available
+        // Create comprehensive snapshot collector (feeds TTM pipeline)
+        var snapshotCollector = ComprehensiveSnapshotCollector.comprehensiveSnapshotCollector(gcMetricsCollector,
+                                                                                              eventLoopMetricsCollector,
+                                                                                              networkMetricsHandler,
+                                                                                              rabiaMetricsCollector,
+                                                                                              invocationMetrics,
+                                                                                              minuteAggregator);
         // Create TTM manager (returns no-op if disabled in config)
         var ttmManager = TTMManager.ttmManager(config.ttm(),
                                                minuteAggregator,
                                                controller::getConfiguration)
                                    .fold(_ -> TTMManager.noOp(config.ttm()),
                                          manager -> manager);
+        // Create control loop with adaptive controller when TTM is enabled
+        ClusterController effectiveController = config.ttm()
+                                                      .enabled()
+                                                ? AdaptiveDecisionTree.adaptiveDecisionTree(controller, ttmManager)
+                                                : controller;
+        var controlLoop = ControlLoop.controlLoop(config.self(), effectiveController, metricsCollector, clusterNode);
         // Create slice invoker (needs rollingUpdateManager for weighted routing during rolling updates)
         var sliceInvoker = SliceInvoker.sliceInvoker(config.self(),
                                                      clusterNode.network(),
@@ -397,7 +427,8 @@ public interface AetherNode {
                                                 invocationHandler,
                                                 alertManager,
                                                 ttmManager,
-                                                rabiaMetricsCollector);
+                                                rabiaMetricsCollector,
+                                                rollingUpdateManager);
         var allEntries = new ArrayList<>(clusterNode.routeEntries());
         allEntries.addAll(aetherEntries);
         // Create HTTP router if configured
@@ -432,6 +463,7 @@ public interface AetherNode {
                                       rollingUpdateManager,
                                       alertManager,
                                       ttmManager,
+                                      snapshotCollector,
                                       Option.empty(),
                                       httpRouter);
         // Build and wire ImmutableRouter, then create final node
@@ -466,6 +498,7 @@ public interface AetherNode {
                                                                rollingUpdateManager,
                                                                alertManager,
                                                                ttmManager,
+                                                               snapshotCollector,
                                                                Option.some(managementServer),
                                                                httpRouter);
                                  }
@@ -512,7 +545,8 @@ public interface AetherNode {
                                                                       InvocationHandler invocationHandler,
                                                                       AlertManager alertManager,
                                                                       TTMManager ttmManager,
-                                                                      RabiaMetricsCollector rabiaMetricsCollector) {
+                                                                      RabiaMetricsCollector rabiaMetricsCollector,
+                                                                      RollingUpdateManagerImpl rollingUpdateManager) {
         var entries = new ArrayList<MessageRouter.Entry< ? >>();
         // KVStore notifications to deployment managers
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValuePut.class, nodeDeploymentManager::onValuePut));
@@ -525,6 +559,9 @@ public interface AetherNode {
                                               clusterDeploymentManager::onValueRemove));
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValueRemove.class, endpointRegistry::onValueRemove));
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValueRemove.class, routeRegistry::onValueRemove));
+        // ControlLoop blueprint sync via KV-Store
+        entries.add(MessageRouter.Entry.route(KVStoreNotification.ValuePut.class, controlLoop::onValuePut));
+        entries.add(MessageRouter.Entry.route(KVStoreNotification.ValueRemove.class, controlLoop::onValueRemove));
         // Alert threshold sync via KV-Store
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValuePut.class,
                                               notification -> alertManager.onKvStoreUpdate((AetherKey) notification.cause()
@@ -546,6 +583,8 @@ public interface AetherNode {
                                                                                          change.leaderId()
                                                                                                .map(NodeId::id))));
         entries.add(MessageRouter.Entry.route(LeaderNotification.LeaderChange.class, ttmManager::onLeaderChange));
+        entries.add(MessageRouter.Entry.route(LeaderNotification.LeaderChange.class,
+                                              rollingUpdateManager::onLeaderChange));
         // Topology change notifications
         entries.add(MessageRouter.Entry.route(TopologyChangeNotification.class,
                                               clusterDeploymentManager::onTopologyChange));

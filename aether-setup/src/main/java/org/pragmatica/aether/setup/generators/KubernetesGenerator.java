@@ -100,8 +100,7 @@ public final class KubernetesGenerator implements Generator {
                                                    .nodes(),
                                              config.kubernetes()
                                                    .serviceType());
-            return Result.success(GeneratorOutput.of(
-            outputDir, generatedFiles, instructions));
+            return Result.success(GeneratorOutput.of(outputDir, generatedFiles, instructions));
         } catch (IOException e) {
             return GeneratorError.ioError(e.getMessage())
                                  .result();

@@ -241,11 +241,10 @@ public final class InvocationMetricsCollector {
     /**
      * Combined snapshot of method metrics and slow invocations.
      */
-    public record MethodSnapshot(
-    Artifact artifact,
-    MethodMetrics.Snapshot metrics,
-    List<SlowInvocation> slowInvocations,
-    long currentThresholdNs) {
+    public record MethodSnapshot(Artifact artifact,
+                                 MethodMetrics.Snapshot metrics,
+                                 List<SlowInvocation> slowInvocations,
+                                 long currentThresholdNs) {
         /**
          * Method name from the metrics.
          */

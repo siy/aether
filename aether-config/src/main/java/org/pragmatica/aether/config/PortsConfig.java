@@ -5,9 +5,8 @@ package org.pragmatica.aether.config;
  * @param management Base port for management API (HTTP). Nodes use management, management+1, etc.
  * @param cluster    Base port for cluster communication. Nodes use cluster, cluster+1, etc.
  */
-public record PortsConfig(
- int management,
- int cluster) {
+public record PortsConfig(int management,
+                          int cluster) {
     public static final int DEFAULT_MANAGEMENT_PORT = 8080;
     public static final int DEFAULT_CLUSTER_PORT = 8090;
 

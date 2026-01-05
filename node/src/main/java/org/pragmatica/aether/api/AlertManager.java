@@ -94,18 +94,18 @@ public class AlertManager {
         var value = AetherValue.AlertThresholdValue.alertThresholdValue(metric, warning, critical);
         var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Put<>(key, value);
         return clusterNode.<Unit> apply(List.of(command))
-               .map(_ -> {
-                        thresholds.put(metric,
-                                       new Threshold(warning, critical));
-                        log.info("Threshold set and persisted for {}: warning={}, critical={}",
-                                 metric,
-                                 warning,
-                                 critical);
-                        return Unit.unit();
-                    })
-               .onFailure(cause -> log.error("Failed to persist threshold for {}: {}",
-                                             metric,
-                                             cause.message()));
+                          .map(_ -> {
+                                   thresholds.put(metric,
+                                                  new Threshold(warning, critical));
+                                   log.info("Threshold set and persisted for {}: warning={}, critical={}",
+                                            metric,
+                                            warning,
+                                            critical);
+                                   return Unit.unit();
+                               })
+                          .onFailure(cause -> log.error("Failed to persist threshold for {}: {}",
+                                                        metric,
+                                                        cause.message()));
     }
 
     /**
@@ -118,23 +118,23 @@ public class AlertManager {
         var key = AetherKey.AlertThresholdKey.alertThresholdKey(metric);
         var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Remove<>(key);
         return clusterNode.<Unit> apply(List.of(command))
-               .map(_ -> {
-                        var removed = thresholds.remove(metric);
-                        if (removed != null) {
-                        log.info("Threshold removed and persisted for {}", metric);
-                    }
-                        return Unit.unit();
-                    })
-               .onFailure(cause -> log.error("Failed to persist threshold removal for {}: {}",
-                                             metric,
-                                             cause.message()));
+                          .map(_ -> {
+                                   var removed = thresholds.remove(metric);
+                                   if (removed != null) {
+                                       log.info("Threshold removed and persisted for {}", metric);
+                                   }
+                                   return Unit.unit();
+                               })
+                          .onFailure(cause -> log.error("Failed to persist threshold removal for {}: {}",
+                                                        metric,
+                                                        cause.message()));
     }
 
     /**
      * Get all configured thresholds.
      */
-    public Map<String, double[] > getAllThresholds() {
-        Map<String, double[] > result = new ConcurrentHashMap<>();
+    public Map<String, double[]> getAllThresholds() {
+        Map<String, double[]> result = new ConcurrentHashMap<>();
         thresholds.forEach((k, v) -> result.put(k, new double[]{v.warning, v.critical}));
         return result;
     }
@@ -243,8 +243,12 @@ public class AlertManager {
 
     private void addToHistory(String metric, NodeId nodeId, double value, String severity, String status) {
         synchronized (alertHistory) {
-            alertHistory.add(new AlertHistoryEntry(
-            System.currentTimeMillis(), metric, nodeId.id(), value, severity, status));
+            alertHistory.add(new AlertHistoryEntry(System.currentTimeMillis(),
+                                                   metric,
+                                                   nodeId.id(),
+                                                   value,
+                                                   severity,
+                                                   status));
             while (alertHistory.size() > MAX_ALERT_HISTORY) {
                 alertHistory.removeFirst();
             }
@@ -354,7 +358,7 @@ public class AlertManager {
         }
 
         double forSeverity(String severity) {
-            return "CRITICAL".equals(severity)
+            return "CRITICAL". equals(severity)
                    ? critical
                    : warning;
         }

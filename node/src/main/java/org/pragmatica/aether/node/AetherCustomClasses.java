@@ -32,11 +32,11 @@ public interface AetherCustomClasses {
         CustomClasses.configure(consumer);
         // Aether key/value types
         concreteSubtypes(AetherKey.class)
-        .forEach(consumer);
+                        .forEach(consumer);
         concreteSubtypes(AetherValue.class)
-        .forEach(consumer);
+                        .forEach(consumer);
         concreteSubtypes(AetherKey.AetherKeyPattern.class)
-        .forEach(consumer);
+                        .forEach(consumer);
         // Artifact types
         consumer.accept(Artifact.class);
         consumer.accept(GroupId.class);
@@ -53,12 +53,12 @@ public interface AetherCustomClasses {
         consumer.accept(RouteTarget.class);
         consumer.accept(Binding.class);
         concreteSubtypes(BindingSource.class)
-        .forEach(consumer);
+                        .forEach(consumer);
         // Metrics types
         concreteSubtypes(MetricsMessage.class)
-        .forEach(consumer);
+                        .forEach(consumer);
         // Invocation types
         concreteSubtypes(InvocationMessage.class)
-        .forEach(consumer);
+                        .forEach(consumer);
     }
 }

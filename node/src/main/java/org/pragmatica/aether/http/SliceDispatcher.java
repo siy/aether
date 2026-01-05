@@ -63,7 +63,7 @@ class SliceDispatcherImpl implements SliceDispatcher {
             request = resolvedParams.values()
                                     .iterator()
                                     .next();
-        }else {
+        } else {
             // Empty or multiple params - use the map (empty map is safer than null)
             request = resolvedParams;
         }

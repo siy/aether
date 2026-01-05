@@ -114,7 +114,7 @@ class ControlLoopImpl implements ControlLoop {
         if (leaderChange.localNodeIsLeader()) {
             log.info("Node {} became leader, starting control loop", self);
             startEvaluation();
-        }else {
+        } else {
             log.info("Node {} is no longer leader, stopping control loop", self);
             stopEvaluation();
         }
@@ -158,8 +158,7 @@ class ControlLoopImpl implements ControlLoop {
 
     private void startEvaluation() {
         stopEvaluation();
-        var task = scheduler.scheduleAtFixedRate(
-        this::runEvaluation, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+        var task = scheduler.scheduleAtFixedRate(this::runEvaluation, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
         evaluationTask.set(task);
     }
 
@@ -176,8 +175,7 @@ class ControlLoopImpl implements ControlLoop {
                 log.trace("No blueprints registered, skipping evaluation");
                 return;
             }
-            var context = new ControlContext(
-            metricsCollector.allMetrics(), Map.copyOf(blueprints), topology.get());
+            var context = new ControlContext(metricsCollector.allMetrics(), Map.copyOf(blueprints), topology.get());
             controller.evaluate(context)
                       .onSuccess(this::applyDecisions)
                       .onFailure(cause -> log.error("Controller evaluation failed: {}",

@@ -60,7 +60,7 @@ public final class EventBuffer {
             if (size < capacity) {
                 size++ ;
             }
-        }finally{
+        } finally{
             lock.writeLock()
                 .unlock();
         }
@@ -83,7 +83,7 @@ public final class EventBuffer {
                 }
             }
             return result;
-        }finally{
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -110,7 +110,7 @@ public final class EventBuffer {
                 }
             }
             return result;
-        }finally{
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -140,7 +140,7 @@ public final class EventBuffer {
                 }
             }
             return result;
-        }finally{
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -163,7 +163,7 @@ public final class EventBuffer {
                 }
             }
             return count;
-        }finally{
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -181,7 +181,7 @@ public final class EventBuffer {
             }
             head = 0;
             size = 0;
-        }finally{
+        } finally{
             lock.writeLock()
                 .unlock();
         }
@@ -197,7 +197,7 @@ public final class EventBuffer {
             if (event != null && event.timestamp() < cutoff) {
                 buffer[idx] = null;
                 evicted++ ;
-            }else {
+            } else {
                 break;
             }
         }

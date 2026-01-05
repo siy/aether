@@ -14,7 +14,7 @@ import org.pragmatica.lang.utils.Causes;
  * <p>Format: groupId:artifactId (e.g., "org.pragmatica-lite.aether:example-slice")
  */
 public record ArtifactBase(GroupId groupId, ArtifactId artifactId) {
-    private static final Fn1<Cause, String>INVALID_FORMAT = Causes.forOneValue("Invalid artifact base format {}");
+    private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forOneValue("Invalid artifact base format {}");
 
     /**
      * Parses an artifact base from string format (groupId:artifactId).

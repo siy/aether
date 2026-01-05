@@ -147,9 +147,9 @@ class MetricsCollectorImpl implements MetricsCollector {
                               metrics.put(prefix + "calls", (double) stats.count.sum());
                               metrics.put(prefix + "duration.total", stats.totalDuration.sum());
                               if (stats.count.sum() > 0) {
-                              metrics.put(prefix + "duration.avg",
-                                          stats.totalDuration.sum() / stats.count.sum());
-                          }
+                                  metrics.put(prefix + "duration.avg",
+                                              stats.totalDuration.sum() / stats.count.sum());
+                              }
                           });
         // Add custom metrics
         metrics.putAll(customMetrics);
@@ -191,8 +191,8 @@ class MetricsCollectorImpl implements MetricsCollector {
                                          // Filter to only include snapshots within the window
         var filtered = ringBuffer.filter(s -> s.timestamp() >= cutoff);
                                          if (!filtered.isEmpty()) {
-                                         result.put(nodeId, filtered);
-                                     }
+                                             result.put(nodeId, filtered);
+                                         }
                                      });
         return result;
     }
@@ -224,8 +224,7 @@ class MetricsCollectorImpl implements MetricsCollector {
      * Old entries are automatically evicted when buffer is full.
      */
     private void addToHistory(NodeId nodeId, Map<String, Double> metrics) {
-        var ringBuffer = historicalMetricsMap.computeIfAbsent(
-        nodeId, _ -> RingBuffer.ringBuffer(RING_BUFFER_CAPACITY));
+        var ringBuffer = historicalMetricsMap.computeIfAbsent(nodeId, _ -> RingBuffer.ringBuffer(RING_BUFFER_CAPACITY));
         ringBuffer.add(new MetricsSnapshot(System.currentTimeMillis(), metrics));
     }
 

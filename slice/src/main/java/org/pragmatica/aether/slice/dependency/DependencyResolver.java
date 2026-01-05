@@ -88,7 +88,7 @@ public interface DependencyResolver {
                                               SharedLibraryClassLoader sharedLibraryLoader,
                                               SerializerFactory serializerFactory) {
         return resolve(artifact, repository, registry, sharedLibraryLoader)
-               .map(slice -> SliceBridgeImpl.sliceBridge(artifact, slice, serializerFactory));
+                      .map(slice -> SliceBridgeImpl.sliceBridge(artifact, slice, serializerFactory));
     }
 
     /**
@@ -117,7 +117,7 @@ public interface DependencyResolver {
         var artifactKey = artifact.asString();
         if (resolutionPath.contains(artifactKey)) {
             return circularDependencyDetected(artifactKey)
-                   .promise();
+                                             .promise();
         }
         resolutionPath.add(artifactKey);
         return repository.locate(artifact)
@@ -163,15 +163,20 @@ public interface DependencyResolver {
             log.error("Artifact mismatch: requested {} but JAR declares {}", artifact, manifest.artifact());
             return artifactMismatch(artifact,
                                     manifest.artifact())
-                   .promise();
+                                   .promise();
         }
         // Load dependency file to get shared and slice dependencies
         return DependencyFile.load(manifest.sliceClassName(),
                                    createTempLoader(location.url(),
                                                     sharedLibraryLoader))
                              .async()
-                             .flatMap(depFile -> processSharedAndLoadSlice(
-        manifest, location, depFile, repository, registry, sharedLibraryLoader, resolutionPath));
+                             .flatMap(depFile -> processSharedAndLoadSlice(manifest,
+                                                                           location,
+                                                                           depFile,
+                                                                           repository,
+                                                                           registry,
+                                                                           sharedLibraryLoader,
+                                                                           resolutionPath));
     }
 
     private static SliceClassLoader createTempLoader(URL jarUrl, SharedLibraryClassLoader parent) {
@@ -190,24 +195,22 @@ public interface DependencyResolver {
         return SharedDependencyLoader.processApiDependencies(depFile.api(),
                                                              sharedLibraryLoader,
                                                              repository)
-                                     .flatMap(_ -> SharedDependencyLoader.processSharedDependencies(
-        depFile.shared(),
-        sharedLibraryLoader,
-        repository,
-        location.url()))
+                                     .flatMap(_ -> SharedDependencyLoader.processSharedDependencies(depFile.shared(),
+                                                                                                    sharedLibraryLoader,
+                                                                                                    repository,
+                                                                                                    location.url()))
                                      .flatMap(sharedResult -> {
                                                   // Now load the slice class and resolve slice dependencies
         return loadClass(manifest.sliceClassName(),
                          sharedResult.sliceClassLoader())
-               .flatMap(sliceClass -> resolveSliceDependencies(
-        manifest.artifact(),
-        sliceClass,
-        depFile.slices(),
-        sharedResult.sliceClassLoader(),
-        repository,
-        registry,
-        sharedLibraryLoader,
-        resolutionPath));
+                        .flatMap(sliceClass -> resolveSliceDependencies(manifest.artifact(),
+                                                                        sliceClass,
+                                                                        depFile.slices(),
+                                                                        sharedResult.sliceClassLoader(),
+                                                                        repository,
+                                                                        registry,
+                                                                        sharedLibraryLoader,
+                                                                        resolutionPath));
                                               });
     }
 
@@ -223,8 +226,8 @@ public interface DependencyResolver {
             return createSliceFromClass(sliceClass,
                                         List.of(),
                                         List.of())
-                   .async()
-                   .flatMap(slice -> registerSlice(artifact, slice, registry));
+                                       .async()
+                                       .flatMap(slice -> registerSlice(artifact, slice, registry));
         }
         return resolveArtifactDependenciesSequentially(sliceDeps,
                                                        repository,
@@ -232,9 +235,11 @@ public interface DependencyResolver {
                                                        sharedLibraryLoader,
                                                        resolutionPath,
                                                        List.of())
-               .flatMap(resolvedSlices -> createSliceFromClass(sliceClass, resolvedSlices, sliceDeps)
-                                          .async())
-               .flatMap(slice -> registerSlice(artifact, slice, registry));
+                                                      .flatMap(resolvedSlices -> createSliceFromClass(sliceClass,
+                                                                                                      resolvedSlices,
+                                                                                                      sliceDeps)
+                                                                                                     .async())
+                                                      .flatMap(slice -> registerSlice(artifact, slice, registry));
     }
 
     private static Promise<List<Slice>> resolveArtifactDependenciesSequentially(List<ArtifactDependency> dependencies,
@@ -249,13 +254,13 @@ public interface DependencyResolver {
         var dep = dependencies.getFirst();
         var remaining = dependencies.subList(1, dependencies.size());
         return resolveArtifactDependency(dep, repository, registry, sharedLibraryLoader, resolutionPath)
-               .flatMap(slice -> resolveArtifactDependenciesSequentially(
-        remaining,
-        repository,
-        registry,
-        sharedLibraryLoader,
-        resolutionPath,
-        appendToList(accumulated, slice)));
+                                        .flatMap(slice -> resolveArtifactDependenciesSequentially(remaining,
+                                                                                                  repository,
+                                                                                                  registry,
+                                                                                                  sharedLibraryLoader,
+                                                                                                  resolutionPath,
+                                                                                                  appendToList(accumulated,
+                                                                                                               slice)));
     }
 
     private static Promise<Slice> resolveArtifactDependency(ArtifactDependency dependency,
@@ -281,17 +286,17 @@ public interface DependencyResolver {
                                                                 SharedLibraryClassLoader sharedLibraryLoader,
                                                                 Set<String> resolutionPath) {
         return toArtifact(dependency)
-               .async()
-               .flatMap(artifact -> resolveWithSharedLoader(artifact,
-                                                            repository,
-                                                            registry,
-                                                            sharedLibraryLoader,
-                                                            resolutionPath));
+                         .async()
+                         .flatMap(artifact -> resolveWithSharedLoader(artifact,
+                                                                      repository,
+                                                                      registry,
+                                                                      sharedLibraryLoader,
+                                                                      resolutionPath));
     }
 
     private static Result<Artifact> toArtifact(ArtifactDependency dependency) {
         var versionStr = extractVersion(dependency.versionPattern())
-                         .withQualifier();
+                                       .withQualifier();
         return Artifact.artifact(dependency.groupId() + ":" + dependency.artifactId() + ":" + versionStr);
     }
 
@@ -310,11 +315,10 @@ public interface DependencyResolver {
                                                       List<ArtifactDependency> descriptors) {
         // Convert ArtifactDependency to DependencyDescriptor for SliceFactory compatibility
         var legacyDescriptors = descriptors.stream()
-                                           .map(dep -> new DependencyDescriptor(
-        ArtifactMapper.toClassName(dep.groupId(),
-                                   dep.artifactId()),
-        dep.versionPattern(),
-        Option.none()))
+                                           .map(dep -> new DependencyDescriptor(ArtifactMapper.toClassName(dep.groupId(),
+                                                                                                           dep.artifactId()),
+                                                                                dep.versionPattern(),
+                                                                                Option.none()))
                                            .toList();
         return SliceFactory.createSlice(sliceClass, dependencies, legacyDescriptors);
     }

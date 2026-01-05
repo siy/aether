@@ -44,14 +44,14 @@ public interface SliceDependencies {
         return Result.lift(Causes::fromThrowable,
                            () -> {
                                try (var reader = new BufferedReader(new InputStreamReader(resource))) {
-                               var dependencies = new ArrayList<DependencyDescriptor>();
-                               String line;
-                               while ((line = reader.readLine()) != null) {
-                               DependencyDescriptor.parse(line)
-                                                   .onSuccess(dependencies::add);
-                           }
-                               return dependencies;
-                           }
+                                   var dependencies = new ArrayList<DependencyDescriptor>();
+                                   String line;
+                                   while ((line = reader.readLine()) != null) {
+                                       DependencyDescriptor.parse(line)
+                                                           .onSuccess(dependencies::add);
+                                   }
+                                   return dependencies;
+                               }
                            });
     }
 }

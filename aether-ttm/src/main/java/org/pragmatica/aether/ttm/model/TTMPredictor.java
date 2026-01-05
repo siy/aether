@@ -17,7 +17,7 @@ public interface TTMPredictor {
      *
      * @return Predicted values for next time step (float[features])
      */
-    Promise<float[] > predict(float[][] input);
+    Promise<float[]> predict(float[][] input);
 
     /**
      * Get confidence score for last prediction.
@@ -58,7 +58,7 @@ final class NoOpTTMPredictor implements TTMPredictor {
     private NoOpTTMPredictor() {}
 
     @Override
-    public Promise<float[] > predict(float[][] input) {
+    public Promise<float[]> predict(float[][] input) {
         return Promise.success(new float[FeatureIndex.FEATURE_COUNT]);
     }
 
@@ -67,7 +67,7 @@ final class NoOpTTMPredictor implements TTMPredictor {
         return 0.0;
     }
 
-    @Override
+    @ Override
     public boolean isReady() {
         return false;
     }

@@ -44,10 +44,9 @@ import java.util.List;
  * @param shared List of shared library dependencies
  * @param slices List of slice dependencies (runtime, non-typed)
  */
-public record DependencyFile(
- List<ArtifactDependency> api,
- List<ArtifactDependency> shared,
- List<ArtifactDependency> slices) {
+public record DependencyFile(List<ArtifactDependency> api,
+                             List<ArtifactDependency> shared,
+                             List<ArtifactDependency> slices) {
     private enum Section {
         NONE,
         // No section yet (for backward compatibility)
@@ -112,16 +111,16 @@ public record DependencyFile(
             if (cause == ArtifactDependency.EMPTY_LINE ||
             cause == ArtifactDependency.COMMENT_LINE ||
             cause == ArtifactDependency.SECTION_HEADER) {
-                                      continueFlag[0] = true;
-                                  }else {
-                                      errorResult[0] = cause.result();
-                                  }
+                                          continueFlag[0] = true;
+                                      } else {
+                                          errorResult[0] = cause.result();
+                                      }
                                   });
             if (continueFlag[0]) {
                 continue;
             }
             if (errorResult[0] != null) {
-                return (Result<DependencyFile>) errorResult[0];
+                return ( Result<DependencyFile>) errorResult[0];
             }
         }
         return Result.success(new DependencyFile(List.copyOf(api), List.copyOf(shared), List.copyOf(slices)));
@@ -137,14 +136,14 @@ public record DependencyFile(
         return Result.lift(Causes::fromThrowable,
                            () -> {
                                try (var reader = new BufferedReader(new InputStreamReader(inputStream))) {
-                               var content = new StringBuilder();
-                               String line;
-                               while ((line = reader.readLine()) != null) {
-                               content.append(line)
-                                      .append("\n");
-                           }
-                               return content.toString();
-                           }
+                                   var content = new StringBuilder();
+                                   String line;
+                                   while ((line = reader.readLine()) != null) {
+                                       content.append(line)
+                                              .append("\n");
+                                   }
+                                   return content.toString();
+                               }
                            })
                      .flatMap(DependencyFile::parse);
     }
@@ -170,21 +169,21 @@ public record DependencyFile(
      * Check if this file has any API dependencies.
      */
     public boolean hasApiDependencies() {
-        return !api.isEmpty();
+        return ! api.isEmpty();
     }
 
     /**
      * Check if this file has any shared dependencies.
      */
     public boolean hasSharedDependencies() {
-        return !shared.isEmpty();
+        return ! shared.isEmpty();
     }
 
     /**
      * Check if this file has any slice dependencies.
      */
     public boolean hasSliceDependencies() {
-        return !slices.isEmpty();
+        return ! slices.isEmpty();
     }
 
     /**
@@ -195,5 +194,5 @@ public record DependencyFile(
     }
 
     // Error constants
-    private static final Fn1<Cause, String>UNKNOWN_SECTION = Causes.forOneValue("Unknown section in dependency file: %s. Valid sections: [api], [shared], [slices]");
+    private static final Fn1<Cause, String> UNKNOWN_SECTION = Causes.forOneValue("Unknown section in dependency file: %s. Valid sections: [api], [shared], [slices]");
 }

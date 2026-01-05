@@ -79,27 +79,25 @@ public final class NetworkMetricsHandler extends ChannelDuplexHandler {
      * Take a snapshot of current metrics.
      */
     public NetworkMetrics snapshot() {
-        return new NetworkMetrics(
-        bytesRead.sum(),
-        bytesWritten.sum(),
-        messagesRead.sum(),
-        messagesWritten.sum(),
-        activeConnections.get(),
-        backpressureEvents.get(),
-        lastBackpressureTimestamp.get());
+        return new NetworkMetrics(bytesRead.sum(),
+                                  bytesWritten.sum(),
+                                  messagesRead.sum(),
+                                  messagesWritten.sum(),
+                                  activeConnections.get(),
+                                  backpressureEvents.get(),
+                                  lastBackpressureTimestamp.get());
     }
 
     /**
      * Take a snapshot and reset counters (for delta-based reporting).
      */
     public NetworkMetrics snapshotAndReset() {
-        return new NetworkMetrics(
-        bytesRead.sumThenReset(),
-        bytesWritten.sumThenReset(),
-        messagesRead.sumThenReset(),
-        messagesWritten.sumThenReset(),
-        activeConnections.get(),
-        backpressureEvents.getAndSet(0),
-        lastBackpressureTimestamp.get());
+        return new NetworkMetrics(bytesRead.sumThenReset(),
+                                  bytesWritten.sumThenReset(),
+                                  messagesRead.sumThenReset(),
+                                  messagesWritten.sumThenReset(),
+                                  activeConnections.get(),
+                                  backpressureEvents.getAndSet(0),
+                                  lastBackpressureTimestamp.get());
     }
 }

@@ -57,9 +57,9 @@ public class DashboardWebSocketHandler extends SimpleChannelInboundHandler<WebSo
         if (message.contains("\"type\":\"SUBSCRIBE\"")) {
             // Client subscribing to streams - currently all clients get all updates
             log.debug("Client subscribed to streams");
-        }else if (message.contains("\"type\":\"SET_THRESHOLD\"")) {
+        } else if (message.contains("\"type\":\"SET_THRESHOLD\"")) {
             metricsPublisher.handleSetThreshold(message);
-        }else if (message.contains("\"type\":\"GET_HISTORY\"")) {
+        } else if (message.contains("\"type\":\"GET_HISTORY\"")) {
             var history = metricsPublisher.buildHistoryResponse(message);
             ctx.writeAndFlush(new TextWebSocketFrame(history));
         }

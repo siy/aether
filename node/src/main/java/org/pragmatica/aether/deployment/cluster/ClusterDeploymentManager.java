@@ -81,14 +81,13 @@ public interface ClusterDeploymentManager {
         /**
          * Active state when node IS the leader.
          */
-        record Active(
-        NodeId self,
-        ClusterNode<KVCommand<AetherKey>> cluster,
-        KVStore<AetherKey, AetherValue> kvStore,
-        MessageRouter router,
-        Map<Artifact, Blueprint> blueprints,
-        Map<SliceNodeKey, SliceState> sliceStates,
-        List<NodeId> activeNodes) implements ClusterDeploymentState {
+        record Active(NodeId self,
+                      ClusterNode<KVCommand<AetherKey>> cluster,
+                      KVStore<AetherKey, AetherValue> kvStore,
+                      MessageRouter router,
+                      Map<Artifact, Blueprint> blueprints,
+                      Map<SliceNodeKey, SliceState> sliceStates,
+                      List<NodeId> activeNodes) implements ClusterDeploymentState {
             private static final Logger log = LoggerFactory.getLogger(Active.class);
 
             /**
@@ -101,19 +100,19 @@ public interface ClusterDeploymentManager {
                        .forEach((key, value) -> {
                                     switch (key) {
                     case BlueprintKey blueprintKey when value instanceof BlueprintValue blueprintValue -> {
-                                    var artifact = blueprintKey.artifact();
-                                    var instances = (int) blueprintValue.instanceCount();
-                                    blueprints.put(artifact,
-                                                   new Blueprint(artifact, instances));
-                                    log.debug("Restored blueprint: {} with {} instances", artifact, instances);
-                                }
+                                        var artifact = blueprintKey.artifact();
+                                        var instances = (int) blueprintValue.instanceCount();
+                                        blueprints.put(artifact,
+                                                       new Blueprint(artifact, instances));
+                                        log.debug("Restored blueprint: {} with {} instances", artifact, instances);
+                                    }
                     case SliceNodeKey sliceNodeKey when value instanceof SliceNodeValue sliceNodeValue -> {
-                                    sliceStates.put(sliceNodeKey,
-                                                    sliceNodeValue.state());
-                                    log.debug("Restored slice state: {} = {}",
-                                              sliceNodeKey,
-                                              sliceNodeValue.state());
-                                }
+                                        sliceStates.put(sliceNodeKey,
+                                                        sliceNodeValue.state());
+                                        log.debug("Restored slice state: {} = {}",
+                                                  sliceNodeKey,
+                                                  sliceNodeValue.state());
+                                    }
                     default -> {}
                 }
                                 });
@@ -300,7 +299,7 @@ public interface ClusterDeploymentManager {
 
             private void deallocateAllInstances(Artifact artifact) {
                 getCurrentInstances(artifact)
-                .forEach(this::issueUnloadCommand);
+                                   .forEach(this::issueUnloadCommand);
             }
 
             /**
@@ -337,31 +336,29 @@ public interface ClusterDeploymentManager {
                                                              ClusterNode<KVCommand<AetherKey>> cluster,
                                                              KVStore<AetherKey, AetherValue> kvStore,
                                                              MessageRouter router) {
-        record clusterDeploymentManager(
-        NodeId self,
-        ClusterNode<KVCommand<AetherKey>> cluster,
-        KVStore<AetherKey, AetherValue> kvStore,
-        MessageRouter router,
-        AtomicReference<ClusterDeploymentState> state) implements ClusterDeploymentManager {
+        record clusterDeploymentManager(NodeId self,
+                                        ClusterNode<KVCommand<AetherKey>> cluster,
+                                        KVStore<AetherKey, AetherValue> kvStore,
+                                        MessageRouter router,
+                                        AtomicReference<ClusterDeploymentState> state) implements ClusterDeploymentManager {
             private static final Logger log = LoggerFactory.getLogger(clusterDeploymentManager.class);
 
             @Override
             public void onLeaderChange(LeaderChange leaderChange) {
                 if (leaderChange.localNodeIsLeader()) {
                     log.info("Node {} became leader, activating cluster deployment manager", self);
-                    var activeState = new ClusterDeploymentState.Active(
-                    self,
-                    cluster,
-                    kvStore,
-                    router,
-                    new ConcurrentHashMap<>(),
-                    new ConcurrentHashMap<>(),
-                    new CopyOnWriteArrayList<>());
+                    var activeState = new ClusterDeploymentState.Active(self,
+                                                                        cluster,
+                                                                        kvStore,
+                                                                        router,
+                                                                        new ConcurrentHashMap<>(),
+                                                                        new ConcurrentHashMap<>(),
+                                                                        new CopyOnWriteArrayList<>());
                     state.set(activeState);
                     // Rebuild state from KVStore and reconcile
                     activeState.rebuildStateFromKVStore();
                     activeState.reconcile();
-                }else {
+                } else {
                     log.info("Node {} is not leader, deactivating cluster deployment manager", self);
                     state.set(new ClusterDeploymentState.Dormant());
                 }
@@ -385,7 +382,10 @@ public interface ClusterDeploymentManager {
                      .onTopologyChange(topologyChange);
             }
         }
-        return new clusterDeploymentManager(
-        self, cluster, kvStore, router, new AtomicReference<>(new ClusterDeploymentState.Dormant()));
+        return new clusterDeploymentManager(self,
+                                            cluster,
+                                            kvStore,
+                                            router,
+                                            new AtomicReference<>(new ClusterDeploymentState.Dormant()));
     }
 }

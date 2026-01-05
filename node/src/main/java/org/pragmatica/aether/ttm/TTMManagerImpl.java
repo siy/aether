@@ -59,7 +59,7 @@ final class TTMManagerImpl implements TTMManager {
         if (leaderChange.localNodeIsLeader()) {
             log.info("Node became leader, starting TTM evaluation");
             startEvaluation();
-        }else {
+        } else {
             log.info("Node is no longer leader, stopping TTM evaluation");
             stopEvaluation();
         }
@@ -97,8 +97,8 @@ final class TTMManagerImpl implements TTMManager {
         Result.lift(e -> new TTMError.InferenceFailed("Scheduler termination interrupted"),
                     () -> {
                         if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                        scheduler.shutdownNow();
-                    }
+                            scheduler.shutdownNow();
+                        }
                         return Unit.unit();
                     })
               .onFailure(cause -> {
@@ -111,8 +111,10 @@ final class TTMManagerImpl implements TTMManager {
     private void startEvaluation() {
         stopEvaluation();
         state.set(TTMState.RUNNING);
-        var task = scheduler.scheduleAtFixedRate(
-        this::runEvaluation, config.evaluationIntervalMs(), config.evaluationIntervalMs(), TimeUnit.MILLISECONDS);
+        var task = scheduler.scheduleAtFixedRate(this::runEvaluation,
+                                                 config.evaluationIntervalMs(),
+                                                 config.evaluationIntervalMs(),
+                                                 TimeUnit.MILLISECONDS);
         evaluationTask.set(task);
         log.info("TTM evaluation started with interval {}ms", config.evaluationIntervalMs());
     }
@@ -128,7 +130,7 @@ final class TTMManagerImpl implements TTMManager {
 
     private void runEvaluation() {
         evaluateAsync()
-        .onFailure(this::handleEvaluationError);
+                     .onFailure(this::handleEvaluationError);
     }
 
     private Promise<Unit> evaluateAsync() {

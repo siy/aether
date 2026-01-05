@@ -12,11 +12,10 @@ import java.util.List;
  *     .withBody()
  * }</pre>
  */
-public record SliceRoute(
- String httpMethod,
- String pathPattern,
- String methodName,
- List<RouteBinding> bindings) {
+public record SliceRoute(String httpMethod,
+                         String pathPattern,
+                         String methodName,
+                         List<RouteBinding> bindings) {
     /**
      * Create a GET route.
      */

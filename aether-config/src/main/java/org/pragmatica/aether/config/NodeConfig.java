@@ -11,12 +11,11 @@ import java.time.Duration;
  * @param reconciliation    Cluster reconciliation interval
  * @param resources         Kubernetes resource limits (optional)
  */
-public record NodeConfig(
- String heap,
- String gc,
- Duration metricsInterval,
- Duration reconciliation,
- ResourcesConfig resources) {
+public record NodeConfig(String heap,
+                         String gc,
+                         Duration metricsInterval,
+                         Duration reconciliation,
+                         ResourcesConfig resources) {
     public static final String DEFAULT_GC = "zgc";
     public static final Duration DEFAULT_METRICS_INTERVAL = Duration.ofSeconds(1);
     public static final Duration DEFAULT_RECONCILIATION = Duration.ofSeconds(5);
@@ -25,14 +24,13 @@ public record NodeConfig(
      * Create node config with environment defaults.
      */
     public static NodeConfig forEnvironment(Environment env) {
-        return new NodeConfig(
-        env.defaultHeap(),
-        DEFAULT_GC,
-        DEFAULT_METRICS_INTERVAL,
-        DEFAULT_RECONCILIATION,
-        env == Environment.KUBERNETES
-        ? ResourcesConfig.defaults()
-        : null);
+        return new NodeConfig(env.defaultHeap(),
+                              DEFAULT_GC,
+                              DEFAULT_METRICS_INTERVAL,
+                              DEFAULT_RECONCILIATION,
+                              env == Environment.KUBERNETES
+                              ? ResourcesConfig.defaults()
+                              : null);
     }
 
     /**
@@ -61,8 +59,8 @@ public record NodeConfig(
      */
     public String javaOpts() {
         var gcOpt = switch (gc.toLowerCase()) {
-            case"zgc" -> "-XX:+UseZGC -XX:+ZGenerational";
-            case"g1" -> "-XX:+UseG1GC";
+            case "zgc" -> "-XX:+UseZGC -XX:+ZGenerational";
+            case "g1" -> "-XX:+UseG1GC";
             default -> "-XX:+UseZGC -XX:+ZGenerational";
         };
         return "-Xmx" + heap + " " + gcOpt;

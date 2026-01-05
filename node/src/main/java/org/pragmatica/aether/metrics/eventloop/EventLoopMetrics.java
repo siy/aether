@@ -7,11 +7,10 @@ package org.pragmatica.aether.metrics.eventloop;
  * @param activeChannels Number of active channels across all event loops
  * @param healthy       Whether event loop is healthy (lag < threshold)
  */
-public record EventLoopMetrics(
- long lagNanos,
- int pendingTasks,
- int activeChannels,
- boolean healthy) {
+public record EventLoopMetrics(long lagNanos,
+                               int pendingTasks,
+                               int activeChannels,
+                               boolean healthy) {
     public static final EventLoopMetrics EMPTY = new EventLoopMetrics(0, 0, 0, true);
 
     // Default threshold: 10ms = unhealthy event loop

@@ -35,11 +35,10 @@ public sealed interface VersionPattern {
     }
 
     /// Version range with inclusive/exclusive bounds
-    record Range(
-    Version from,
-    boolean fromInclusive,
-    Version to,
-    boolean toInclusive) implements VersionPattern {
+    record Range(Version from,
+                 boolean fromInclusive,
+                 Version to,
+                 boolean toInclusive) implements VersionPattern {
         @Override
         public boolean matches(Version version) {
             int fromCmp = compareVersions(version, from);
@@ -97,15 +96,15 @@ public sealed interface VersionPattern {
             }
             public static Result<Operator> fromSymbol(String symbol) {
                 return switch (symbol) {
-                    case">" -> Result.success(GT);
-                    case">=" -> Result.success(GTE);
-                    case"<" -> Result.success(LT);
-                    case"<=" -> Result.success(LTE);
+                    case ">" -> Result.success(GT);
+                    case ">=" -> Result.success(GTE);
+                    case "<" -> Result.success(LT);
+                    case "<=" -> Result.success(LTE);
                     default -> INVALID_OPERATOR.apply(symbol)
                                                .result();
                 };
             }
-            private static final Fn1<Cause, String>INVALID_OPERATOR = Causes.forOneValue("Invalid comparison operator: %s");
+            private static final Fn1<Cause, String> INVALID_OPERATOR = Causes.forOneValue("Invalid comparison operator: %s");
         }
     }
 
@@ -187,7 +186,7 @@ public sealed interface VersionPattern {
     }
 
     private static boolean isRangePattern(String pattern) {
-        return (pattern.startsWith("[") || pattern.startsWith("(")) &&
+        return ( pattern.startsWith("[") || pattern.startsWith("(")) &&
         (pattern.endsWith("]") || pattern.endsWith(")"));
     }
 
@@ -232,19 +231,19 @@ public sealed interface VersionPattern {
             opStr = ">=";
             versionStr = pattern.substring(2)
                                 .trim();
-        }else if (pattern.startsWith("<=")) {
+        } else if (pattern.startsWith("<=")) {
             opStr = "<=";
             versionStr = pattern.substring(2)
                                 .trim();
-        }else if (pattern.startsWith(">")) {
+        } else if (pattern.startsWith(">")) {
             opStr = ">";
             versionStr = pattern.substring(1)
                                 .trim();
-        }else if (pattern.startsWith("<")) {
+        } else if (pattern.startsWith("<")) {
             opStr = "<";
             versionStr = pattern.substring(1)
                                 .trim();
-        }else {
+        } else {
             return INVALID_COMPARISON_FORMAT.apply(pattern)
                                             .result();
         }
@@ -260,6 +259,6 @@ public sealed interface VersionPattern {
 
     // Error constants
     Cause EMPTY_PATTERN = Causes.cause("Version pattern cannot be empty");
-    Fn1<Cause, String>INVALID_RANGE_FORMAT = Causes.forOneValue("Invalid range format: %s");
-    Fn1<Cause, String>INVALID_COMPARISON_FORMAT = Causes.forOneValue("Invalid comparison format: %s");
+    Fn1<Cause, String> INVALID_RANGE_FORMAT = Causes.forOneValue("Invalid range format: %s");
+    Fn1<Cause, String> INVALID_COMPARISON_FORMAT = Causes.forOneValue("Invalid comparison format: %s");
 }

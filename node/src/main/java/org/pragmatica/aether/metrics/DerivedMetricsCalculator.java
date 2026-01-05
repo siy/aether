@@ -44,7 +44,7 @@ public final class DerivedMetricsCalculator {
         try{
             samples.add(snapshot);
             recalculate();
-        }finally{
+        } finally{
             lock.writeLock()
                 .unlock();
         }
@@ -58,7 +58,7 @@ public final class DerivedMetricsCalculator {
             .lock();
         try{
             return current;
-        }finally{
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -149,19 +149,18 @@ public final class DerivedMetricsCalculator {
                 errorTrend = (secondHalfErrors / secondHalfWindow) - (firstHalfErrors / firstHalfWindow);
             }
         }
-        current = new DerivedMetrics(
-        requestRate,
-        errorRate,
-        gcRate,
-        p50,
-        p95,
-        p99,
-        eventLoopSaturation,
-        avgHeapUsage,
-        backpressureRate,
-        cpuTrend,
-        latencyTrend,
-        errorTrend);
+        current = new DerivedMetrics(requestRate,
+                                     errorRate,
+                                     gcRate,
+                                     p50,
+                                     p95,
+                                     p99,
+                                     eventLoopSaturation,
+                                     avgHeapUsage,
+                                     backpressureRate,
+                                     cpuTrend,
+                                     latencyTrend,
+                                     errorTrend);
     }
 
     private double percentile(double[] sorted, int percentile) {

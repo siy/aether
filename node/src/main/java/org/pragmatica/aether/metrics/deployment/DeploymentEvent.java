@@ -18,12 +18,11 @@ public sealed interface DeploymentEvent extends Message.Local {
     /**
      * Emitted on each state transition during deployment.
      */
-    record StateTransition(
-    Artifact artifact,
-    NodeId nodeId,
-    SliceState from,
-    SliceState to,
-    long timestamp) implements DeploymentEvent {}
+    record StateTransition(Artifact artifact,
+                           NodeId nodeId,
+                           SliceState from,
+                           SliceState to,
+                           long timestamp) implements DeploymentEvent {}
 
     /**
      * Emitted when deployment completes (reaches ACTIVE state).

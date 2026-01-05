@@ -11,15 +11,14 @@ package org.pragmatica.aether.metrics.gc;
  * @param promotionRateBytesPerSec  Promotion rate to old gen (bytes/second)
  * @param lastMajorGcTimestamp   Timestamp of last major GC (0 if none)
  */
-public record GCMetrics(
- long youngGcCount,
- long youngGcPauseMs,
- long oldGcCount,
- long oldGcPauseMs,
- long reclaimedBytes,
- long allocationRateBytesPerSec,
- long promotionRateBytesPerSec,
- long lastMajorGcTimestamp) {
+public record GCMetrics(long youngGcCount,
+                        long youngGcPauseMs,
+                        long oldGcCount,
+                        long oldGcPauseMs,
+                        long reclaimedBytes,
+                        long allocationRateBytesPerSec,
+                        long promotionRateBytesPerSec,
+                        long lastMajorGcTimestamp) {
     public static final GCMetrics EMPTY = new GCMetrics(0, 0, 0, 0, 0, 0, 0, 0);
 
     /**

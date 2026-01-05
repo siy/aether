@@ -13,13 +13,12 @@ import org.pragmatica.lang.Result;
  * @param confidenceThreshold  Minimum confidence for applying predictions (0.0-1.0, default: 0.7)
  * @param enabled              Whether TTM is enabled (default: false)
  */
-public record TTMConfig(
- String modelPath,
- int inputWindowMinutes,
- int predictionHorizon,
- long evaluationIntervalMs,
- double confidenceThreshold,
- boolean enabled) {
+public record TTMConfig(String modelPath,
+                        int inputWindowMinutes,
+                        int predictionHorizon,
+                        long evaluationIntervalMs,
+                        double confidenceThreshold,
+                        boolean enabled) {
     private static final TTMConfig DEFAULT = new TTMConfig("models/ttm-aether.onnx", 60, 1, 60_000L, 0.7, true);
 
     private static final TTMConfig DISABLED = new TTMConfig("", 60, 1, 60_000L, 0.7, false);

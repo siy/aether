@@ -185,30 +185,30 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
             @Override
             public NodeId self() {
                 return config()
-                       .topology()
-                       .self();
+                             .topology()
+                             .self();
             }
 
             @Override
             public Promise<Unit> start() {
                 return network()
-                       .start()
-                       .onSuccessRunAsync(topologyManager()::start)
-                       .flatMap(consensus()::start);
+                              .start()
+                              .onSuccessRunAsync(topologyManager()::start)
+                              .flatMap(consensus()::start);
             }
 
             @Override
             public Promise<Unit> stop() {
                 return consensus()
-                       .stop()
-                       .onResultRun(topologyManager()::stop)
-                       .flatMap(network()::stop);
+                                .stop()
+                                .onResultRun(topologyManager()::stop)
+                                .flatMap(network()::stop);
             }
 
             @Override
             public <R> Promise<List<R>> apply(List<C> commands) {
                 return consensus()
-                       .apply(commands);
+                                .apply(commands);
             }
         }
         return new rabiaNode <>(config,

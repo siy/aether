@@ -92,7 +92,7 @@ class MetricsSchedulerImpl implements MetricsScheduler {
         if (leaderChange.localNodeIsLeader()) {
             log.info("Node {} became leader, starting metrics scheduler", self);
             startPinging();
-        }else {
+        } else {
             log.info("Node {} is no longer leader, stopping metrics scheduler", self);
             stopPinging();
         }
@@ -125,8 +125,7 @@ class MetricsSchedulerImpl implements MetricsScheduler {
     private void startPinging() {
         stopPinging();
         // Cancel any existing task
-        var task = scheduler.scheduleAtFixedRate(
-        this::sendPingsToAllNodes, 0, intervalMs, TimeUnit.MILLISECONDS);
+        var task = scheduler.scheduleAtFixedRate(this::sendPingsToAllNodes, 0, intervalMs, TimeUnit.MILLISECONDS);
         pingTask.set(task);
     }
 

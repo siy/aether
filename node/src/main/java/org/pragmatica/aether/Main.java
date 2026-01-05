@@ -65,10 +65,10 @@ public record Main(String[] args) {
 
     private Option<AetherConfig> loadConfig() {
         return findArg("--config=")
-               .map(Path::of)
-               .filter(p -> p.toFile()
-                             .exists())
-               .flatMap(this::loadConfigFile);
+                      .map(Path::of)
+                      .filter(p -> p.toFile()
+                                    .exists())
+                      .flatMap(this::loadConfigFile);
     }
 
     private Option<AetherConfig> loadConfigFile(Path path) {
@@ -140,18 +140,18 @@ public record Main(String[] args) {
 
     private NodeId parseNodeId(Option<AetherConfig> aetherConfig) {
         return findArg("--node-id=")
-               .map(NodeId::nodeId)
-               .orElse(findEnv("NODE_ID")
-                       .map(NodeId::nodeId))
-               .or(NodeId::randomNodeId);
+                      .map(NodeId::nodeId)
+                      .orElse(findEnv("NODE_ID")
+                                     .map(NodeId::nodeId))
+                      .or(NodeId::randomNodeId);
     }
 
     private int parsePort(Option<AetherConfig> aetherConfig) {
         return findArg("--port=")
-               .map(Integer::parseInt)
-               .orElse(findEnv("CLUSTER_PORT")
-                       .map(Integer::parseInt))
-               .or(() -> portFromConfig(aetherConfig));
+                      .map(Integer::parseInt)
+                      .orElse(findEnv("CLUSTER_PORT")
+                                     .map(Integer::parseInt))
+                      .or(() -> portFromConfig(aetherConfig));
     }
 
     private int portFromConfig(Option<AetherConfig> aetherConfig) {
@@ -163,10 +163,10 @@ public record Main(String[] args) {
 
     private int parseManagementPort(Option<AetherConfig> aetherConfig) {
         return findArg("--management-port=")
-               .map(Integer::parseInt)
-               .orElse(findEnv("MANAGEMENT_PORT")
-                       .map(Integer::parseInt))
-               .or(() -> managementPortFromConfig(aetherConfig));
+                      .map(Integer::parseInt)
+                      .orElse(findEnv("MANAGEMENT_PORT")
+                                     .map(Integer::parseInt))
+                      .or(() -> managementPortFromConfig(aetherConfig));
     }
 
     private int managementPortFromConfig(Option<AetherConfig> aetherConfig) {
@@ -179,11 +179,11 @@ public record Main(String[] args) {
     private List<NodeInfo> parsePeers(NodeId self, int selfPort, Option<AetherConfig> aetherConfig) {
         var selfInfo = nodeInfo(self, nodeAddress("localhost", selfPort));
         return findArg("--peers=")
-               .map(peersStr -> parsePeersFromString(peersStr, self, selfInfo))
-               .orElse(findEnv("CLUSTER_PEERS")
-                       .map(peersStr -> parsePeersFromString(peersStr, self, selfInfo)))
-               .orElse(aetherConfig.map(this::generatePeersFromConfig))
-               .or(() -> List.of(selfInfo));
+                      .map(peersStr -> parsePeersFromString(peersStr, self, selfInfo))
+                      .orElse(findEnv("CLUSTER_PEERS")
+                                     .map(peersStr -> parsePeersFromString(peersStr, self, selfInfo)))
+                      .orElse(aetherConfig.map(this::generatePeersFromConfig))
+                      .or(() -> List.of(selfInfo));
     }
 
     private List<NodeInfo> generatePeersFromConfig(AetherConfig aetherConfig) {
@@ -213,7 +213,7 @@ public record Main(String[] args) {
                           .map(String::trim)
                           .filter(s -> !s.isEmpty())
                           .flatMap(peerStr -> parsePeerAddress(peerStr)
-                                              .stream())
+                                                              .stream())
                           .toList();
         return ensureSelfIncluded(peers, self, selfInfo);
     }

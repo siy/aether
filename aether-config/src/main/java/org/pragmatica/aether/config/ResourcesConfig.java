@@ -7,11 +7,10 @@ package org.pragmatica.aether.config;
  * @param memoryRequest Memory request (e.g., "1Gi")
  * @param memoryLimit   Memory limit (e.g., "2Gi")
  */
-public record ResourcesConfig(
- String cpuRequest,
- String cpuLimit,
- String memoryRequest,
- String memoryLimit) {
+public record ResourcesConfig(String cpuRequest,
+                              String cpuLimit,
+                              String memoryRequest,
+                              String memoryLimit) {
     public static ResourcesConfig defaults() {
         return new ResourcesConfig("500m", "2", "1Gi", "2Gi");
     }

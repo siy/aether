@@ -7,17 +7,15 @@ package org.pragmatica.aether.config;
  * @param tls         Enable TLS for cluster communication
  * @param ports       Port configuration
  */
-public record ClusterConfig(
- Environment environment,
- int nodes,
- boolean tls,
- PortsConfig ports) {
+public record ClusterConfig(Environment environment,
+                            int nodes,
+                            boolean tls,
+                            PortsConfig ports) {
     /**
      * Create cluster config with environment defaults.
      */
     public static ClusterConfig forEnvironment(Environment env) {
-        return new ClusterConfig(
-        env, env.defaultNodes(), env.defaultTls(), PortsConfig.defaults());
+        return new ClusterConfig(env, env.defaultNodes(), env.defaultTls(), PortsConfig.defaults());
     }
 
     /**

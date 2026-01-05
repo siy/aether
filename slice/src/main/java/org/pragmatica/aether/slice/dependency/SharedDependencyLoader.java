@@ -54,7 +54,7 @@ public interface SharedDependencyLoader {
         var dependency = dependencies.getFirst();
         var remaining = dependencies.subList(1, dependencies.size());
         return loadApiIntoShared(dependency, sharedLibraryLoader, repository)
-               .flatMap(_ -> processApiSequentially(remaining, sharedLibraryLoader, repository));
+                                .flatMap(_ -> processApiSequentially(remaining, sharedLibraryLoader, repository));
     }
 
     private static Promise<Unit> loadApiIntoShared(ArtifactDependency dependency,
@@ -69,11 +69,11 @@ public interface SharedDependencyLoader {
                                                  SharedLibraryClassLoader sharedLibraryLoader,
                                                  Repository repository) {
         return toArtifact(dependency)
-               .async()
-               .flatMap(repository::locate)
-               .map(location -> addApiToSharedLoader(dependency,
-                                                     sharedLibraryLoader,
-                                                     location.url()));
+                         .async()
+                         .flatMap(repository::locate)
+                         .map(location -> addApiToSharedLoader(dependency,
+                                                               sharedLibraryLoader,
+                                                               location.url()));
     }
 
     private static Unit addApiToSharedLoader(ArtifactDependency dependency,
@@ -96,9 +96,8 @@ public interface SharedDependencyLoader {
      * @param sliceClassLoader   The ClassLoader to use for loading the slice
      * @param conflictingJarUrls URLs of JARs that conflict with shared versions (loaded into slice)
      */
-    record SharedDependencyResult(
-    SliceClassLoader sliceClassLoader,
-    List<URL> conflictingJarUrls) {}
+    record SharedDependencyResult(SliceClassLoader sliceClassLoader,
+                                  List<URL> conflictingJarUrls) {}
 
     /**
      * Process shared dependencies for a slice.
@@ -120,7 +119,7 @@ public interface SharedDependencyLoader {
                                                                      URL sliceJarUrl) {
         var conflictUrls = new ArrayList<URL>();
         return processSequentially(dependencies, sharedLibraryLoader, repository, conflictUrls)
-               .map(_ -> createSliceClassLoader(sharedLibraryLoader, sliceJarUrl, conflictUrls));
+                                  .map(_ -> createSliceClassLoader(sharedLibraryLoader, sliceJarUrl, conflictUrls));
     }
 
     private static SharedDependencyResult createSliceClassLoader(SharedLibraryClassLoader sharedLibraryLoader,
@@ -143,7 +142,10 @@ public interface SharedDependencyLoader {
         var dependency = dependencies.getFirst();
         var remaining = dependencies.subList(1, dependencies.size());
         return processSingleDependency(dependency, sharedLibraryLoader, repository, conflictUrls)
-               .flatMap(_ -> processSequentially(remaining, sharedLibraryLoader, repository, conflictUrls));
+                                      .flatMap(_ -> processSequentially(remaining,
+                                                                        sharedLibraryLoader,
+                                                                        repository,
+                                                                        conflictUrls));
     }
 
     private static Promise<Unit> processSingleDependency(ArtifactDependency dependency,
@@ -188,11 +190,11 @@ public interface SharedDependencyLoader {
                                                 SharedLibraryClassLoader sharedLibraryLoader,
                                                 Repository repository) {
         return toArtifact(dependency)
-               .async()
-               .flatMap(repository::locate)
-               .map(location -> addToSharedLoader(dependency,
-                                                  sharedLibraryLoader,
-                                                  location.url()));
+                         .async()
+                         .flatMap(repository::locate)
+                         .map(location -> addToSharedLoader(dependency,
+                                                            sharedLibraryLoader,
+                                                            location.url()));
     }
 
     private static Unit addToSharedLoader(ArtifactDependency dependency,
@@ -208,11 +210,11 @@ public interface SharedDependencyLoader {
                                                        Repository repository,
                                                        List<URL> conflictUrls) {
         return toArtifact(dependency)
-               .async()
-               .flatMap(repository::locate)
-               .map(location -> addConflictUrl(dependency,
-                                               conflictUrls,
-                                               location.url()));
+                         .async()
+                         .flatMap(repository::locate)
+                         .map(location -> addConflictUrl(dependency,
+                                                         conflictUrls,
+                                                         location.url()));
     }
 
     private static Unit addConflictUrl(ArtifactDependency dependency, List<URL> conflictUrls, URL url) {
@@ -223,7 +225,7 @@ public interface SharedDependencyLoader {
 
     private static Result<Artifact> toArtifact(ArtifactDependency dependency) {
         var versionStr = extractVersion(dependency.versionPattern())
-                         .withQualifier();
+                                       .withQualifier();
         return Artifact.artifact(dependency.groupId() + ":" + dependency.artifactId() + ":" + versionStr);
     }
 

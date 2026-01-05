@@ -71,6 +71,6 @@ public record TTMForecast(long timestamp,
      * Check if the recommendation requires action.
      */
     public boolean requiresAction() {
-        return !(recommendation instanceof ScalingRecommendation.NoAction);
+        return ! ( recommendation instanceof ScalingRecommendation.NoAction);
     }
 }

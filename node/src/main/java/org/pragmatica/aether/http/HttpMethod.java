@@ -17,13 +17,13 @@ public enum HttpMethod {
     OPTIONS;
     public static Option<HttpMethod> fromString(String method) {
         return switch (method.toUpperCase(Locale.ROOT)) {
-            case"GET" -> Option.some(GET);
-            case"POST" -> Option.some(POST);
-            case"PUT" -> Option.some(PUT);
-            case"DELETE" -> Option.some(DELETE);
-            case"PATCH" -> Option.some(PATCH);
-            case"HEAD" -> Option.some(HEAD);
-            case"OPTIONS" -> Option.some(OPTIONS);
+            case "GET" -> Option.some(GET);
+            case "POST" -> Option.some(POST);
+            case "PUT" -> Option.some(PUT);
+            case "DELETE" -> Option.some(DELETE);
+            case "PATCH" -> Option.some(PATCH);
+            case "HEAD" -> Option.some(HEAD);
+            case "OPTIONS" -> Option.some(OPTIONS);
             default -> Option.none();
         };
     }

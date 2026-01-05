@@ -14,17 +14,15 @@ import org.pragmatica.lang.Option;
  * @param syncFailureCount  Failed sync attempts
  * @param totalDecisionLatencyNs Cumulative decision latency in nanoseconds
  */
-public record RabiaMetrics(
- String role,
- Option<String> leaderId,
- int pendingBatches,
- long decisionsCount,
- long proposalsCount,
- long syncSuccessCount,
- long syncFailureCount,
- long totalDecisionLatencyNs) {
-    public static final RabiaMetrics EMPTY = new RabiaMetrics(
-    "FOLLOWER", Option.empty(), 0, 0, 0, 0, 0, 0);
+public record RabiaMetrics(String role,
+                           Option<String> leaderId,
+                           int pendingBatches,
+                           long decisionsCount,
+                           long proposalsCount,
+                           long syncSuccessCount,
+                           long syncFailureCount,
+                           long totalDecisionLatencyNs) {
+    public static final RabiaMetrics EMPTY = new RabiaMetrics("FOLLOWER", Option.empty(), 0, 0, 0, 0, 0, 0);
 
     /**
      * Calculate average decision latency in milliseconds.
@@ -33,7 +31,7 @@ public record RabiaMetrics(
         if (decisionsCount == 0) {
             return 0.0;
         }
-        return (totalDecisionLatencyNs / (double) decisionsCount) / 1_000_000.0;
+        return ( totalDecisionLatencyNs / (double) decisionsCount) / 1_000_000.0;
     }
 
     /**
@@ -51,7 +49,7 @@ public record RabiaMetrics(
      * Check if this node is leader.
      */
     public boolean isLeader() {
-        return "LEADER".equals(role);
+        return "LEADER". equals(role);
     }
 
     /**

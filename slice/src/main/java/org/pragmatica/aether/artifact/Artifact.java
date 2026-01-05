@@ -6,7 +6,7 @@ import org.pragmatica.lang.Result;
 import org.pragmatica.lang.utils.Causes;
 
 public record Artifact(GroupId groupId, ArtifactId artifactId, Version version) {
-    private static final Fn1<Cause, String>INVALID_FORMAT = Causes.forOneValue("Invalid artifact format %s");
+    private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forOneValue("Invalid artifact format %s");
 
     public static Result<Artifact> artifact(String artifactString) {
         var parts = artifactString.split(":", 3);

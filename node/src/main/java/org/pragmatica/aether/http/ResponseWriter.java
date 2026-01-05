@@ -49,7 +49,7 @@ class ResponseWriterImpl implements ResponseWriter {
         ByteBuf content;
         if (body == null) {
             content = Unpooled.EMPTY_BUFFER;
-        }else {
+        } else {
             content = Unpooled.buffer();
             serializer.write(content, body);
         }

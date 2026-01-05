@@ -35,41 +35,39 @@ import java.util.Map;
  * @param avgLatencyMs         Average invocation latency in milliseconds
  * @param custom               Custom metrics from slices
  */
-public record ComprehensiveSnapshot(
- long timestamp,
- // JVM
+public record ComprehensiveSnapshot(long timestamp,
+                                    // JVM
 double cpuUsage,
- long heapUsed,
- long heapMax,
- // GC
+                                    long heapUsed,
+                                    long heapMax,
+                                    // GC
 GCMetrics gc,
- // Event Loop
+                                    // Event Loop
 EventLoopMetrics eventLoop,
- // Network
+                                    // Network
 NetworkMetrics network,
- // Consensus
+                                    // Consensus
 RabiaMetrics consensus,
- // Invocation summary
+                                    // Invocation summary
 long totalInvocations,
- long successfulInvocations,
- long failedInvocations,
- double avgLatencyMs,
- // Custom
+                                    long successfulInvocations,
+                                    long failedInvocations,
+                                    double avgLatencyMs,
+                                    // Custom
 Map<String, Double> custom) {
-    public static final ComprehensiveSnapshot EMPTY = new ComprehensiveSnapshot(
-    0,
-    0.0,
-    0,
-    0,
-    GCMetrics.EMPTY,
-    EventLoopMetrics.EMPTY,
-    NetworkMetrics.EMPTY,
-    RabiaMetrics.EMPTY,
-    0,
-    0,
-    0,
-    0.0,
-    Map.of());
+    public static final ComprehensiveSnapshot EMPTY = new ComprehensiveSnapshot(0,
+                                                                                0.0,
+                                                                                0,
+                                                                                0,
+                                                                                GCMetrics.EMPTY,
+                                                                                EventLoopMetrics.EMPTY,
+                                                                                NetworkMetrics.EMPTY,
+                                                                                RabiaMetrics.EMPTY,
+                                                                                0,
+                                                                                0,
+                                                                                0,
+                                                                                0.0,
+                                                                                Map.of());
 
     /**
      * Heap usage as ratio (0.0-1.0).
@@ -78,7 +76,7 @@ Map<String, Double> custom) {
         if (heapMax <= 0) {
             return 0.0;
         }
-        return (double) heapUsed / heapMax;
+        return ( double) heapUsed / heapMax;
     }
 
     /**
@@ -88,7 +86,7 @@ Map<String, Double> custom) {
         if (totalInvocations <= 0) {
             return 1.0;
         }
-        return (double) successfulInvocations / totalInvocations;
+        return ( double) successfulInvocations / totalInvocations;
     }
 
     /**
@@ -98,7 +96,7 @@ Map<String, Double> custom) {
         if (totalInvocations <= 0) {
             return 0.0;
         }
-        return (double) failedInvocations / totalInvocations;
+        return ( double) failedInvocations / totalInvocations;
     }
 
     /**
@@ -210,20 +208,19 @@ Map<String, Double> custom) {
         }
 
         public ComprehensiveSnapshot build() {
-            return new ComprehensiveSnapshot(
-            timestamp,
-            cpuUsage,
-            heapUsed,
-            heapMax,
-            gc,
-            eventLoop,
-            network,
-            consensus,
-            totalInvocations,
-            successfulInvocations,
-            failedInvocations,
-            avgLatencyMs,
-            custom);
+            return new ComprehensiveSnapshot(timestamp,
+                                             cpuUsage,
+                                             heapUsed,
+                                             heapMax,
+                                             gc,
+                                             eventLoop,
+                                             network,
+                                             consensus,
+                                             totalInvocations,
+                                             successfulInvocations,
+                                             failedInvocations,
+                                             avgLatencyMs,
+                                             custom);
         }
     }
 }

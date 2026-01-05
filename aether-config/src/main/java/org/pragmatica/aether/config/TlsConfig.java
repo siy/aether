@@ -12,11 +12,10 @@ import java.nio.file.Path;
  * @param keyPath      Path to private key file (if not auto-generating)
  * @param caPath       Path to CA certificate file (if not auto-generating)
  */
-public record TlsConfig(
- boolean autoGenerate,
- String certPath,
- String keyPath,
- String caPath) {
+public record TlsConfig(boolean autoGenerate,
+                        String certPath,
+                        String keyPath,
+                        String caPath) {
     /**
      * Default: auto-generate self-signed certificates.
      */
@@ -35,7 +34,7 @@ public record TlsConfig(
      * Check if using user-provided certificates.
      */
     public boolean hasProvidedCertificates() {
-        return !autoGenerate && !certPath.isBlank() && !keyPath.isBlank();
+        return ! autoGenerate && !certPath.isBlank() && !keyPath.isBlank();
     }
 
     public Option<Path> certFile() {

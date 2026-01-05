@@ -128,7 +128,7 @@ public final class GCMetricsCollector {
         if (isYoungGc) {
             youngGcCount.increment();
             youngGcPauseMs.add(duration);
-        }else {
+        } else {
             oldGcCount.increment();
             oldGcPauseMs.add(duration);
             lastMajorGcTimestamp.set(System.currentTimeMillis());
@@ -145,7 +145,7 @@ public final class GCMetricsCollector {
             }
         }
         // Default: if name contains "Old", "Major", or "Full", it's not young
-        return !gcName.contains("Old") && !gcName.contains("Major") && !gcName.contains("Full");
+        return ! gcName.contains("Old") && !gcName.contains("Major") && !gcName.contains("Full");
     }
 
     private void updateAllocationRate(long currentHeapUsed) {
@@ -166,30 +166,28 @@ public final class GCMetricsCollector {
      * Take a snapshot of current metrics.
      */
     public GCMetrics snapshot() {
-        return new GCMetrics(
-        youngGcCount.sum(),
-        youngGcPauseMs.sum(),
-        oldGcCount.sum(),
-        oldGcPauseMs.sum(),
-        reclaimedBytes.sum(),
-        allocationRateBytesPerSec.get(),
-        promotionRateBytesPerSec.get(),
-        lastMajorGcTimestamp.get());
+        return new GCMetrics(youngGcCount.sum(),
+                             youngGcPauseMs.sum(),
+                             oldGcCount.sum(),
+                             oldGcPauseMs.sum(),
+                             reclaimedBytes.sum(),
+                             allocationRateBytesPerSec.get(),
+                             promotionRateBytesPerSec.get(),
+                             lastMajorGcTimestamp.get());
     }
 
     /**
      * Take a snapshot and reset counters (for delta-based reporting).
      */
     public GCMetrics snapshotAndReset() {
-        var snap = new GCMetrics(
-        youngGcCount.sumThenReset(),
-        youngGcPauseMs.sumThenReset(),
-        oldGcCount.sumThenReset(),
-        oldGcPauseMs.sumThenReset(),
-        reclaimedBytes.sumThenReset(),
-        allocationRateBytesPerSec.get(),
-        promotionRateBytesPerSec.get(),
-        lastMajorGcTimestamp.get());
+        var snap = new GCMetrics(youngGcCount.sumThenReset(),
+                                 youngGcPauseMs.sumThenReset(),
+                                 oldGcCount.sumThenReset(),
+                                 oldGcPauseMs.sumThenReset(),
+                                 reclaimedBytes.sumThenReset(),
+                                 allocationRateBytesPerSec.get(),
+                                 promotionRateBytesPerSec.get(),
+                                 lastMajorGcTimestamp.get());
         return snap;
     }
 }

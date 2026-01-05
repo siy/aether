@@ -51,10 +51,9 @@ public sealed interface RollingUpdateError extends Cause {
     /**
      * Insufficient instances to satisfy routing ratio.
      */
-    record InsufficientInstances(
-    VersionRouting routing,
-    int newInstances,
-    int oldInstances) implements RollingUpdateError {
+    record InsufficientInstances(VersionRouting routing,
+                                 int newInstances,
+                                 int oldInstances) implements RollingUpdateError {
         @Override
         public String message() {
             return "Cannot satisfy routing " + routing + " with " + newInstances + " new and " + oldInstances
@@ -65,10 +64,9 @@ public sealed interface RollingUpdateError extends Cause {
     /**
      * Health check failed.
      */
-    record HealthCheckFailed(
-    double errorRate,
-    long latencyMs,
-    HealthThresholds thresholds) implements RollingUpdateError {
+    record HealthCheckFailed(double errorRate,
+                             long latencyMs,
+                             HealthThresholds thresholds) implements RollingUpdateError {
         @Override
         public String message() {
             return "Health check failed: error rate " + errorRate + " (max " + thresholds.maxErrorRate()

@@ -216,32 +216,31 @@ public interface AetherNode {
                                                    RabiaMetricsCollector rabiaMetricsCollector,
                                                    Serializer serializer,
                                                    Deserializer deserializer) {
-        record aetherNodeImpl(
-        AetherNodeConfig config,
-        MessageRouter.DelegateRouter router,
-        KVStore<AetherKey, AetherValue> kvStore,
-        SliceRegistry sliceRegistry,
-        SliceStore sliceStore,
-        RabiaNode<KVCommand<AetherKey>> clusterNode,
-        NodeDeploymentManager nodeDeploymentManager,
-        ClusterDeploymentManager clusterDeploymentManager,
-        EndpointRegistry endpointRegistry,
-        MetricsCollector metricsCollector,
-        MetricsScheduler metricsScheduler,
-        DeploymentMetricsCollector deploymentMetricsCollector,
-        DeploymentMetricsScheduler deploymentMetricsScheduler,
-        ControlLoop controlLoop,
-        SliceInvoker sliceInvoker,
-        InvocationHandler invocationHandler,
-        BlueprintService blueprintService,
-        MavenProtocolHandler mavenProtocolHandler,
-        InvocationMetricsCollector invocationMetrics,
-        DecisionTreeController controller,
-        RollingUpdateManager rollingUpdateManager,
-        AlertManager alertManager,
-        TTMManager ttmManager,
-        Option<ManagementServer> managementServer,
-        Option<HttpRouter> httpRouter) implements AetherNode {
+        record aetherNodeImpl(AetherNodeConfig config,
+                              MessageRouter.DelegateRouter router,
+                              KVStore<AetherKey, AetherValue> kvStore,
+                              SliceRegistry sliceRegistry,
+                              SliceStore sliceStore,
+                              RabiaNode<KVCommand<AetherKey>> clusterNode,
+                              NodeDeploymentManager nodeDeploymentManager,
+                              ClusterDeploymentManager clusterDeploymentManager,
+                              EndpointRegistry endpointRegistry,
+                              MetricsCollector metricsCollector,
+                              MetricsScheduler metricsScheduler,
+                              DeploymentMetricsCollector deploymentMetricsCollector,
+                              DeploymentMetricsScheduler deploymentMetricsScheduler,
+                              ControlLoop controlLoop,
+                              SliceInvoker sliceInvoker,
+                              InvocationHandler invocationHandler,
+                              BlueprintService blueprintService,
+                              MavenProtocolHandler mavenProtocolHandler,
+                              InvocationMetricsCollector invocationMetrics,
+                              DecisionTreeController controller,
+                              RollingUpdateManager rollingUpdateManager,
+                              AlertManager alertManager,
+                              TTMManager ttmManager,
+                              Option<ManagementServer> managementServer,
+                              Option<HttpRouter> httpRouter) implements AetherNode {
             private static final Logger log = LoggerFactory.getLogger(aetherNodeImpl.class);
 
             @Override
@@ -255,9 +254,8 @@ public interface AetherNode {
                 SliceRuntime.setSliceInvoker(sliceInvoker);
                 return managementServer.fold(() -> Promise.success(Unit.unit()),
                                              ManagementServer::start)
-                                       .flatMap(_ -> httpRouter.fold(
-                () -> Promise.success(Unit.unit()),
-                HttpRouter::start))
+                                       .flatMap(_ -> httpRouter.fold(() -> Promise.success(Unit.unit()),
+                                                                     HttpRouter::start))
                                        .flatMap(_ -> startClusterAsync())
                                        .onSuccess(_ -> log.info("Aether node {} HTTP server started, cluster forming...",
                                                                 self()));
@@ -273,9 +271,8 @@ public interface AetherNode {
                 SliceRuntime.clear();
                 return httpRouter.fold(() -> Promise.success(Unit.unit()),
                                        HttpRouter::stop)
-                                 .flatMap(_ -> managementServer.fold(
-                () -> Promise.success(Unit.unit()),
-                ManagementServer::stop))
+                                 .flatMap(_ -> managementServer.fold(() -> Promise.success(Unit.unit()),
+                                                                     ManagementServer::stop))
                                  .flatMap(_ -> sliceInvoker.stop())
                                  .flatMap(_ -> clusterNode.stop())
                                  .onSuccess(_ -> log.info("Aether node {} stopped",
@@ -319,38 +316,37 @@ public interface AetherNode {
         // Create route registry for dynamic route registration (before node deployment manager)
         var routeRegistry = RouteRegistry.routeRegistry(clusterNode, kvStore);
         // Create deployment metrics components
-        var deploymentMetricsCollector = DeploymentMetricsCollector.deploymentMetricsCollector(
-        config.self(), clusterNode.network());
-        var deploymentMetricsScheduler = DeploymentMetricsScheduler.deploymentMetricsScheduler(
-        config.self(), clusterNode.network(), deploymentMetricsCollector);
+        var deploymentMetricsCollector = DeploymentMetricsCollector.deploymentMetricsCollector(config.self(),
+                                                                                               clusterNode.network());
+        var deploymentMetricsScheduler = DeploymentMetricsScheduler.deploymentMetricsScheduler(config.self(),
+                                                                                               clusterNode.network(),
+                                                                                               deploymentMetricsCollector);
         // Create deployment managers
-        var nodeDeploymentManager = NodeDeploymentManager.nodeDeploymentManager(
-        config.self(),
-        delegateRouter,
-        sliceStore,
-        clusterNode,
-        kvStore,
-        invocationHandler,
-        routeRegistry,
-        config.sliceAction());
-        var clusterDeploymentManager = ClusterDeploymentManager.clusterDeploymentManager(
-        config.self(), clusterNode, kvStore, delegateRouter);
+        var nodeDeploymentManager = NodeDeploymentManager.nodeDeploymentManager(config.self(),
+                                                                                delegateRouter,
+                                                                                sliceStore,
+                                                                                clusterNode,
+                                                                                kvStore,
+                                                                                invocationHandler,
+                                                                                routeRegistry,
+                                                                                config.sliceAction());
+        var clusterDeploymentManager = ClusterDeploymentManager.clusterDeploymentManager(config.self(),
+                                                                                         clusterNode,
+                                                                                         kvStore,
+                                                                                         delegateRouter);
         // Create endpoint registry
         var endpointRegistry = EndpointRegistry.endpointRegistry();
         // Create metrics components
         var metricsCollector = MetricsCollector.metricsCollector(config.self(), clusterNode.network());
-        var metricsScheduler = MetricsScheduler.metricsScheduler(
-        config.self(), clusterNode.network(), metricsCollector);
+        var metricsScheduler = MetricsScheduler.metricsScheduler(config.self(), clusterNode.network(), metricsCollector);
         // Create controller and control loop
         var controller = DecisionTreeController.decisionTreeController();
-        var controlLoop = ControlLoop.controlLoop(
-        config.self(), controller, metricsCollector, clusterNode);
+        var controlLoop = ControlLoop.controlLoop(config.self(), controller, metricsCollector, clusterNode);
         // Create blueprint service using composite repository from configuration
-        var blueprintService = BlueprintServiceImpl.blueprintService(
-        clusterNode,
-        kvStore,
-        compositeRepository(config.sliceAction()
-                                  .repositories()));
+        var blueprintService = BlueprintServiceImpl.blueprintService(clusterNode,
+                                                                     kvStore,
+                                                                     compositeRepository(config.sliceAction()
+                                                                                               .repositories()));
         // Create DHT and artifact repository
         var dhtStorage = MemoryStorageEngine.memoryStorageEngine();
         var dhtRing = ConsistentHashRing.<String>consistentHashRing();
@@ -367,8 +363,7 @@ public interface AetherNode {
         // Create invocation metrics collector
         var invocationMetrics = InvocationMetricsCollector.invocationMetricsCollector();
         // Create rolling update manager
-        var rollingUpdateManager = RollingUpdateManagerImpl.rollingUpdateManager(
-        clusterNode, kvStore, invocationMetrics);
+        var rollingUpdateManager = RollingUpdateManagerImpl.rollingUpdateManager(clusterNode, kvStore, invocationMetrics);
         // Create alert manager with KV-Store persistence
         var alertManager = AlertManager.alertManager(clusterNode, kvStore);
         // Create minute aggregator for TTM and metrics collection
@@ -380,14 +375,13 @@ public interface AetherNode {
                                    .fold(_ -> TTMManager.noOp(config.ttm()),
                                          manager -> manager);
         // Create slice invoker (needs rollingUpdateManager for weighted routing during rolling updates)
-        var sliceInvoker = SliceInvoker.sliceInvoker(
-        config.self(),
-        clusterNode.network(),
-        endpointRegistry,
-        invocationHandler,
-        serializer,
-        deserializer,
-        rollingUpdateManager);
+        var sliceInvoker = SliceInvoker.sliceInvoker(config.self(),
+                                                     clusterNode.network(),
+                                                     endpointRegistry,
+                                                     invocationHandler,
+                                                     serializer,
+                                                     deserializer,
+                                                     rollingUpdateManager);
         // Collect all route entries from RabiaNode and AetherNode components
         var aetherEntries = collectRouteEntries(kvStore,
                                                 nodeDeploymentManager,
@@ -415,68 +409,66 @@ public interface AetherNode {
                                                                                     serializer,
                                                                                     deserializer));
         // Create the node first (without management server reference)
-        var node = new aetherNodeImpl(
-        config,
-        delegateRouter,
-        kvStore,
-        sliceRegistry,
-        sliceStore,
-        clusterNode,
-        nodeDeploymentManager,
-        clusterDeploymentManager,
-        endpointRegistry,
-        metricsCollector,
-        metricsScheduler,
-        deploymentMetricsCollector,
-        deploymentMetricsScheduler,
-        controlLoop,
-        sliceInvoker,
-        invocationHandler,
-        blueprintService,
-        mavenProtocolHandler,
-        invocationMetrics,
-        controller,
-        rollingUpdateManager,
-        alertManager,
-        ttmManager,
-        Option.empty(),
-        httpRouter);
+        var node = new aetherNodeImpl(config,
+                                      delegateRouter,
+                                      kvStore,
+                                      sliceRegistry,
+                                      sliceStore,
+                                      clusterNode,
+                                      nodeDeploymentManager,
+                                      clusterDeploymentManager,
+                                      endpointRegistry,
+                                      metricsCollector,
+                                      metricsScheduler,
+                                      deploymentMetricsCollector,
+                                      deploymentMetricsScheduler,
+                                      controlLoop,
+                                      sliceInvoker,
+                                      invocationHandler,
+                                      blueprintService,
+                                      mavenProtocolHandler,
+                                      invocationMetrics,
+                                      controller,
+                                      rollingUpdateManager,
+                                      alertManager,
+                                      ttmManager,
+                                      Option.empty(),
+                                      httpRouter);
         // Build and wire ImmutableRouter, then create final node
         return RabiaNode.buildAndWireRouter(delegateRouter, allEntries)
                         .map(_ -> {
                                  // Create management server if enabled
         if (config.managementPort() > 0) {
-                                 var managementServer = ManagementServer.managementServer(config.managementPort(),
-                                                                                          () -> node,
-                                                                                          alertManager,
-                                                                                          config.tls());
-                                 return new aetherNodeImpl(
-        config,
-        delegateRouter,
-        kvStore,
-        sliceRegistry,
-        sliceStore,
-        clusterNode,
-        nodeDeploymentManager,
-        clusterDeploymentManager,
-        endpointRegistry,
-        metricsCollector,
-        metricsScheduler,
-        deploymentMetricsCollector,
-        deploymentMetricsScheduler,
-        controlLoop,
-        sliceInvoker,
-        invocationHandler,
-        blueprintService,
-        mavenProtocolHandler,
-        invocationMetrics,
-        controller,
-        rollingUpdateManager,
-        alertManager,
-        ttmManager,
-        Option.some(managementServer),
-        httpRouter);
-                             }
+                                     var managementServer = ManagementServer.managementServer(config.managementPort(),
+                                                                                              () -> node,
+                                                                                              alertManager,
+                                                                                              config.tls());
+                                     return new aetherNodeImpl(config,
+                                                               delegateRouter,
+                                                               kvStore,
+                                                               sliceRegistry,
+                                                               sliceStore,
+                                                               clusterNode,
+                                                               nodeDeploymentManager,
+                                                               clusterDeploymentManager,
+                                                               endpointRegistry,
+                                                               metricsCollector,
+                                                               metricsScheduler,
+                                                               deploymentMetricsCollector,
+                                                               deploymentMetricsScheduler,
+                                                               controlLoop,
+                                                               sliceInvoker,
+                                                               invocationHandler,
+                                                               blueprintService,
+                                                               mavenProtocolHandler,
+                                                               invocationMetrics,
+                                                               controller,
+                                                               rollingUpdateManager,
+                                                               alertManager,
+                                                               ttmManager,
+                                                               Option.some(managementServer),
+                                                               httpRouter);
+                                 }
                                  return node;
                              });
     }
@@ -535,11 +527,10 @@ public interface AetherNode {
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValueRemove.class, routeRegistry::onValueRemove));
         // Alert threshold sync via KV-Store
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValuePut.class,
-                                              notification -> alertManager.onKvStoreUpdate(
-        (AetherKey) notification.cause()
-                               .key(),
-        (AetherValue) notification.cause()
-                                 .value())));
+                                              notification -> alertManager.onKvStoreUpdate((AetherKey) notification.cause()
+                                                                                                                  .key(),
+                                                                                           (AetherValue) notification.cause()
+                                                                                                                    .value())));
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValueRemove.class,
                                               notification -> alertManager.onKvStoreRemove((AetherKey) notification.cause()
                                                                                                                   .key())));

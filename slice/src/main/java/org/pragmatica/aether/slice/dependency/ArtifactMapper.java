@@ -124,7 +124,7 @@ public interface ArtifactMapper {
                     }
                 }
                 result.append(Character.toLowerCase(c));
-            }else {
+            } else {
                 result.append(c);
             }
         }
@@ -149,10 +149,10 @@ public interface ArtifactMapper {
         for (var c : kebabCase.toCharArray()) {
             if (c == '-') {
                 capitalizeNext = true;
-            }else if (capitalizeNext) {
+            } else if (capitalizeNext) {
                 result.append(Character.toUpperCase(c));
                 capitalizeNext = false;
-            }else {
+            } else {
                 result.append(c);
             }
         }
@@ -174,6 +174,5 @@ public interface ArtifactMapper {
         };
     }
 
-    Fn1<Cause, String>INVALID_CLASS_NAME = Causes.forOneValue(
-    "Invalid class name format: %s. Expected fully qualified name like 'org.example.ClassName'");
+    Fn1<Cause, String> INVALID_CLASS_NAME = Causes.forOneValue("Invalid class name format: %s. Expected fully qualified name like 'org.example.ClassName'");
 }

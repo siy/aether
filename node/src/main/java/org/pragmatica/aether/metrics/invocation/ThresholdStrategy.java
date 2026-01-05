@@ -183,14 +183,14 @@ public sealed interface ThresholdStrategy {
                 var c = count.incrementAndGet();
                 if (c == 1) {
                     ema = durationNs;
-                }else {
+                } else {
                     // Thread-safe EMA update (approximate, but good enough for thresholds)
                     ema = ALPHA * durationNs + (1 - ALPHA) * ema;
                 }
             }
 
             long averageNs() {
-                return (long) ema;
+                return ( long) ema;
             }
         }
     }
@@ -243,9 +243,8 @@ public sealed interface ThresholdStrategy {
     /**
      * Composite strategy - per-method overrides with adaptive fallback.
      */
-    record Composite(
-    Map<MethodName, Long> methodThresholdsNs,
-    ThresholdStrategy fallback) implements ThresholdStrategy {
+    record Composite(Map<MethodName, Long> methodThresholdsNs,
+                     ThresholdStrategy fallback) implements ThresholdStrategy {
         @Override
         public boolean isSlow(MethodName method, long durationNs) {
             var explicit = methodThresholdsNs.get(method);

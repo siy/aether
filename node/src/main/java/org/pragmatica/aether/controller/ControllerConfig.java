@@ -9,11 +9,10 @@ package org.pragmatica.aether.controller;
  * @param callRateScaleUpThreshold call rate above which to scale up
  * @param evaluationIntervalMs interval between controller evaluations in milliseconds
  */
-public record ControllerConfig(
- double cpuScaleUpThreshold,
- double cpuScaleDownThreshold,
- double callRateScaleUpThreshold,
- long evaluationIntervalMs) {
+public record ControllerConfig(double cpuScaleUpThreshold,
+                               double cpuScaleDownThreshold,
+                               double callRateScaleUpThreshold,
+                               long evaluationIntervalMs) {
     /**
      * Default configuration.
      */

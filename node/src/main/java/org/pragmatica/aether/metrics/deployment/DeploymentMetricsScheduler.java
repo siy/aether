@@ -92,7 +92,7 @@ class DeploymentMetricsSchedulerImpl implements DeploymentMetricsScheduler {
         if (leaderChange.localNodeIsLeader()) {
             log.info("Node {} became leader, starting deployment metrics scheduler", self);
             startPinging();
-        }else {
+        } else {
             log.info("Node {} is no longer leader, stopping deployment metrics scheduler", self);
             stopPinging();
         }
@@ -125,8 +125,7 @@ class DeploymentMetricsSchedulerImpl implements DeploymentMetricsScheduler {
     private void startPinging() {
         stopPinging();
         // Cancel any existing task
-        var task = scheduler.scheduleAtFixedRate(
-        this::sendPingsToAllNodes, 0, intervalMs, TimeUnit.MILLISECONDS);
+        var task = scheduler.scheduleAtFixedRate(this::sendPingsToAllNodes, 0, intervalMs, TimeUnit.MILLISECONDS);
         pingTask.set(task);
     }
 

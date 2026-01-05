@@ -309,10 +309,10 @@ public class DashboardMetricsPublisher {
 
     private long parseTimeRange(String range) {
         return switch (range) {
-            case"5m" -> 5 * 60 * 1000L;
-            case"15m" -> 15 * 60 * 1000L;
-            case"1h" -> 60 * 60 * 1000L;
-            case"2h" -> 2 * 60 * 60 * 1000L;
+            case "5m" -> 5 * 60 * 1000L;
+            case "15m" -> 15 * 60 * 1000L;
+            case "1h" -> 60 * 60 * 1000L;
+            case "2h" -> 2 * 60 * 60 * 1000L;
             default -> 60 * 60 * 1000L;
         };
     }

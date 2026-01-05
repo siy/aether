@@ -75,7 +75,7 @@ public interface SliceStoreImpl {
             }
             log.info("Loading slice {}", artifact);
             return locateInRepositories(artifact)
-                   .flatMap(location -> loadFromLocation(artifact));
+                                       .flatMap(location -> loadFromLocation(artifact));
         }
 
         private Promise<LoadedSlice> loadFromLocation(Artifact artifact) {
@@ -88,8 +88,8 @@ public interface SliceStoreImpl {
             var sliceClassLoader = slice.getClass()
                                         .getClassLoader();
                                               if (sliceClassLoader instanceof SliceClassLoader scl) {
-                                              return createEntry(artifact, slice, scl);
-                                          }
+                                                  return createEntry(artifact, slice, scl);
+                                              }
                                               // Fallback - create a minimal classloader entry
             log.warn("Slice {} loaded with unexpected classloader type: {}. Resource access may be limited.",
                      artifact,
@@ -186,10 +186,9 @@ public interface SliceStoreImpl {
                                                      .stop()
                                               : Promise.success(Unit.unit());
             return deactivatePromise.map(_ -> cleanup(artifact, entry))
-                                    .onFailure(cause -> log.error(
-            "Failed to unload slice {}: {}",
-            artifact,
-            cause.message()));
+                                    .onFailure(cause -> log.error("Failed to unload slice {}: {}",
+                                                                  artifact,
+                                                                  cause.message()));
         }
 
         private Unit cleanup(Artifact artifact, LoadedSliceEntry entry) {
@@ -237,12 +236,10 @@ public interface SliceStoreImpl {
             }
         }
 
-        private static final Fn1<Cause, String>SLICE_NOT_LOADED = Causes.forOneValue("Slice not loaded: %s");
+        private static final Fn1<Cause, String> SLICE_NOT_LOADED = Causes.forOneValue("Slice not loaded: %s");
 
-        private static final Fn1<Cause, String>INVALID_STATE_TRANSITION = Causes.forOneValue(
-        "Invalid state transition: %s");
+        private static final Fn1<Cause, String> INVALID_STATE_TRANSITION = Causes.forOneValue("Invalid state transition: %s");
 
-        private static final Fn1<Cause, String>ARTIFACT_NOT_FOUND = Causes.forOneValue(
-        "Artifact not found in any repository: %s");
+        private static final Fn1<Cause, String> ARTIFACT_NOT_FOUND = Causes.forOneValue("Artifact not found in any repository: %s");
     }
 }

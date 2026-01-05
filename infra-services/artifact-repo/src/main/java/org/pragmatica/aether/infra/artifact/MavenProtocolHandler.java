@@ -44,10 +44,9 @@ public interface MavenProtocolHandler {
     /**
      * Response from Maven protocol handler.
      */
-    record MavenResponse(
-    int statusCode,
-    String contentType,
-    byte[] content) {
+    record MavenResponse(int statusCode,
+                         String contentType,
+                         byte[] content) {
         public static MavenResponse ok(byte[] content, String contentType) {
             return new MavenResponse(200, contentType, content);
         }
@@ -106,8 +105,8 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
         }
         var repoPath = path.substring(REPOSITORY_PREFIX.length());
         return parsePath(repoPath)
-               .fold(() -> Promise.success(MavenResponse.badRequest("Cannot parse path: " + path)),
-                     parsed -> handleGetParsed(parsed));
+                        .fold(() -> Promise.success(MavenResponse.badRequest("Cannot parse path: " + path)),
+                              parsed -> handleGetParsed(parsed));
     }
 
     private Promise<MavenResponse> handleGetParsed(ParsedPath parsed) {
@@ -124,9 +123,9 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
                                                      contentTypeFor(ap.extension())))
                     .recover(cause -> {
                                  if (cause instanceof ArtifactStore.ArtifactStoreError.NotFound) {
-                                 return MavenResponse.notFound("Artifact not found: " + ap.artifact()
-                                                                                         .asString());
-                             }
+                                     return MavenResponse.notFound("Artifact not found: " + ap.artifact()
+                                                                                             .asString());
+                                 }
                                  return MavenResponse.serverError(cause.message());
                              });
     }
@@ -136,8 +135,8 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
                               mp.artifactId())
                     .map(versions -> {
                              if (versions.isEmpty()) {
-                             return MavenResponse.notFound("No versions found");
-                         }
+                                 return MavenResponse.notFound("No versions found");
+                             }
                              var xml = generateMavenMetadata(mp.groupId(),
                                                              mp.artifactId(),
                                                              versions);
@@ -169,8 +168,8 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
         }
         var repoPath = path.substring(REPOSITORY_PREFIX.length());
         return parsePath(repoPath)
-               .fold(() -> Promise.success(MavenResponse.badRequest("Cannot parse path: " + path)),
-                     parsed -> handlePutParsed(parsed, content));
+                        .fold(() -> Promise.success(MavenResponse.badRequest("Cannot parse path: " + path)),
+                              parsed -> handlePutParsed(parsed, content));
     }
 
     private Promise<MavenResponse> handlePutParsed(ParsedPath parsed, byte[] content) {
@@ -198,12 +197,12 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
         if (path.endsWith(".md5")) {
             return parsePath(path.substring(0,
                                             path.length() - 4))
-                   .map(inner -> new ParsedPath.ChecksumPath(inner, "MD5"));
+                            .map(inner -> new ParsedPath.ChecksumPath(inner, "MD5"));
         }
         if (path.endsWith(".sha1")) {
             return parsePath(path.substring(0,
                                             path.length() - 5))
-                   .map(inner -> new ParsedPath.ChecksumPath(inner, "SHA-1"));
+                            .map(inner -> new ParsedPath.ChecksumPath(inner, "SHA-1"));
         }
         var parts = path.split("/");
         if (parts.length < 3) return Option.none();
@@ -318,9 +317,9 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
 
     private String contentTypeFor(String extension) {
         return switch (extension) {
-            case"jar" -> "application/java-archive";
-            case"pom" -> "application/xml";
-            case"xml" -> "application/xml";
+            case "jar" -> "application/java-archive";
+            case "pom" -> "application/xml";
+            case "xml" -> "application/xml";
             default -> "application/octet-stream";
         };
     }

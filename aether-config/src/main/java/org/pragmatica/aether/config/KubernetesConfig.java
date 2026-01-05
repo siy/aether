@@ -6,10 +6,9 @@ package org.pragmatica.aether.config;
  * @param serviceType  Service type (ClusterIP, LoadBalancer, NodePort)
  * @param storageClass Storage class for persistent volumes (empty = default)
  */
-public record KubernetesConfig(
- String namespace,
- String serviceType,
- String storageClass) {
+public record KubernetesConfig(String namespace,
+                               String serviceType,
+                               String storageClass) {
     public static final String DEFAULT_NAMESPACE = "aether";
     public static final String DEFAULT_SERVICE_TYPE = "ClusterIP";
 

@@ -120,8 +120,8 @@ public class FrameworkClassLoader extends URLClassLoader {
                 continue;
             }
             toUrl(jarPath)
-            .onSuccess(urls::add)
-            .onFailure(cause -> errors.add(cause.message()));
+                 .onSuccess(urls::add)
+                 .onFailure(cause -> errors.add(cause.message()));
         }
         if (!errors.isEmpty()) {
             return Causes.cause("Failed to load framework JARs: " + String.join(", ", errors))
@@ -147,10 +147,9 @@ public class FrameworkClassLoader extends URLClassLoader {
     }
 
     private static Result<URL> toUrl(Path path) {
-        return Result.lift(
-        Causes::fromThrowable,
-        () -> path.toUri()
-                  .toURL());
+        return Result.lift(Causes::fromThrowable,
+                           () -> path.toUri()
+                                     .toURL());
     }
 
     private static String extractJarName(URL url) {

@@ -17,20 +17,20 @@ import static org.pragmatica.lang.io.TimeSpan.timeSpan;
 public enum SliceState {
     LOAD,
     LOADING(timeSpan(2)
-            .minutes()),
+                    .minutes()),
     LOADED,
     ACTIVATE,
     ACTIVATING(timeSpan(1)
-               .minutes()),
+                       .minutes()),
     ACTIVE,
     DEACTIVATE,
     DEACTIVATING(
     timeSpan(30)
-    .seconds()),
+            .seconds()),
     FAILED,
     UNLOAD,
     UNLOADING(timeSpan(2)
-              .minutes());
+                      .minutes());
     private final Option<TimeSpan> timeout;
     SliceState() {
         this(Option.none());
@@ -66,7 +66,7 @@ public enum SliceState {
     }
     public boolean canTransitionTo(SliceState target) {
         return validTransitions()
-               .contains(target);
+                               .contains(target);
     }
     public Result<SliceState> nextState() {
         return switch (this) {
@@ -82,7 +82,7 @@ public enum SliceState {
             case UNLOADING -> TERMINAL_STATE_ERROR.result();
         };
     }
-    private static final Map<String, SliceState>STRING_TO_STATE;
+    private static final Map<String, SliceState> STRING_TO_STATE;
     static {
         var map = new HashMap<String, SliceState>();
         map.put("LOAD", LOAD);
@@ -102,6 +102,6 @@ public enum SliceState {
         return Option.option(STRING_TO_STATE.get(stateString.toUpperCase()))
                      .toResult(UNKNOWN_STATE.apply(stateString));
     }
-    private static final Fn1<Cause, String>UNKNOWN_STATE = Causes.forOneValue("Unknown slice state [{}]");
+    private static final Fn1<Cause, String> UNKNOWN_STATE = Causes.forOneValue("Unknown slice state [{}]");
     private static final Cause TERMINAL_STATE_ERROR = Causes.cause("Cannot transition from UNLOADING terminal state");
 }

@@ -29,7 +29,7 @@ public record VersionRouting(int newWeight, int oldWeight) {
     private static final Cause NEGATIVE_WEIGHTS = Causes.cause("Weights must be non-negative");
     private static final Cause NO_POSITIVE_WEIGHT = Causes.cause("At least one weight must be positive");
 
-    private static final Fn1<Cause, String>INVALID_RATIO_FORMAT = Causes.forOneValue("Invalid ratio format. Expected 'new:old', got: {}");
+    private static final Fn1<Cause, String> INVALID_RATIO_FORMAT = Causes.forOneValue("Invalid ratio format. Expected 'new:old', got: {}");
 
     /**
      * Initial routing: all traffic to old version.
@@ -69,9 +69,8 @@ public record VersionRouting(int newWeight, int oldWeight) {
                                        .result();
         }
         return Result.lift(_ -> INVALID_RATIO_FORMAT.apply(ratio),
-                           () -> new VersionRouting(
-        Integer.parseInt(parts[0].trim()),
-        Integer.parseInt(parts[1].trim())))
+                           () -> new VersionRouting(Integer.parseInt(parts[0].trim()),
+                                                    Integer.parseInt(parts[1].trim())))
                      .flatMap(vr -> versionRouting(vr.newWeight(),
                                                    vr.oldWeight()));
     }
@@ -102,7 +101,7 @@ public record VersionRouting(int newWeight, int oldWeight) {
      */
     public double newVersionPercentage() {
         if (totalWeight() == 0) return 0.0;
-        return (double) newWeight / totalWeight() * 100.0;
+        return ( double) newWeight / totalWeight() * 100.0;
     }
 
     /**
@@ -116,7 +115,7 @@ public record VersionRouting(int newWeight, int oldWeight) {
      * @param oldInstances available old version instances
      * @return scaled instance counts (new, old), or empty if unsatisfiable
      */
-    public Option<int[] > scaleToInstances(int newInstances, int oldInstances) {
+    public Option<int[]> scaleToInstances(int newInstances, int oldInstances) {
         if (isAllOld()) {
             return Option.option(new int[] {0, oldInstances});
         }

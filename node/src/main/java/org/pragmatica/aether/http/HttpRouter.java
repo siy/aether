@@ -96,35 +96,37 @@ class HttpRouterImpl implements HttpRouter {
     public Promise<Unit> start() {
         return Promise.promise(promise -> {
                                    var bootstrap = new ServerBootstrap().group(bossGroup, workerGroup)
-                                                   .channel(NioServerSocketChannel.class)
-                                                   .childHandler(new ChannelInitializer<SocketChannel>() {
+                                                                        .channel(NioServerSocketChannel.class)
+                                                                        .childHandler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                                                                     ChannelPipeline p = ch.pipeline();
-                                                                     sslContext.onPresent(ctx -> p.addLast(ctx.newHandler(ch.alloc())));
-                                                                     p.addLast(new HttpServerCodec());
-                                                                     p.addLast(new HttpObjectAggregator(config.maxContentLength()));
-                                                                     p.addLast(new HttpRequestHandler(
-            routeRegistry, bindingResolver, dispatcher, responseWriter));
-                                                                 }
+                                                                                          ChannelPipeline p = ch.pipeline();
+                                                                                          sslContext.onPresent(ctx -> p.addLast(ctx.newHandler(ch.alloc())));
+                                                                                          p.addLast(new HttpServerCodec());
+                                                                                          p.addLast(new HttpObjectAggregator(config.maxContentLength()));
+                                                                                          p.addLast(new HttpRequestHandler(routeRegistry,
+                                                                                                                           bindingResolver,
+                                                                                                                           dispatcher,
+                                                                                                                           responseWriter));
+                                                                                      }
         });
                                    bootstrap.bind(config.port())
                                             .addListener(future -> {
                                                              if (future.isSuccess()) {
-                                                             serverChannel = ((io.netty.channel.ChannelFuture) future).channel();
-                                                             var protocol = sslContext.isPresent()
-                                                                            ? "HTTPS"
-                                                                            : "HTTP";
-                                                             log.info("{} router started on port {}",
-                                                                      protocol,
-                                                                      config.port());
-                                                             promise.succeed(unit());
-                                                         }else {
-                                                             log.error("Failed to start HTTP router on port {}",
-                                                                       config.port(),
-                                                                       future.cause());
-                                                             promise.fail(Causes.fromThrowable(future.cause()));
-                                                         }
+                                                                 serverChannel = ((io.netty.channel.ChannelFuture) future).channel();
+                                                                 var protocol = sslContext.isPresent()
+                                                                                ? "HTTPS"
+                                                                                : "HTTP";
+                                                                 log.info("{} router started on port {}",
+                                                                          protocol,
+                                                                          config.port());
+                                                                 promise.succeed(unit());
+                                                             } else {
+                                                                 log.error("Failed to start HTTP router on port {}",
+                                                                           config.port(),
+                                                                           future.cause());
+                                                                 promise.fail(Causes.fromThrowable(future.cause()));
+                                                             }
                                                          });
                                });
     }
@@ -133,11 +135,11 @@ class HttpRouterImpl implements HttpRouter {
     public Promise<Unit> stop() {
         return Promise.promise(promise -> {
                                    if (serverChannel != null) {
-                                   serverChannel.close()
-                                                .addListener(_ -> shutdownEventLoops(promise));
-                               }else {
-                                   shutdownEventLoops(promise);
-                               }
+                                       serverChannel.close()
+                                                    .addListener(_ -> shutdownEventLoops(promise));
+                                   } else {
+                                       shutdownEventLoops(promise);
+                                   }
                                });
     }
 
@@ -238,11 +240,11 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private HttpResponseStatus determineErrorStatus(org.pragmatica.lang.Cause cause) {
         if (cause instanceof HttpRouterError.SliceNotFound) {
             return HttpResponseStatus.NOT_FOUND;
-        }else if (cause instanceof HttpRouterError.BindingFailed) {
+        } else if (cause instanceof HttpRouterError.BindingFailed) {
             return HttpResponseStatus.BAD_REQUEST;
-        }else if (cause instanceof HttpRouterError.DeserializationFailed) {
+        } else if (cause instanceof HttpRouterError.DeserializationFailed) {
             return HttpResponseStatus.BAD_REQUEST;
-        }else {
+        } else {
             return HttpResponseStatus.INTERNAL_SERVER_ERROR;
         }
     }

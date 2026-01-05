@@ -27,12 +27,11 @@ public sealed interface AetherValue {
 
     /// Route definition for HTTP routing.
     /// Contains full route information for self-registration by slices.
-    record RouteValue(
-    Artifact artifact,
-    String methodName,
-    String httpMethod,
-    String pathPattern,
-    List<Binding> bindings) implements AetherValue {
+    record RouteValue(Artifact artifact,
+                      String methodName,
+                      String httpMethod,
+                      String pathPattern,
+                      List<Binding> bindings) implements AetherValue {
         /// Check if this route matches another route (same target).
         /// Used for idempotent registration validation.
         public boolean matches(RouteValue other) {
@@ -52,12 +51,11 @@ public sealed interface AetherValue {
     /// @param newWeight traffic weight for new version
     /// @param oldWeight traffic weight for old version
     /// @param updatedAt timestamp of last update
-    record VersionRoutingValue(
-    Version oldVersion,
-    Version newVersion,
-    int newWeight,
-    int oldWeight,
-    long updatedAt) implements AetherValue {
+    record VersionRoutingValue(Version oldVersion,
+                               Version newVersion,
+                               int newWeight,
+                               int oldWeight,
+                               long updatedAt) implements AetherValue {
         /// Creates initial routing with all traffic to old version.
         public static VersionRoutingValue initial(Version oldVersion, Version newVersion) {
             return new VersionRoutingValue(oldVersion, newVersion, 0, 1, System.currentTimeMillis());
@@ -100,21 +98,20 @@ public sealed interface AetherValue {
     /// @param cleanupPolicy cleanup policy name
     /// @param createdAt timestamp when update was created
     /// @param updatedAt timestamp of last state change
-    record RollingUpdateValue(
-    String updateId,
-    ArtifactBase artifactBase,
-    Version oldVersion,
-    Version newVersion,
-    String state,
-    int newWeight,
-    int oldWeight,
-    int newInstances,
-    double maxErrorRate,
-    long maxLatencyMs,
-    boolean requireManualApproval,
-    String cleanupPolicy,
-    long createdAt,
-    long updatedAt) implements AetherValue {}
+    record RollingUpdateValue(String updateId,
+                              ArtifactBase artifactBase,
+                              Version oldVersion,
+                              Version newVersion,
+                              String state,
+                              int newWeight,
+                              int oldWeight,
+                              int newInstances,
+                              double maxErrorRate,
+                              long maxLatencyMs,
+                              boolean requireManualApproval,
+                              String cleanupPolicy,
+                              long createdAt,
+                              long updatedAt) implements AetherValue {}
 
     /// Alert threshold configuration stored in consensus.
     /// Allows thresholds to survive restarts and sync across cluster nodes.
@@ -123,11 +120,10 @@ public sealed interface AetherValue {
     /// @param warningThreshold value at which a warning is triggered
     /// @param criticalThreshold value at which a critical alert is triggered
     /// @param updatedAt timestamp of last update
-    record AlertThresholdValue(
-    String metricName,
-    double warningThreshold,
-    double criticalThreshold,
-    long updatedAt) implements AetherValue {
+    record AlertThresholdValue(String metricName,
+                               double warningThreshold,
+                               double criticalThreshold,
+                               long updatedAt) implements AetherValue {
         /// Creates a new threshold value with current timestamp.
         public static AlertThresholdValue alertThresholdValue(String metricName, double warning, double critical) {
             return new AlertThresholdValue(metricName, warning, critical, System.currentTimeMillis());

@@ -54,12 +54,12 @@ public final class MethodMetrics {
         count.incrementAndGet();
         if (success) {
             successCount.incrementAndGet();
-        }else {
+        } else {
             failureCount.incrementAndGet();
         }
         totalDurationNs.addAndGet(durationNs);
         histogram[bucketFor(durationNs)]
-        .incrementAndGet();
+                 .incrementAndGet();
     }
 
     /**
@@ -76,8 +76,12 @@ public final class MethodMetrics {
         for (int i = 0; i < HISTOGRAM_SIZE; i++ ) {
             snapshotHistogram[i] = histogram[i].getAndSet(0);
         }
-        return new Snapshot(
-        methodName, snapshotCount, snapshotSuccess, snapshotFailure, snapshotDuration, snapshotHistogram);
+        return new Snapshot(methodName,
+                            snapshotCount,
+                            snapshotSuccess,
+                            snapshotFailure,
+                            snapshotDuration,
+                            snapshotHistogram);
     }
 
     /**
@@ -88,8 +92,12 @@ public final class MethodMetrics {
         for (int i = 0; i < HISTOGRAM_SIZE; i++ ) {
             snapshotHistogram[i] = histogram[i].get();
         }
-        return new Snapshot(
-        methodName, count.get(), successCount.get(), failureCount.get(), totalDurationNs.get(), snapshotHistogram);
+        return new Snapshot(methodName,
+                            count.get(),
+                            successCount.get(),
+                            failureCount.get(),
+                            totalDurationNs.get(),
+                            snapshotHistogram);
     }
 
     public MethodName methodName() {
@@ -115,13 +123,12 @@ public final class MethodMetrics {
     /**
      * Immutable snapshot of method metrics.
      */
-    public record Snapshot(
-    MethodName methodName,
-    long count,
-    long successCount,
-    long failureCount,
-    long totalDurationNs,
-    int[] histogram) {
+    public record Snapshot(MethodName methodName,
+                           long count,
+                           long successCount,
+                           long failureCount,
+                           long totalDurationNs,
+                           int[] histogram) {
         /**
          * Calculate average latency in nanoseconds.
          */

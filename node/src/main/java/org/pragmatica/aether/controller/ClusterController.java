@@ -25,10 +25,9 @@ public interface ClusterController {
     /**
      * Context provided to the controller for decision-making.
      */
-    record ControlContext(
-    Map<NodeId, Map<String, Double>> metrics,
-    Map<Artifact, Blueprint> blueprints,
-    List<NodeId> activeNodes) {
+    record ControlContext(Map<NodeId, Map<String, Double>> metrics,
+                          Map<Artifact, Blueprint> blueprints,
+                          List<NodeId> activeNodes) {
         /**
          * Get average value of a metric across all nodes.
          */

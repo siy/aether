@@ -51,7 +51,7 @@ public interface BlueprintExpander {
     static Promise<ExpandedBlueprint> expand(Blueprint blueprint, DependencyLoader loader) {
         var explicitSlices = collectExplicitSlices(blueprint);
         return resolveDependencies(explicitSlices, loader)
-               .flatMap(allDeps -> buildExpandedBlueprint(blueprint, explicitSlices, allDeps));
+                                  .flatMap(allDeps -> buildExpandedBlueprint(blueprint, explicitSlices, allDeps));
     }
 
     private static Promise<ExpandedBlueprint> buildExpandedBlueprint(Blueprint blueprint,
@@ -59,10 +59,10 @@ public interface BlueprintExpander {
                                                                      Map<Artifact, Set<Artifact>> allDeps) {
         var graph = buildDependencyGraph(allDeps);
         return checkCycles(graph)
-               .map(_ -> buildLoadOrder(explicitSlices, allDeps, graph))
-               .map(loadOrder -> ExpandedBlueprint.expandedBlueprint(blueprint.id(),
-                                                                     loadOrder))
-               .async();
+                          .map(_ -> buildLoadOrder(explicitSlices, allDeps, graph))
+                          .map(loadOrder -> ExpandedBlueprint.expandedBlueprint(blueprint.id(),
+                                                                                loadOrder))
+                          .async();
     }
 
     /**
@@ -86,7 +86,7 @@ public interface BlueprintExpander {
                                             loader,
                                             processed,
                                             dependencies)
-               .map(_ -> Collections.unmodifiableMap(dependencies));
+                                           .map(_ -> Collections.unmodifiableMap(dependencies));
     }
 
     /**
@@ -184,8 +184,7 @@ public interface BlueprintExpander {
         var result = new ArrayList<Artifact>();
         artifacts.stream()
                  .filter(artifact -> !visited.contains(artifact))
-                 .forEach(artifact -> topologicalSortDfs(
-        artifact, dependencies, visited, result));
+                 .forEach(artifact -> topologicalSortDfs(artifact, dependencies, visited, result));
         return result;
     }
 
@@ -212,7 +211,7 @@ public interface BlueprintExpander {
         var spec = explicitSlices.get(artifact);
         if (spec != null) {
             return ResolvedSlice.resolvedSlice(artifact, spec.instances(), false);
-        }else {
+        } else {
             return ResolvedSlice.resolvedSlice(artifact, 1, true);
         }
     }

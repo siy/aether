@@ -31,19 +31,18 @@ import org.pragmatica.lang.utils.Causes;
  * @param createdAt timestamp when update was created
  * @param updatedAt timestamp of last state change
  */
-public record RollingUpdate(
- String updateId,
- ArtifactBase artifactBase,
- Version oldVersion,
- Version newVersion,
- RollingUpdateState state,
- VersionRouting routing,
- HealthThresholds thresholds,
- CleanupPolicy cleanupPolicy,
- int newInstances,
- long createdAt,
- long updatedAt) {
-    private static final Fn1<Cause, String>INVALID_TRANSITION = Causes.forOneValue("Invalid state transition: {}");
+public record RollingUpdate(String updateId,
+                            ArtifactBase artifactBase,
+                            Version oldVersion,
+                            Version newVersion,
+                            RollingUpdateState state,
+                            VersionRouting routing,
+                            HealthThresholds thresholds,
+                            CleanupPolicy cleanupPolicy,
+                            int newInstances,
+                            long createdAt,
+                            long updatedAt) {
+    private static final Fn1<Cause, String> INVALID_TRANSITION = Causes.forOneValue("Invalid state transition: {}");
 
     /**
      * Creates a new rolling update in PENDING state.
@@ -65,18 +64,17 @@ public record RollingUpdate(
                                        HealthThresholds thresholds,
                                        CleanupPolicy cleanupPolicy) {
         var now = System.currentTimeMillis();
-        return new RollingUpdate(
-        updateId,
-        artifactBase,
-        oldVersion,
-        newVersion,
-        RollingUpdateState.PENDING,
-        VersionRouting.ALL_OLD,
-        thresholds,
-        cleanupPolicy,
-        newInstances,
-        now,
-        now);
+        return new RollingUpdate(updateId,
+                                 artifactBase,
+                                 oldVersion,
+                                 newVersion,
+                                 RollingUpdateState.PENDING,
+                                 VersionRouting.ALL_OLD,
+                                 thresholds,
+                                 cleanupPolicy,
+                                 newInstances,
+                                 now,
+                                 now);
     }
 
     /**
@@ -91,18 +89,17 @@ public record RollingUpdate(
             return INVALID_TRANSITION.apply(state + " -> " + newState)
                                      .result();
         }
-        return Result.success(new RollingUpdate(
-        updateId,
-        artifactBase,
-        oldVersion,
-        newVersion,
-        newState,
-        routing,
-        thresholds,
-        cleanupPolicy,
-        newInstances,
-        createdAt,
-        System.currentTimeMillis()));
+        return Result.success(new RollingUpdate(updateId,
+                                                artifactBase,
+                                                oldVersion,
+                                                newVersion,
+                                                newState,
+                                                routing,
+                                                thresholds,
+                                                cleanupPolicy,
+                                                newInstances,
+                                                createdAt,
+                                                System.currentTimeMillis()));
     }
 
     /**
@@ -112,18 +109,17 @@ public record RollingUpdate(
      * @return updated rolling update
      */
     public RollingUpdate withRouting(VersionRouting newRouting) {
-        return new RollingUpdate(
-        updateId,
-        artifactBase,
-        oldVersion,
-        newVersion,
-        state,
-        newRouting,
-        thresholds,
-        cleanupPolicy,
-        newInstances,
-        createdAt,
-        System.currentTimeMillis());
+        return new RollingUpdate(updateId,
+                                 artifactBase,
+                                 oldVersion,
+                                 newVersion,
+                                 state,
+                                 newRouting,
+                                 thresholds,
+                                 cleanupPolicy,
+                                 newInstances,
+                                 createdAt,
+                                 System.currentTimeMillis());
     }
 
     /**
@@ -137,7 +133,7 @@ public record RollingUpdate(
      * Checks if this update is active (not terminal).
      */
     public boolean isActive() {
-        return !isTerminal();
+        return ! isTerminal();
     }
 
     /**

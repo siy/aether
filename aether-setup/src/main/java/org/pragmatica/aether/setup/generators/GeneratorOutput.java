@@ -12,12 +12,11 @@ import java.util.List;
  * @param stopScript     Path to the stop script (if applicable)
  * @param instructions   Human-readable instructions for next steps
  */
-public record GeneratorOutput(
- Path outputDir,
- List<Path> generatedFiles,
- Path startScript,
- Path stopScript,
- String instructions) {
+public record GeneratorOutput(Path outputDir,
+                              List<Path> generatedFiles,
+                              Path startScript,
+                              Path stopScript,
+                              String instructions) {
     public static GeneratorOutput of(Path outputDir, List<Path> files, String instructions) {
         return new GeneratorOutput(outputDir, files, null, null, instructions);
     }

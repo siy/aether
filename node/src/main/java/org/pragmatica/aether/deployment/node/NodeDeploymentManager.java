@@ -65,25 +65,24 @@ public interface NodeDeploymentManager {
 
         record DormantNodeDeploymentState() implements NodeDeploymentState {}
 
-        record ActiveNodeDeploymentState(
-        NodeId self,
-        SliceStore sliceStore,
-        SliceActionConfig configuration,
-        ClusterNode<KVCommand<AetherKey>> cluster,
-        KVStore<AetherKey, AetherValue> kvStore,
-        InvocationHandler invocationHandler,
-        RouteRegistry routeRegistry,
-        MessageRouter router,
-        ConcurrentHashMap<SliceNodeKey, SliceDeployment> deployments) implements NodeDeploymentState {
+        record ActiveNodeDeploymentState(NodeId self,
+                                         SliceStore sliceStore,
+                                         SliceActionConfig configuration,
+                                         ClusterNode<KVCommand<AetherKey>> cluster,
+                                         KVStore<AetherKey, AetherValue> kvStore,
+                                         InvocationHandler invocationHandler,
+                                         RouteRegistry routeRegistry,
+                                         MessageRouter router,
+                                         ConcurrentHashMap<SliceNodeKey, SliceDeployment> deployments) implements NodeDeploymentState {
             private static final Logger log = LoggerFactory.getLogger(ActiveNodeDeploymentState.class);
 
-            private static final Fn1<Cause, Class< ? >>UNEXPECTED_VALUE_TYPE = Causes.forOneValue("Unexpected value type for slice-node key: {}");
+            private static final Fn1<Cause, Class< ? >> UNEXPECTED_VALUE_TYPE = Causes.forOneValue("Unexpected value type for slice-node key: {}");
 
-            private static final Fn1<Cause, SliceNodeKey>CLEANUP_FAILED = Causes.forOneValue("Failed to cleanup slice {} during abrupt removal");
+            private static final Fn1<Cause, SliceNodeKey> CLEANUP_FAILED = Causes.forOneValue("Failed to cleanup slice {} during abrupt removal");
 
-            private static final Fn1<Cause, SliceNodeKey>STATE_UPDATE_FAILED = Causes.forOneValue("Failed to update slice state for {}");
+            private static final Fn1<Cause, SliceNodeKey> STATE_UPDATE_FAILED = Causes.forOneValue("Failed to update slice state for {}");
 
-            private static final Fn1<Cause, SliceNodeKey>UNLOAD_FAILED = Causes.forOneValue("Failed to unload slice {}");
+            private static final Fn1<Cause, SliceNodeKey> UNLOAD_FAILED = Causes.forOneValue("Failed to unload slice {}");
 
             private Option<SliceStore.LoadedSlice> findLoadedSlice(Artifact artifact) {
                 return Option.option(sliceStore.loaded()
@@ -110,10 +109,10 @@ public interface NodeDeploymentManager {
                                                           .value();
                                       switch (value) {
                     case SliceNodeValue(SliceState state) -> {
-                                      log.debug("ValuePut received for key: {}, state: {}", sliceKey, state);
-                                      recordDeployment(sliceKey, state);
-                                      processStateTransition(sliceKey, state);
-                                  }
+                                          log.debug("ValuePut received for key: {}, state: {}", sliceKey, state);
+                                          recordDeployment(sliceKey, state);
+                                          processStateTransition(sliceKey, state);
+                                      }
                     default -> log.warn(UNEXPECTED_VALUE_TYPE.apply(value.getClass())
                                                              .message());
                 }
@@ -131,8 +130,8 @@ public interface NodeDeploymentManager {
                 // unload and remove, ignoring errors.
                 var deployment = deployments.remove(sliceKey);
                                       if (shouldForceCleanup(deployment)) {
-                                      forceCleanupSlice(sliceKey);
-                                  }
+                                          forceCleanupSlice(sliceKey);
+                                      }
                                   });
             }
 
@@ -191,38 +190,36 @@ public interface NodeDeploymentManager {
             }
 
             private void handleLoading(SliceNodeKey sliceKey) {
-                executeWithStateTransition(
-                sliceKey,
-                SliceState.LOADING,
-                sliceStore.loadSlice(sliceKey.artifact()),
-                SliceState.LOADED,
-                SliceState.FAILED);
+                executeWithStateTransition(sliceKey,
+                                           SliceState.LOADING,
+                                           sliceStore.loadSlice(sliceKey.artifact()),
+                                           SliceState.LOADED,
+                                           SliceState.FAILED);
             }
 
             private void handleLoaded(SliceNodeKey sliceKey) {
                 // Only auto-activate if slice is actually loaded in our store
                 // (protects against externally-set states like in tests)
                 findLoadedSlice(sliceKey.artifact())
-                .onPresent(_ -> {
-                               log.info("Slice {} loaded, auto-activating",
-                                        sliceKey.artifact());
-                               transitionTo(sliceKey, SliceState.ACTIVATE);
-                           })
-                .onEmpty(() -> log.debug("Slice {} state is LOADED but not found in SliceStore, skipping auto-activation",
-                                         sliceKey.artifact()));
+                               .onPresent(_ -> {
+                                              log.info("Slice {} loaded, auto-activating",
+                                                       sliceKey.artifact());
+                                              transitionTo(sliceKey, SliceState.ACTIVATE);
+                                          })
+                               .onEmpty(() -> log.debug("Slice {} state is LOADED but not found in SliceStore, skipping auto-activation",
+                                                        sliceKey.artifact()));
             }
 
             private void handleActivating(SliceNodeKey sliceKey) {
                 // Only activate if slice is actually loaded in our store
                 findLoadedSlice(sliceKey.artifact())
-                .onPresent(_ -> executeWithStateTransition(
-                sliceKey,
-                SliceState.ACTIVATING,
-                sliceStore.activateSlice(sliceKey.artifact()),
-                SliceState.ACTIVE,
-                SliceState.FAILED))
-                .onEmpty(() -> log.debug("Slice {} state is ACTIVATE but not found in SliceStore, skipping activation",
-                                         sliceKey.artifact()));
+                               .onPresent(_ -> executeWithStateTransition(sliceKey,
+                                                                          SliceState.ACTIVATING,
+                                                                          sliceStore.activateSlice(sliceKey.artifact()),
+                                                                          SliceState.ACTIVE,
+                                                                          SliceState.FAILED))
+                               .onEmpty(() -> log.debug("Slice {} state is ACTIVATE but not found in SliceStore, skipping activation",
+                                                        sliceKey.artifact()));
             }
 
             private void handleActive(SliceNodeKey sliceKey) {
@@ -240,35 +237,35 @@ public interface NodeDeploymentManager {
             private void registerRoutes(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                .onPresent(ls -> {
-                               var slice = ls.slice();
-                               var routes = slice.routes();
-                               if (routes.isEmpty()) {
-                               return;
-                           }
-                               routes.forEach(route -> {
-                                                  var bindings = route.bindings()
-                                                                      .stream()
-                                                                      .map(this::toBinding)
-                                                                      .toList();
-                                                  routeRegistry.register(artifact,
-                                                                         route.methodName(),
-                                                                         route.httpMethod(),
-                                                                         route.pathPattern(),
-                                                                         bindings)
-                                                               .onSuccess(_ -> log.info("Registered route {} {} -> {}:{}",
+                               .onPresent(ls -> {
+                                              var slice = ls.slice();
+                                              var routes = slice.routes();
+                                              if (routes.isEmpty()) {
+                                                  return;
+                                              }
+                                              routes.forEach(route -> {
+                                                                 var bindings = route.bindings()
+                                                                                     .stream()
+                                                                                     .map(this::toBinding)
+                                                                                     .toList();
+                                                                 routeRegistry.register(artifact,
+                                                                                        route.methodName(),
                                                                                         route.httpMethod(),
                                                                                         route.pathPattern(),
-                                                                                        artifact.asString(),
-                                                                                        route.methodName()))
-                                                               .onFailure(cause -> log.error("Failed to register route {} {} -> {}:{}: {}",
-                                                                                             route.httpMethod(),
-                                                                                             route.pathPattern(),
-                                                                                             artifact.asString(),
-                                                                                             route.methodName(),
-                                                                                             cause.message()));
-                                              });
-                           });
+                                                                                        bindings)
+                                                                              .onSuccess(_ -> log.info("Registered route {} {} -> {}:{}",
+                                                                                                       route.httpMethod(),
+                                                                                                       route.pathPattern(),
+                                                                                                       artifact.asString(),
+                                                                                                       route.methodName()))
+                                                                              .onFailure(cause -> log.error("Failed to register route {} {} -> {}:{}: {}",
+                                                                                                            route.httpMethod(),
+                                                                                                            route.pathPattern(),
+                                                                                                            artifact.asString(),
+                                                                                                            route.methodName(),
+                                                                                                            cause.message()));
+                                                             });
+                                          });
             }
 
             private Binding toBinding(SliceRoute.RouteBinding binding) {
@@ -284,25 +281,25 @@ public interface NodeDeploymentManager {
             private void registerSliceForInvocation(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                .onPresent(ls -> {
-                               var slice = ls.slice();
-                               // Use configured provider or default to Fury (thread-safe, no pooling needed)
+                               .onPresent(ls -> {
+                                              var slice = ls.slice();
+                                              // Use configured provider or default to Fury (thread-safe, no pooling needed)
                 SerializerFactoryProvider serializerProvider = configuration.serializerProvider();
-                               if (serializerProvider == null) {
-                               serializerProvider = FurySerializerFactoryProvider.furySerializerFactoryProvider();
-                           }
-                               // Create SerializerFactory from provider using all type tokens
+                                              if (serializerProvider == null) {
+                                                  serializerProvider = FurySerializerFactoryProvider.furySerializerFactoryProvider();
+                                              }
+                                              // Create SerializerFactory from provider using all type tokens
                 var typeTokens = slice.methods()
                                       .stream()
                                       .flatMap(m -> java.util.stream.Stream.of(m.parameterType(),
                                                                                m.returnType()))
                                       .collect(Collectors.toList());
-                               var serializerFactory = serializerProvider.createFactory(typeTokens);
-                               // Create and register SliceBridge
+                                              var serializerFactory = serializerProvider.createFactory(typeTokens);
+                                              // Create and register SliceBridge
                 var sliceBridge = SliceBridgeImpl.sliceBridge(artifact, slice, serializerFactory);
-                               invocationHandler.registerSlice(artifact, sliceBridge);
-                               log.info("Registered slice {} for invocation", artifact);
-                           });
+                                              invocationHandler.registerSlice(artifact, sliceBridge);
+                                              log.info("Registered slice {} for invocation", artifact);
+                                          });
             }
 
             private void unregisterSliceFromInvocation(SliceNodeKey sliceKey) {
@@ -314,27 +311,27 @@ public interface NodeDeploymentManager {
             private void publishEndpoints(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                .onPresent(ls -> {
-                               var slice = ls.slice();
-                               var methods = slice.methods();
-                               // Use nodeId hash as instance number to ensure uniqueness across cluster
+                               .onPresent(ls -> {
+                                              var slice = ls.slice();
+                                              var methods = slice.methods();
+                                              // Use nodeId hash as instance number to ensure uniqueness across cluster
                 int instanceNumber = Math.abs(self.id()
                                                   .hashCode());
-                               var commands = methods.stream()
-                                                     .map(method -> createEndpointPutCommand(artifact,
-                                                                                             method.name(),
-                                                                                             instanceNumber))
-                                                     .toList();
-                               if (!commands.isEmpty()) {
-                               cluster.apply(commands)
-                                      .onSuccess(_ -> log.info("Published {} endpoints for slice {}",
-                                                               methods.size(),
-                                                               artifact))
-                                      .onFailure(cause -> log.error("Failed to publish endpoints for {}: {}",
-                                                                    artifact,
-                                                                    cause.message()));
-                           }
-                           });
+                                              var commands = methods.stream()
+                                                                    .map(method -> createEndpointPutCommand(artifact,
+                                                                                                            method.name(),
+                                                                                                            instanceNumber))
+                                                                    .toList();
+                                              if (!commands.isEmpty()) {
+                                                  cluster.apply(commands)
+                                                         .onSuccess(_ -> log.info("Published {} endpoints for slice {}",
+                                                                                  methods.size(),
+                                                                                  artifact))
+                                                         .onFailure(cause -> log.error("Failed to publish endpoints for {}: {}",
+                                                                                       artifact,
+                                                                                       cause.message()));
+                                              }
+                                          });
             }
 
             private KVCommand<AetherKey> createEndpointPutCommand(org.pragmatica.aether.artifact.Artifact artifact,
@@ -352,16 +349,15 @@ public interface NodeDeploymentManager {
                 // 3. Check if this is the last instance and unregister routes if so
                 // 4. Then deactivate the slice
                 unpublishEndpoints(sliceKey)
-                .onResultRun(() -> {
-                                 unregisterSliceFromInvocation(sliceKey);
-                                 unregisterRoutesIfLastInstance(sliceKey);
-                                 executeWithStateTransition(
-                sliceKey,
-                SliceState.DEACTIVATING,
-                sliceStore.deactivateSlice(sliceKey.artifact()),
-                SliceState.LOADED,
-                SliceState.FAILED);
-                             });
+                                  .onResultRun(() -> {
+                                                   unregisterSliceFromInvocation(sliceKey);
+                                                   unregisterRoutesIfLastInstance(sliceKey);
+                                                   executeWithStateTransition(sliceKey,
+                                                                              SliceState.DEACTIVATING,
+                                                                              sliceStore.deactivateSlice(sliceKey.artifact()),
+                                                                              SliceState.LOADED,
+                                                                              SliceState.FAILED);
+                                               });
             }
 
             private void unregisterRoutesIfLastInstance(SliceNodeKey sliceKey) {
@@ -385,7 +381,7 @@ public interface NodeDeploymentManager {
                                  .onFailure(cause -> log.error("Failed to unregister routes for {}: {}",
                                                                artifact.asString(),
                                                                cause.message()));
-                }else {
+                } else {
                     log.debug("Slice {} has {} other active instances, keeping routes", artifact.asString(), activeCount);
                 }
             }
@@ -393,34 +389,34 @@ public interface NodeDeploymentManager {
             private Promise<Unit> unpublishEndpoints(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 return findLoadedSlice(artifact)
-                       .map(ls -> {
-                                var slice = ls.slice();
-                                var methods = slice.methods();
-                                int instanceNumber = Math.abs(self.id()
-                                                                  .hashCode());
-                                var commands = methods.stream()
-                                                      .map(method -> createEndpointRemoveCommand(artifact,
-                                                                                                 method.name(),
-                                                                                                 instanceNumber))
-                                                      .toList();
-                                if (commands.isEmpty()) {
-                                return Promise.success(Unit.unit());
-                            }
-                                return cluster.apply(commands)
-                                              .map(_ -> {
-                                                       log.info("Unpublished {} endpoints for slice {}",
-                                                                methods.size(),
-                                                                artifact);
-                                                       return Unit.unit();
-                                                   })
-                                              .mapError(cause -> {
-                                                            log.error("Failed to unpublish endpoints for {}: {}",
-                                                                      artifact,
-                                                                      cause.message());
-                                                            return cause;
-                                                        });
-                            })
-                       .or(Promise.success(Unit.unit()));
+                                      .map(ls -> {
+                                               var slice = ls.slice();
+                                               var methods = slice.methods();
+                                               int instanceNumber = Math.abs(self.id()
+                                                                                 .hashCode());
+                                               var commands = methods.stream()
+                                                                     .map(method -> createEndpointRemoveCommand(artifact,
+                                                                                                                method.name(),
+                                                                                                                instanceNumber))
+                                                                     .toList();
+                                               if (commands.isEmpty()) {
+                                                   return Promise.success(Unit.unit());
+                                               }
+                                               return cluster.apply(commands)
+                                                             .map(_ -> {
+                                                                      log.info("Unpublished {} endpoints for slice {}",
+                                                                               methods.size(),
+                                                                               artifact);
+                                                                      return Unit.unit();
+                                                                  })
+                                                             .mapError(cause -> {
+                                                                           log.error("Failed to unpublish endpoints for {}: {}",
+                                                                                     artifact,
+                                                                                     cause.message());
+                                                                           return cause;
+                                                                       });
+                                           })
+                                      .or(Promise.success(Unit.unit()));
             }
 
             private KVCommand<AetherKey> createEndpointRemoveCommand(org.pragmatica.aether.artifact.Artifact artifact,
@@ -516,16 +512,15 @@ public interface NodeDeploymentManager {
                                                        InvocationHandler invocationHandler,
                                                        RouteRegistry routeRegistry,
                                                        SliceActionConfig configuration) {
-        record deploymentManager(
-        NodeId self,
-        SliceStore sliceStore,
-        ClusterNode<KVCommand<AetherKey>> cluster,
-        KVStore<AetherKey, AetherValue> kvStore,
-        InvocationHandler invocationHandler,
-        RouteRegistry routeRegistry,
-        SliceActionConfig configuration,
-        MessageRouter router,
-        AtomicReference<NodeDeploymentState> state) implements NodeDeploymentManager {
+        record deploymentManager(NodeId self,
+                                 SliceStore sliceStore,
+                                 ClusterNode<KVCommand<AetherKey>> cluster,
+                                 KVStore<AetherKey, AetherValue> kvStore,
+                                 InvocationHandler invocationHandler,
+                                 RouteRegistry routeRegistry,
+                                 SliceActionConfig configuration,
+                                 MessageRouter router,
+                                 AtomicReference<NodeDeploymentState> state) implements NodeDeploymentManager {
             @Override
             public void onValuePut(ValuePut<AetherKey, AetherValue> valuePut) {
                 state.get()
@@ -542,34 +537,32 @@ public interface NodeDeploymentManager {
             public void onQuorumStateChange(QuorumStateNotification quorumStateNotification) {
                 switch (quorumStateNotification) {
                     case ESTABLISHED -> state()
-                                        .set(new NodeDeploymentState.ActiveNodeDeploymentState(
-                    self(),
-                    sliceStore(),
-                    configuration(),
-                    cluster(),
-                    kvStore(),
-                    invocationHandler(),
-                    routeRegistry(),
-                    router(),
-                    new ConcurrentHashMap<>()));
+                                             .set(new NodeDeploymentState.ActiveNodeDeploymentState(self(),
+                                                                                                    sliceStore(),
+                                                                                                    configuration(),
+                                                                                                    cluster(),
+                                                                                                    kvStore(),
+                                                                                                    invocationHandler(),
+                                                                                                    routeRegistry(),
+                                                                                                    router(),
+                                                                                                    new ConcurrentHashMap<>()));
                     case DISAPPEARED -> {
                         // Clean up any pending operations before going dormant
                         // Individual Promise timeouts will handle their own cleanup
                         state()
-                        .set(new NodeDeploymentState.DormantNodeDeploymentState());
+                             .set(new NodeDeploymentState.DormantNodeDeploymentState());
                     }
                 }
             }
         }
-        return new deploymentManager(
-        self,
-        sliceStore,
-        cluster,
-        kvStore,
-        invocationHandler,
-        routeRegistry,
-        configuration,
-        router,
-        new AtomicReference<>(new NodeDeploymentState.DormantNodeDeploymentState()));
+        return new deploymentManager(self,
+                                     sliceStore,
+                                     cluster,
+                                     kvStore,
+                                     invocationHandler,
+                                     routeRegistry,
+                                     configuration,
+                                     router,
+                                     new AtomicReference<>(new NodeDeploymentState.DormantNodeDeploymentState()));
     }
 }

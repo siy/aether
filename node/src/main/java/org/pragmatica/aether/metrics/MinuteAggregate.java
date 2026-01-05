@@ -19,28 +19,38 @@ package org.pragmatica.aether.metrics;
  * @param eventCount      Number of cluster events during the minute
  * @param sampleCount     Number of samples aggregated (up to 60)
  */
-public record MinuteAggregate(
- long minuteTimestamp,
- double avgCpuUsage,
- double avgHeapUsage,
- double avgEventLoopLagMs,
- double avgLatencyMs,
- long totalInvocations,
- long totalGcPauseMs,
- double latencyP50,
- double latencyP95,
- double latencyP99,
- double errorRate,
- int eventCount,
- int sampleCount) {
-    public static final MinuteAggregate EMPTY = new MinuteAggregate(
-    0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0, 0);
+public record MinuteAggregate(long minuteTimestamp,
+                              double avgCpuUsage,
+                              double avgHeapUsage,
+                              double avgEventLoopLagMs,
+                              double avgLatencyMs,
+                              long totalInvocations,
+                              long totalGcPauseMs,
+                              double latencyP50,
+                              double latencyP95,
+                              double latencyP99,
+                              double errorRate,
+                              int eventCount,
+                              int sampleCount) {
+    public static final MinuteAggregate EMPTY = new MinuteAggregate(0,
+                                                                    0.0,
+                                                                    0.0,
+                                                                    0.0,
+                                                                    0.0,
+                                                                    0,
+                                                                    0,
+                                                                    0.0,
+                                                                    0.0,
+                                                                    0.0,
+                                                                    0.0,
+                                                                    0,
+                                                                    0);
 
     /**
      * Align timestamp to minute boundary.
      */
     public static long alignToMinute(long timestamp) {
-        return (timestamp / 60_000L) * 60_000L;
+        return ( timestamp / 60_000L) * 60_000L;
     }
 
     /**

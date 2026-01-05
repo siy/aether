@@ -77,11 +77,8 @@ public record DependencyDescriptor(String sliceClassName, VersionPattern version
     // Error constants
     private static final Cause EMPTY_LINE = Causes.cause("Dependency descriptor line is empty");
     private static final Cause COMMENT_LINE = Causes.cause("Dependency descriptor line is a comment");
-    private static final Fn1<Cause, String>INVALID_FORMAT = Causes.forOneValue("Invalid dependency descriptor format: %s");
-    private static final Fn1<Cause, String>TOO_MANY_PARTS = Causes.forOneValue(
-    "Too many parts in dependency descriptor: %s");
-    private static final Fn1<Cause, String>EMPTY_CLASS_NAME = Causes.forOneValue(
-    "Empty class name in dependency descriptor: %s");
-    private static final Fn1<Cause, String>EMPTY_VERSION_PATTERN = Causes.forOneValue(
-    "Empty version pattern in dependency descriptor: %s");
+    private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forOneValue("Invalid dependency descriptor format: %s");
+    private static final Fn1<Cause, String> TOO_MANY_PARTS = Causes.forOneValue("Too many parts in dependency descriptor: %s");
+    private static final Fn1<Cause, String> EMPTY_CLASS_NAME = Causes.forOneValue("Empty class name in dependency descriptor: %s");
+    private static final Fn1<Cause, String> EMPTY_VERSION_PATTERN = Causes.forOneValue("Empty version pattern in dependency descriptor: %s");
 }

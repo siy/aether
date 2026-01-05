@@ -38,8 +38,8 @@ public interface SliceFactory {
                                      List<Slice> dependencies,
                                      List<DependencyDescriptor> descriptors) {
         return findFactoryMethod(sliceClass)
-               .flatMap(method -> verifyParameters(method, dependencies, descriptors))
-               .flatMap(method -> invokeFactory(method, dependencies));
+                                .flatMap(method -> verifyParameters(method, dependencies, descriptors))
+                                .flatMap(method -> invokeFactory(method, dependencies));
     }
 
     private static Result<Method> findFactoryMethod(Class< ? > sliceClass) {
@@ -53,7 +53,7 @@ public interface SliceFactory {
                      .map(Result::success)
                      .orElseGet(() -> factoryMethodNotFound(sliceClass.getName(),
                                                             expectedName)
-                                      .result());
+                                                           .result());
     }
 
     private static Result<Method> verifyParameters(Method method,
@@ -64,7 +64,7 @@ public interface SliceFactory {
             return parameterCountMismatch(method.getName(),
                                           parameters.length,
                                           dependencies.size())
-                   .result();
+                                         .result();
         }
         for (int i = 0; i < parameters.length; i++ ) {
             var parameter = parameters[i];
@@ -78,7 +78,7 @@ public interface SliceFactory {
                                                       .getName(),
                                              dependency.getClass()
                                                        .getName())
-                       .result();
+                                            .result();
             }
         }
         return Result.success(method);
@@ -89,7 +89,7 @@ public interface SliceFactory {
                            () -> {
                                method.setAccessible(true);
                                var instance = method.invoke(null, dependencies.toArray());
-                               return (Slice) instance;
+                               return ( Slice) instance;
                            });
     }
 

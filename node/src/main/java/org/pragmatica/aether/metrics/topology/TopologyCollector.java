@@ -54,12 +54,12 @@ public final class TopologyCollector {
         topologyManager.set(manager);
         // Register self
         option(manager)
-        .onPresent(m -> {
-            var self = m.self();
-            knownNodes.put(self.id()
-                               .id(),
-                           self);
-        });
+              .onPresent(m -> {
+                  var self = m.self();
+                  knownNodes.put(self.id()
+                                     .id(),
+                                 self);
+              });
     }
 
     /**
@@ -136,7 +136,7 @@ public final class TopologyCollector {
                                        .or(false);
             if (nodeSuspectTimes.containsKey(nodeIdStr)) {
                 nodeInfos.add(ClusterTopology.NodeInfo.suspected(nodeIdStr, address));
-            }else {
+            } else {
                 nodeInfos.add(ClusterTopology.NodeInfo.healthy(nodeIdStr, address, isLeader));
                 healthyCount++ ;
             }
@@ -148,8 +148,7 @@ public final class TopologyCollector {
         int quorumSize = topology.map(TopologyManager::quorumSize)
                                  .or(0);
         boolean hasQuorum = healthyCount >= quorumSize;
-        return new ClusterTopology(
-        totalNodes, healthyCount, quorumSize, hasQuorum, leaderId, nodeInfos, sliceInfos);
+        return new ClusterTopology(totalNodes, healthyCount, quorumSize, hasQuorum, leaderId, nodeInfos, sliceInfos);
     }
 
     private Map<String, ClusterTopology.SliceInfo> collectSliceInfo(KVStore<AetherKey, AetherValue> store) {
@@ -178,8 +177,7 @@ public final class TopologyCollector {
                                                  .mapToInt(Integer::intValue)
                                                  .sum();
                 sliceInfos.put(artifact,
-                               new ClusterTopology.SliceInfo(
-                artifact, totalInstances, totalInstances, distribution));
+                               new ClusterTopology.SliceInfo(artifact, totalInstances, totalInstances, distribution));
             }
         } catch (Exception e) {
             log.debug("Failed to collect slice info: {}", e.getMessage());

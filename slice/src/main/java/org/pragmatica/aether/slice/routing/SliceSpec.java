@@ -7,7 +7,7 @@ import org.pragmatica.lang.Result;
 import org.pragmatica.lang.utils.Causes;
 
 public record SliceSpec(Artifact artifact, int instances) {
-    private static final Fn1<Cause, Integer>INVALID_INSTANCES = Causes.forOneValue("Instance count must be positive: %s");
+    private static final Fn1<Cause, Integer> INVALID_INSTANCES = Causes.forOneValue("Instance count must be positive: %s");
 
     public static Result<SliceSpec> sliceSpec(Artifact artifact, int instances) {
         if (instances <= 0) {

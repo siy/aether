@@ -33,15 +33,14 @@ import static org.pragmatica.lang.io.TimeSpan.timeSpan;
  * @param tls             TLS configuration for secure connections (empty for plain TCP/HTTP)
  * @param ttm             TTM (Tiny Time Mixers) predictive scaling configuration
  */
-public record AetherNodeConfig(
- TopologyConfig topology,
- ProtocolConfig protocol,
- SliceActionConfig sliceAction,
- int managementPort,
- Option<RouterConfig> httpRouter,
- DHTConfig artifactRepo,
- Option<TlsConfig> tls,
- TTMConfig ttm) {
+public record AetherNodeConfig(TopologyConfig topology,
+                               ProtocolConfig protocol,
+                               SliceActionConfig sliceAction,
+                               int managementPort,
+                               Option<RouterConfig> httpRouter,
+                               DHTConfig artifactRepo,
+                               Option<TlsConfig> tls,
+                               TTMConfig ttm) {
     public static final int DEFAULT_MANAGEMENT_PORT = 8080;
     public static final int MANAGEMENT_DISABLED = 0;
 
@@ -104,10 +103,9 @@ public record AetherNodeConfig(
                                                     int managementPort,
                                                     Option<RouterConfig> httpRouter,
                                                     DHTConfig artifactRepoConfig) {
-        var topology = new TopologyConfig(
-        self, timeSpan(5)
-             .seconds(), timeSpan(1)
-                        .seconds(), coreNodes);
+        var topology = new TopologyConfig(self, timeSpan(5)
+                                                        .seconds(), timeSpan(1)
+                                                                            .seconds(), coreNodes);
         return new AetherNodeConfig(topology,
                                     ProtocolConfig.defaultConfig(),
                                     sliceActionConfig,
@@ -119,10 +117,9 @@ public record AetherNodeConfig(
     }
 
     public static AetherNodeConfig testConfig(NodeId self, int port, List<NodeInfo> coreNodes) {
-        var topology = new TopologyConfig(
-        self, timeSpan(500)
-             .millis(), timeSpan(100)
-                       .millis(), coreNodes);
+        var topology = new TopologyConfig(self, timeSpan(500)
+                                                        .millis(), timeSpan(100)
+                                                                           .millis(), coreNodes);
         // Use full replication for tests - simpler, and tests typically have few nodes
         return new AetherNodeConfig(topology,
                                     ProtocolConfig.testConfig(),
@@ -140,13 +137,12 @@ public record AetherNodeConfig(
     public AetherNodeConfig withTls(TlsConfig tlsConfig) {
         var tlsOption = Option.some(tlsConfig);
         // Update TopologyConfig with TLS for cluster communication
-        var newTopology = new TopologyConfig(
-        topology.self(),
-        topology.reconciliationInterval(),
-        topology.pingInterval(),
-        topology.helloTimeout(),
-        topology.coreNodes(),
-        tlsOption);
+        var newTopology = new TopologyConfig(topology.self(),
+                                             topology.reconciliationInterval(),
+                                             topology.pingInterval(),
+                                             topology.helloTimeout(),
+                                             topology.coreNodes(),
+                                             tlsOption);
         return new AetherNodeConfig(newTopology,
                                     protocol,
                                     sliceAction,

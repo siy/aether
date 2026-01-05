@@ -66,16 +66,16 @@ class BindingResolverImpl implements BindingResolver {
                                                   .toResult(new HttpRouterError.BindingFailed(binding.param(),
                                                                                               "Header not found: " + h.name()));
             case BindingSource.Body ignored -> parseBody(context.body());
-            case BindingSource.Cookie c -> new HttpRouterError.BindingFailed(
-            binding.param(), "Cookie binding not implemented: " + c.name()).result();
-            case BindingSource.Value ignored -> new HttpRouterError.BindingFailed(
-            binding.param(), "Unsupported binding source for HTTP: value").result();
-            case BindingSource.Key ignored -> new HttpRouterError.BindingFailed(
-            binding.param(), "Unsupported binding source for HTTP: key").result();
-            case BindingSource.Metadata ignored -> new HttpRouterError.BindingFailed(
-            binding.param(), "Unsupported binding source for HTTP: metadata").result();
-            case BindingSource.RequestField ignored -> new HttpRouterError.BindingFailed(
-            binding.param(), "Unsupported binding source for HTTP: request").result();
+            case BindingSource.Cookie c -> new HttpRouterError.BindingFailed(binding.param(),
+                                                                             "Cookie binding not implemented: " + c.name()).result();
+            case BindingSource.Value ignored -> new HttpRouterError.BindingFailed(binding.param(),
+                                                                                  "Unsupported binding source for HTTP: value").result();
+            case BindingSource.Key ignored -> new HttpRouterError.BindingFailed(binding.param(),
+                                                                                "Unsupported binding source for HTTP: key").result();
+            case BindingSource.Metadata ignored -> new HttpRouterError.BindingFailed(binding.param(),
+                                                                                     "Unsupported binding source for HTTP: metadata").result();
+            case BindingSource.RequestField ignored -> new HttpRouterError.BindingFailed(binding.param(),
+                                                                                         "Unsupported binding source for HTTP: request").result();
         };
     }
 
@@ -83,8 +83,7 @@ class BindingResolverImpl implements BindingResolver {
         if (body == null || body.length == 0) {
             return new HttpRouterError.BindingFailed("body", "Request body is empty").result();
         }
-        return Result.lift(
-        ex -> new HttpRouterError.DeserializationFailed(org.pragmatica.lang.utils.Causes.fromThrowable(ex)),
-        () -> deserializer.read(io.netty.buffer.Unpooled.wrappedBuffer(body)));
+        return Result.lift(ex -> new HttpRouterError.DeserializationFailed(org.pragmatica.lang.utils.Causes.fromThrowable(ex)),
+                           () -> deserializer.read(io.netty.buffer.Unpooled.wrappedBuffer(body)));
     }
 }

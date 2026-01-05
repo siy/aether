@@ -16,16 +16,14 @@ import java.util.Map;
  * @param nodes         Node information list
  * @param slices        Slice deployment information
  */
-public record ClusterTopology(
- int totalNodes,
- int healthyNodes,
- int quorumSize,
- boolean hasQuorum,
- Option<String> leaderId,
- List<NodeInfo> nodes,
- Map<String, SliceInfo> slices) {
-    public static final ClusterTopology EMPTY = new ClusterTopology(
-    0, 0, 0, false, Option.empty(), List.of(), Map.of());
+public record ClusterTopology(int totalNodes,
+                              int healthyNodes,
+                              int quorumSize,
+                              boolean hasQuorum,
+                              Option<String> leaderId,
+                              List<NodeInfo> nodes,
+                              Map<String, SliceInfo> slices) {
+    public static final ClusterTopology EMPTY = new ClusterTopology(0, 0, 0, false, Option.empty(), List.of(), Map.of());
 
     /**
      * Node information in the cluster.
@@ -36,12 +34,11 @@ public record ClusterTopology(
      * @param isLeader Whether this node is the leader
      * @param lastSeen Last seen timestamp
      */
-    public record NodeInfo(
-    String nodeId,
-    String address,
-    String status,
-    boolean isLeader,
-    long lastSeen) {
+    public record NodeInfo(String nodeId,
+                           String address,
+                           String status,
+                           boolean isLeader,
+                           long lastSeen) {
         public static NodeInfo healthy(String nodeId, String address, boolean isLeader) {
             return new NodeInfo(nodeId, address, "HEALTHY", isLeader, System.currentTimeMillis());
         }
@@ -63,11 +60,10 @@ public record ClusterTopology(
      * @param activeInstances  Currently active instances
      * @param nodeDistribution Instances per node
      */
-    public record SliceInfo(
-    String artifact,
-    int desiredInstances,
-    int activeInstances,
-    Map<String, Integer> nodeDistribution) {
+    public record SliceInfo(String artifact,
+                            int desiredInstances,
+                            int activeInstances,
+                            Map<String, Integer> nodeDistribution) {
         public boolean isHealthy() {
             return activeInstances >= desiredInstances;
         }
@@ -94,7 +90,7 @@ public record ClusterTopology(
         double leaderHealth = leaderId.isPresent()
                               ? 1.0
                               : 0.0;
-        return (nodeHealth * 0.4 + quorumHealth * 0.4 + leaderHealth * 0.2);
+        return ( nodeHealth * 0.4 + quorumHealth * 0.4 + leaderHealth * 0.2);
     }
 
     /**
@@ -115,6 +111,6 @@ public record ClusterTopology(
      * Check if cluster is in critical state.
      */
     public boolean critical() {
-        return !hasQuorum;
+        return ! hasQuorum;
     }
 }

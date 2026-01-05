@@ -41,7 +41,7 @@ public interface ArtifactStore {
     /**
      * Resolve an artifact.
      */
-    Promise<byte[] > resolve(Artifact artifact);
+    Promise<byte[]> resolve(Artifact artifact);
 
     /**
      * Check if an artifact exists.
@@ -61,21 +61,19 @@ public interface ArtifactStore {
     /**
      * Deployment result with checksums.
      */
-    record DeployResult(
-    Artifact artifact,
-    long size,
-    String md5,
-    String sha1) {}
+    record DeployResult(Artifact artifact,
+                        long size,
+                        String md5,
+                        String sha1) {}
 
     /**
      * Artifact metadata.
      */
-    record ArtifactMetadata(
-    long size,
-    int chunkCount,
-    String md5,
-    String sha1,
-    long deployedAt) {
+    record ArtifactMetadata(long size,
+                            int chunkCount,
+                            String md5,
+                            String sha1,
+                            long deployedAt) {
         public byte[] toBytes() {
             var data = size + ":" + chunkCount + ":" + md5 + ":" + sha1 + ":" + deployedAt;
             return data.getBytes(StandardCharsets.UTF_8);
@@ -85,8 +83,11 @@ public interface ArtifactStore {
             try{
                 var parts = new String(bytes, StandardCharsets.UTF_8).split(":");
                 if (parts.length != 5) return Option.none();
-                return Option.some(new ArtifactMetadata(
-                Long.parseLong(parts[0]), Integer.parseInt(parts[1]), parts[2], parts[3], Long.parseLong(parts[4])));
+                return Option.some(new ArtifactMetadata(Long.parseLong(parts[0]),
+                                                        Integer.parseInt(parts[1]),
+                                                        parts[2],
+                                                        parts[3],
+                                                        Long.parseLong(parts[4])));
             } catch (Exception e) {
                 return Option.none();
             }
@@ -158,8 +159,7 @@ class ArtifactStoreImpl implements ArtifactStore {
             chunkPromises.add(dht.put(chunkKey, chunks.get(i)));
         }
         // Store metadata after chunks
-        var metadata = new ArtifactMetadata(
-        content.length, chunks.size(), md5, sha1, System.currentTimeMillis());
+        var metadata = new ArtifactMetadata(content.length, chunks.size(), md5, sha1, System.currentTimeMillis());
         return Promise.allOf(chunkPromises)
                       .flatMap(_ -> dht.put(metaKey(artifact),
                                             metadata.toBytes()))
@@ -173,7 +173,7 @@ class ArtifactStoreImpl implements ArtifactStore {
     }
 
     @Override
-    public Promise<byte[] > resolve(Artifact artifact) {
+    public Promise<byte[]> resolve(Artifact artifact) {
         log.debug("Resolving artifact: {}", artifact.asString());
         return dht.get(metaKey(artifact))
                   .flatMap(metaOpt -> metaOpt.flatMap(ArtifactMetadata::fromBytes)
@@ -181,24 +181,24 @@ class ArtifactStoreImpl implements ArtifactStore {
                                                    meta -> resolveChunks(artifact, meta)));
     }
 
-    private Promise<byte[] > resolveChunks(Artifact artifact, ArtifactMetadata meta) {
-        var chunkPromises = new ArrayList<Promise<Option<byte[] >>>();
+    private Promise<byte[]> resolveChunks(Artifact artifact, ArtifactMetadata meta) {
+        var chunkPromises = new ArrayList<Promise<Option<byte[]>>>();
         for (int i = 0; i < meta.chunkCount(); i++ ) {
             chunkPromises.add(dht.get(chunkKey(artifact, i)));
         }
         return Promise.allOf(chunkPromises)
                       .flatMap(results -> {
-                                   var chunks = new ArrayList<byte[] >();
+                                   var chunks = new ArrayList<byte[]>();
                                    for (var result : results) {
-                                   if (result.isFailure()) {
-                                   return new ArtifactStoreError.ResolveFailed(artifact, "Failed to fetch chunk").promise();
-                               }
-                                   var chunkOpt = result.unwrap();
-                                   if (chunkOpt.isEmpty()) {
-                                   return new ArtifactStoreError.CorruptedArtifact(artifact).promise();
-                               }
-                                   chunkOpt.onPresent(chunks::add);
-                               }
+                                       if (result.isFailure()) {
+                                           return new ArtifactStoreError.ResolveFailed(artifact, "Failed to fetch chunk").promise();
+                                       }
+                                       var chunkOpt = result.unwrap();
+                                       if (chunkOpt.isEmpty()) {
+                                           return new ArtifactStoreError.CorruptedArtifact(artifact).promise();
+                                       }
+                                       chunkOpt.onPresent(chunks::add);
+                                   }
                                    return Promise.success(reassembleChunks(chunks,
                                                                            (int) meta.size()));
                                });
@@ -243,8 +243,8 @@ class ArtifactStoreImpl implements ArtifactStore {
                                var versions = new ArrayList<>(opt.map(this::parseVersionsList)
                                                                  .or(List.of()));
                                if (!versions.contains(artifact.version())) {
-                               versions.add(artifact.version());
-                           }
+                                   versions.add(artifact.version());
+                               }
                                return dht.put(versionsKey,
                                               serializeVersionsList(versions));
                            });
@@ -290,8 +290,8 @@ class ArtifactStoreImpl implements ArtifactStore {
         return key.getBytes(StandardCharsets.UTF_8);
     }
 
-    private List<byte[] > splitIntoChunks(byte[] content) {
-        var chunks = new ArrayList<byte[] >();
+    private List<byte[]> splitIntoChunks(byte[] content) {
+        var chunks = new ArrayList<byte[]>();
         int offset = 0;
         while (offset < content.length) {
             int length = Math.min(CHUNK_SIZE, content.length - offset);
@@ -303,7 +303,7 @@ class ArtifactStoreImpl implements ArtifactStore {
         return chunks;
     }
 
-    private byte[] reassembleChunks(List<byte[] > chunks, int totalSize) {
+    private byte[] reassembleChunks(List<byte[]> chunks, int totalSize) {
         var result = new byte[totalSize];
         int offset = 0;
         for (var chunk : chunks) {

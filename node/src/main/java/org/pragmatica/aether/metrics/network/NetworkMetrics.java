@@ -10,14 +10,13 @@ package org.pragmatica.aether.metrics.network;
  * @param backpressureEvents     Number of channelWritabilityChanged(false) events
  * @param lastBackpressureTimestamp Timestamp of last backpressure event (0 if none)
  */
-public record NetworkMetrics(
- long bytesRead,
- long bytesWritten,
- long messagesRead,
- long messagesWritten,
- int activeConnections,
- int backpressureEvents,
- long lastBackpressureTimestamp) {
+public record NetworkMetrics(long bytesRead,
+                             long bytesWritten,
+                             long messagesRead,
+                             long messagesWritten,
+                             int activeConnections,
+                             int backpressureEvents,
+                             long lastBackpressureTimestamp) {
     public static final NetworkMetrics EMPTY = new NetworkMetrics(0, 0, 0, 0, 0, 0, 0);
 
     /**

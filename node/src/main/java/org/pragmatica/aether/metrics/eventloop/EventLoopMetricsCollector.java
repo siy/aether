@@ -67,8 +67,10 @@ public final class EventLoopMetricsCollector {
         }
         this.scheduler = scheduler;
         started = true;
-        probeFuture = scheduler.scheduleAtFixedRate(
-        this::probe, PROBE_INTERVAL_MS, PROBE_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        probeFuture = scheduler.scheduleAtFixedRate(this::probe,
+                                                    PROBE_INTERVAL_MS,
+                                                    PROBE_INTERVAL_MS,
+                                                    TimeUnit.MILLISECONDS);
         log.info("Event loop metrics collection started");
     }
 
@@ -126,7 +128,7 @@ public final class EventLoopMetricsCollector {
             if (lag <= current) {
                 return;
             }
-        }while (!maxLagNanos.compareAndSet(current, lag));
+        } while (!maxLagNanos.compareAndSet(current, lag));
     }
 
     /**
@@ -134,8 +136,7 @@ public final class EventLoopMetricsCollector {
      */
     public EventLoopMetrics snapshot() {
         long lag = maxLagNanos.get();
-        return new EventLoopMetrics(
-        lag, totalPendingTasks.get(), totalActiveChannels.get(), lag < HEALTH_THRESHOLD_NS);
+        return new EventLoopMetrics(lag, totalPendingTasks.get(), totalActiveChannels.get(), lag < HEALTH_THRESHOLD_NS);
     }
 
     /**
@@ -143,7 +144,6 @@ public final class EventLoopMetricsCollector {
      */
     public EventLoopMetrics snapshotAndReset() {
         long lag = maxLagNanos.getAndSet(0);
-        return new EventLoopMetrics(
-        lag, totalPendingTasks.get(), totalActiveChannels.get(), lag < HEALTH_THRESHOLD_NS);
+        return new EventLoopMetrics(lag, totalPendingTasks.get(), totalActiveChannels.get(), lag < HEALTH_THRESHOLD_NS);
     }
 }

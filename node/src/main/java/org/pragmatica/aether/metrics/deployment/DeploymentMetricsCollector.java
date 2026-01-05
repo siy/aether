@@ -206,8 +206,8 @@ class DeploymentMetricsCollectorImpl implements DeploymentMetricsCollector {
                               // Most recent first
         // Trim to retention count
         while (newList.size() > retentionCount) {
-                              newList.removeLast();
-                          }
+                                  newList.removeLast();
+                              }
                               return List.copyOf(newList);
                           });
     }
@@ -323,8 +323,8 @@ class DeploymentMetricsCollectorImpl implements DeploymentMetricsCollector {
                                                      .equals(self))
                                       .toList();
                                                    if (!filteredList.isEmpty()) {
-                                                   remoteMetrics.put(artifact, filteredList);
-                                               }
+                                                       remoteMetrics.put(artifact, filteredList);
+                                                   }
                                                });
                         });
     }

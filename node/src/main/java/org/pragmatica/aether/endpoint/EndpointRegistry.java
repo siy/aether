@@ -96,11 +96,10 @@ public interface EndpointRegistry {
     /**
      * Endpoint representation with location information.
      */
-    record Endpoint(
-    Artifact artifact,
-    MethodName methodName,
-    int instanceNumber,
-    NodeId nodeId) {
+    record Endpoint(Artifact artifact,
+                    MethodName methodName,
+                    int instanceNumber,
+                    NodeId nodeId) {
         public EndpointKey toKey() {
             return new EndpointKey(artifact, methodName, instanceNumber);
         }
@@ -110,9 +109,8 @@ public interface EndpointRegistry {
      * Create a new endpoint registry.
      */
     static EndpointRegistry endpointRegistry() {
-        record endpointRegistry(
-        Map<EndpointKey, Endpoint> endpoints,
-        Map<String, AtomicInteger> roundRobinCounters) implements EndpointRegistry {
+        record endpointRegistry(Map<EndpointKey, Endpoint> endpoints,
+                                Map<String, AtomicInteger> roundRobinCounters) implements EndpointRegistry {
             private static final Logger log = LoggerFactory.getLogger(endpointRegistry.class);
 
             @Override
@@ -122,11 +120,10 @@ public interface EndpointRegistry {
                 var value = valuePut.cause()
                                     .value();
                 if (key instanceof EndpointKey endpointKey && value instanceof EndpointValue endpointValue) {
-                    var endpoint = new Endpoint(
-                    endpointKey.artifact(),
-                    endpointKey.methodName(),
-                    endpointKey.instanceNumber(),
-                    endpointValue.nodeId());
+                    var endpoint = new Endpoint(endpointKey.artifact(),
+                                                endpointKey.methodName(),
+                                                endpointKey.instanceNumber(),
+                                                endpointValue.nodeId());
                     endpoints.put(endpointKey, endpoint);
                     log.debug("Registered endpoint: {}", endpoint);
                 }
@@ -158,10 +155,10 @@ public interface EndpointRegistry {
             public Option<Endpoint> selectEndpoint(Artifact artifact, MethodName methodName) {
                 // Sort endpoints to ensure consistent round-robin order across calls
                 var available = findEndpoints(artifact, methodName)
-                                .stream()
-                                .sorted(Comparator.comparing(e -> e.nodeId()
-                                                                   .id()))
-                                .toList();
+                                             .stream()
+                                             .sorted(Comparator.comparing(e -> e.nodeId()
+                                                                                .id()))
+                                             .toList();
                 if (available.isEmpty()) {
                     return Option.none();
                 }
@@ -278,7 +275,6 @@ public interface EndpointRegistry {
                 return Option.option(oldEndpoints.get(index));
             }
         }
-        return new endpointRegistry(
-        new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
+        return new endpointRegistry(new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
     }
 }

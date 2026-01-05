@@ -41,7 +41,7 @@ final class TTMPredictorImpl implements TTMPredictor {
             return Result.success(TTMPredictor.noOp());
         }
         return checkModelExists(config)
-               .flatMap(TTMPredictorImpl::loadModel);
+                               .flatMap(TTMPredictorImpl::loadModel);
     }
 
     private static Result<TTMConfig> checkModelExists(TTMConfig config) {
@@ -52,23 +52,22 @@ final class TTMPredictorImpl implements TTMPredictor {
     }
 
     private static Result<TTMPredictor> loadModel(TTMConfig config) {
-        return Result.lift(
-        e -> new TTMError.ModelLoadFailed(config.modelPath(), e.getMessage()),
-        () -> {
-            var env = OrtEnvironment.getEnvironment();
-            var sessionOptions = new OrtSession.SessionOptions();
-            sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
-            sessionOptions.setIntraOpNumThreads(2);
-            var session = env.createSession(config.modelPath(), sessionOptions);
-            log.info("Loaded TTM model from {}", config.modelPath());
-            log.debug("Model inputs: {}", session.getInputNames());
-            log.debug("Model outputs: {}", session.getOutputNames());
-            return new TTMPredictorImpl(env, session, config);
-        });
+        return Result.lift(e -> new TTMError.ModelLoadFailed(config.modelPath(), e.getMessage()),
+                           () -> {
+                               var env = OrtEnvironment.getEnvironment();
+                               var sessionOptions = new OrtSession.SessionOptions();
+                               sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
+                               sessionOptions.setIntraOpNumThreads(2);
+                               var session = env.createSession(config.modelPath(), sessionOptions);
+                               log.info("Loaded TTM model from {}", config.modelPath());
+                               log.debug("Model inputs: {}", session.getInputNames());
+                               log.debug("Model outputs: {}", session.getOutputNames());
+                               return new TTMPredictorImpl(env, session, config);
+                           });
     }
 
     @Override
-    public Promise<float[] > predict(float[][] input) {
+    public Promise<float[]> predict(float[][] input) {
         return Promise.lift(cause -> new TTMError.InferenceFailed(cause.getMessage()),
                             () -> runInference(input));
     }
@@ -85,7 +84,7 @@ final class TTMPredictorImpl implements TTMPredictor {
         // Create tensor with shape [1, seqLen, features]
         long[] shape = {1, seqLen, features};
         try (var tensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(flatInput), shape);
-        var results = session.run(Map.of("input", tensor))) {
+             var results = session.run(Map.of("input", tensor))) {
             // Get output tensor
             var outputTensor = (OnnxTensor) results.get(0);
             float[] output = flattenOutput(outputTensor);
@@ -104,7 +103,7 @@ final class TTMPredictorImpl implements TTMPredictor {
         // Handle different possible output shapes
         if (value instanceof float[] arr) {
             return arr;
-        }else if (value instanceof float[][] arr2d) {
+        } else if (value instanceof float[][] arr2d) {
             // Flatten 2D array
             int totalLen = 0;
             for (float[] row : arr2d) {
@@ -117,7 +116,7 @@ final class TTMPredictorImpl implements TTMPredictor {
                 offset += row.length;
             }
             return flat;
-        }else if (value instanceof float[][][] arr3d) {
+        } else if (value instanceof float[][][] arr3d) {
             // Flatten 3D array [batch, seq, features]
             int totalLen = 0;
             for (float[][] batch : arr3d) {

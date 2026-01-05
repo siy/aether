@@ -44,15 +44,15 @@ public record SliceActionConfig(TimeSpan loadingTimeout,
 
     public static SliceActionConfig defaultConfiguration(SerializerFactoryProvider serializerProvider) {
         return new SliceActionConfig(timeSpan(2)
-                                     .minutes(),
+                                             .minutes(),
                                      timeSpan(1)
-                                     .minutes(),
+                                             .minutes(),
                                      timeSpan(30)
-                                     .seconds(),
+                                             .seconds(),
                                      timeSpan(2)
-                                     .minutes(),
+                                             .minutes(),
                                      timeSpan(5)
-                                     .seconds(),
+                                             .seconds(),
                                      List.of(localRepository()),
                                      serializerProvider,
                                      Option.empty());
@@ -68,15 +68,15 @@ public record SliceActionConfig(TimeSpan loadingTimeout,
     public static SliceActionConfig withIsolation(SerializerFactoryProvider serializerProvider,
                                                   Path frameworkJarsPath) {
         return new SliceActionConfig(timeSpan(2)
-                                     .minutes(),
+                                             .minutes(),
                                      timeSpan(1)
-                                     .minutes(),
+                                             .minutes(),
                                      timeSpan(30)
-                                     .seconds(),
+                                             .seconds(),
                                      timeSpan(2)
-                                     .minutes(),
+                                             .minutes(),
                                      timeSpan(5)
-                                     .seconds(),
+                                             .seconds(),
                                      List.of(localRepository()),
                                      serializerProvider,
                                      Option.option(frameworkJarsPath));
@@ -93,6 +93,5 @@ public record SliceActionConfig(TimeSpan loadingTimeout,
         };
     }
 
-    private static final Fn1<Cause, SliceState>NO_TIMEOUT_CONFIGURED = Causes.forOneValue(
-    "No timeout configured for state: %s");
+    private static final Fn1<Cause, SliceState> NO_TIMEOUT_CONFIGURED = Causes.forOneValue("No timeout configured for state: %s");
 }

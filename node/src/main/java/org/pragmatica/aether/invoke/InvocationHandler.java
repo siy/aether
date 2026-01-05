@@ -144,8 +144,8 @@ class InvocationHandlerImpl implements InvocationHandler {
                              var durationNs = System.nanoTime() - startTime;
                              var responseBytes = responseData.length;
                              if (request.expectResponse()) {
-                             sendSuccessResponse(request, responseData);
-                         }
+                                 sendSuccessResponse(request, responseData);
+                             }
                              // Record success metrics
         metricsCollector.onPresent(mc -> mc.recordSuccess(request.targetSlice(),
                                                           request.method(),
@@ -159,9 +159,9 @@ class InvocationHandlerImpl implements InvocationHandler {
                                        request.correlationId(),
                                        cause.message());
                              if (request.expectResponse()) {
-                             sendErrorResponse(request,
-                                               cause.message());
-                         }
+                                 sendErrorResponse(request,
+                                                   cause.message());
+                             }
                              // Record failure metrics
         metricsCollector.onPresent(mc -> mc.recordFailure(request.targetSlice(),
                                                           request.method(),
@@ -173,15 +173,16 @@ class InvocationHandlerImpl implements InvocationHandler {
     }
 
     private void sendSuccessResponse(InvokeRequest request, byte[] payload) {
-        var response = new InvokeResponse(
-        self, request.correlationId(), true, payload);
+        var response = new InvokeResponse(self, request.correlationId(), true, payload);
         network.send(request.sender(), response);
         log.debug("Sent success response [{}]", request.correlationId());
     }
 
     private void sendErrorResponse(InvokeRequest request, String errorMessage) {
-        var response = new InvokeResponse(
-        self, request.correlationId(), false, errorMessage.getBytes(StandardCharsets.UTF_8));
+        var response = new InvokeResponse(self,
+                                          request.correlationId(),
+                                          false,
+                                          errorMessage.getBytes(StandardCharsets.UTF_8));
         network.send(request.sender(), response);
         log.debug("Sent error response [{}]: {}", request.correlationId(), errorMessage);
     }

@@ -17,16 +17,15 @@ import java.util.regex.Pattern;
  * Compiled path pattern for efficient matching.
  * Supports path variables like {id}, {userId}, etc.
  */
-public record PathPattern(
- HttpMethod method,
- String originalPattern,
- Pattern regex,
- List<String> variableNames) {
+public record PathPattern(HttpMethod method,
+                          String originalPattern,
+                          Pattern regex,
+                          List<String> variableNames) {
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{([^}]+)}");
 
-    private static final Fn1<Cause, String>MISSING_METHOD = Causes.forOneValue("Route pattern must include method: {}");
+    private static final Fn1<Cause, String> MISSING_METHOD = Causes.forOneValue("Route pattern must include method: {}");
 
-    private static final Fn1<Cause, String>UNKNOWN_METHOD = Causes.forOneValue("Unknown HTTP method: {}");
+    private static final Fn1<Cause, String> UNKNOWN_METHOD = Causes.forOneValue("Unknown HTTP method: {}");
 
     public static Result<PathPattern> compile(String routePattern) {
         // Parse "GET:/api/users/{userId}" format

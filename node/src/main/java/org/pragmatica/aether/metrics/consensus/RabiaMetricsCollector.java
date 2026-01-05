@@ -55,7 +55,7 @@ public final class RabiaMetricsCollector implements ConsensusMetrics {
     public void recordSyncAttempt(NodeId nodeId, boolean success) {
         if (success) {
             syncSuccessCount.incrementAndGet();
-        }else {
+        } else {
             syncFailureCount.incrementAndGet();
         }
     }
@@ -79,29 +79,27 @@ public final class RabiaMetricsCollector implements ConsensusMetrics {
      * Take a snapshot of current metrics.
      */
     public RabiaMetrics snapshot() {
-        return new RabiaMetrics(
-        role.get(),
-        leaderId.get(),
-        pendingBatches.get(),
-        decisionsCount.get(),
-        proposalsCount.get(),
-        syncSuccessCount.get(),
-        syncFailureCount.get(),
-        totalDecisionLatencyNs.sum());
+        return new RabiaMetrics(role.get(),
+                                leaderId.get(),
+                                pendingBatches.get(),
+                                decisionsCount.get(),
+                                proposalsCount.get(),
+                                syncSuccessCount.get(),
+                                syncFailureCount.get(),
+                                totalDecisionLatencyNs.sum());
     }
 
     /**
      * Take a snapshot and reset counters (for delta-based reporting).
      */
     public RabiaMetrics snapshotAndReset() {
-        return new RabiaMetrics(
-        role.get(),
-        leaderId.get(),
-        pendingBatches.get(),
-        decisionsCount.getAndSet(0),
-        proposalsCount.getAndSet(0),
-        syncSuccessCount.getAndSet(0),
-        syncFailureCount.getAndSet(0),
-        totalDecisionLatencyNs.sumThenReset());
+        return new RabiaMetrics(role.get(),
+                                leaderId.get(),
+                                pendingBatches.get(),
+                                decisionsCount.getAndSet(0),
+                                proposalsCount.getAndSet(0),
+                                syncSuccessCount.getAndSet(0),
+                                syncFailureCount.getAndSet(0),
+                                totalDecisionLatencyNs.sumThenReset());
     }
 }

@@ -34,8 +34,9 @@ import java.util.Map;
  */
 public final class AetherUp {
     private static final String VERSION = "0.7.1";
-    private static final List<Generator>GENERATORS = List.of(
-    new LocalGenerator(), new DockerGenerator(), new KubernetesGenerator());
+    private static final List<Generator> GENERATORS = List.of(new LocalGenerator(),
+                                                              new DockerGenerator(),
+                                                              new KubernetesGenerator());
 
     public static void main(String[] args) {
         var options = parseArgs(args);
@@ -62,7 +63,7 @@ public final class AetherUp {
                 return;
             }
             config = result.fold(cause -> null, c -> c);
-        }else {
+        } else {
             // No config file - use environment defaults
             var envStr = options.getOrDefault("env", "docker");
             var envResult = Environment.fromString(envStr);
@@ -93,8 +94,7 @@ public final class AetherUp {
         var generator = GENERATORS.stream()
                                   .filter(g -> g.supports(config))
                                   .findFirst()
-                                  .orElseThrow(() -> new IllegalStateException(
-        "No generator found for environment: " + config.environment()));
+                                  .orElseThrow(() -> new IllegalStateException("No generator found for environment: " + config.environment()));
         if (options.containsKey("dry-run")) {
             System.out.println("Dry run - would generate artifacts for:");
             System.out.println("  Environment: " + config.environment()
@@ -122,26 +122,26 @@ public final class AetherUp {
         for (int i = 0; i < args.length; i++ ) {
             var arg = args[i];
             switch (arg) {
-                case"-h", "--help" -> options.put("help", "true");
-                case"-v", "--version" -> options.put("version", "true");
-                case"-c", "--config" -> {
+                case "-h", "--help" -> options.put("help", "true");
+                case "-v", "--version" -> options.put("version", "true");
+                case "-c", "--config" -> {
                     if (i + 1 < args.length) options.put("config", args[++ i]);
                 }
-                case"-e", "--env" -> {
+                case "-e", "--env" -> {
                     if (i + 1 < args.length) options.put("env", args[++ i]);
                 }
-                case"-o", "--output" -> {
+                case "-o", "--output" -> {
                     if (i + 1 < args.length) options.put("output", args[++ i]);
                 }
-                case"--nodes" -> {
+                case "--nodes" -> {
                     if (i + 1 < args.length) options.put("nodes", args[++ i]);
                 }
-                case"--heap" -> {
+                case "--heap" -> {
                     if (i + 1 < args.length) options.put("heap", args[++ i]);
                 }
-                case"--tls" -> options.put("tls", "true");
-                case"--no-tls" -> options.put("no-tls", "true");
-                case"--dry-run" -> options.put("dry-run", "true");
+                case "--tls" -> options.put("tls", "true");
+                case "--no-tls" -> options.put("no-tls", "true");
+                case "--dry-run" -> options.put("dry-run", "true");
             }
         }
         return options;

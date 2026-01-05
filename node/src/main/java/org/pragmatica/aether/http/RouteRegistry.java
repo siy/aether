@@ -81,35 +81,31 @@ public interface RouteRegistry {
     /**
      * A registered route with its metadata.
      */
-    record RegisteredRoute(
-    RouteKey key,
-    RouteValue value,
-    PathPattern compiledPattern) {}
+    record RegisteredRoute(RouteKey key,
+                           RouteValue value,
+                           PathPattern compiledPattern) {}
 
     /**
      * Route registration errors.
      */
     sealed interface RouteRegistryError extends Cause {
-        Fn1<Cause, String>ROUTE_CONFLICT_ERROR = Causes.forOneValue(
-        "Route conflict: %s");
+        Fn1<Cause, String> ROUTE_CONFLICT_ERROR = Causes.forOneValue("Route conflict: %s");
 
-        record RouteConflict(
-        String httpMethod,
-        String pathPattern,
-        RouteValue existing,
-        RouteValue attempted) implements RouteRegistryError {
+        record RouteConflict(String httpMethod,
+                             String pathPattern,
+                             RouteValue existing,
+                             RouteValue attempted) implements RouteRegistryError {
             @Override
             public String message() {
-                return String.format(
-                "Route %s %s already registered to %s:%s, cannot register to %s:%s",
-                httpMethod,
-                pathPattern,
-                existing.artifact()
-                        .asString(),
-                existing.methodName(),
-                attempted.artifact()
-                         .asString(),
-                attempted.methodName());
+                return String.format("Route %s %s already registered to %s:%s, cannot register to %s:%s",
+                                     httpMethod,
+                                     pathPattern,
+                                     existing.artifact()
+                                             .asString(),
+                                     existing.methodName(),
+                                     attempted.artifact()
+                                              .asString(),
+                                     attempted.methodName());
             }
         }
     }
@@ -183,8 +179,7 @@ class RouteRegistryImpl implements RouteRegistry {
             return Promise.success(Unit.unit());
         }
         // Conflict - same path but different target
-        return new RouteRegistryError.RouteConflict(
-        attempted.httpMethod(), attempted.pathPattern(), existing, attempted).promise();
+        return new RouteRegistryError.RouteConflict(attempted.httpMethod(), attempted.pathPattern(), existing, attempted).promise();
     }
 
     private Promise<Unit> submitRoute(RouteKey key, RouteValue value) {
@@ -251,17 +246,15 @@ class RouteRegistryImpl implements RouteRegistry {
             if (matchOpt.isPresent()) {
                 // Convert RouteValue to Route for MatchResult compatibility
                 var routeValue = registered.value();
-                var route = new Route(
-                routeValue.httpMethod() + ":" + routeValue.pathPattern(),
-                new org.pragmatica.aether.slice.routing.RouteTarget(
-                routeValue.artifact()
-                          .asString(),
-                routeValue.methodName(),
-                routeValue.bindings()
-                          .stream()
-                          .map(Binding::param)
-                          .toList()),
-                routeValue.bindings());
+                var route = new Route(routeValue.httpMethod() + ":" + routeValue.pathPattern(),
+                                      new org.pragmatica.aether.slice.routing.RouteTarget(routeValue.artifact()
+                                                                                                    .asString(),
+                                                                                          routeValue.methodName(),
+                                                                                          routeValue.bindings()
+                                                                                                    .stream()
+                                                                                                    .map(Binding::param)
+                                                                                                    .toList()),
+                                      routeValue.bindings());
                 return matchOpt.map(vars -> MatchResult.matchResult(route, vars));
             }
         }

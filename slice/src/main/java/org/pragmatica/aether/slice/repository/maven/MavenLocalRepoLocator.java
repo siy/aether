@@ -15,9 +15,9 @@ public sealed interface MavenLocalRepoLocator {
     static String findLocalRepository() {
         var userHome = System.getProperty("user.home");
         return checkSystemProperty()
-               .orElse(() -> checkUserLevelSettings(userHome))
-               .orElse(() -> checkGlobalSettings(userHome))
-               .or(() -> defaultRepository(userHome));
+                                  .orElse(() -> checkUserLevelSettings(userHome))
+                                  .orElse(() -> checkGlobalSettings(userHome))
+                                  .or(() -> defaultRepository(userHome));
     }
 
     private static String defaultRepository(String userHome) {
@@ -34,7 +34,7 @@ public sealed interface MavenLocalRepoLocator {
 
     private static Option<String> checkUserLevelSettings(String userHome) {
         return getLocalRepoFromSettings(fromM2Home(userHome, "settings.xml"))
-               .map(userRepo -> expandPath(userRepo, userHome));
+                                       .map(userRepo -> expandPath(userRepo, userHome));
     }
 
     private static Option<String> checkSystemProperty() {

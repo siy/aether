@@ -35,8 +35,10 @@ public interface DecisionTreeController extends ClusterController {
     static DecisionTreeController decisionTreeController(double cpuScaleUpThreshold,
                                                          double cpuScaleDownThreshold,
                                                          double callRateScaleUpThreshold) {
-        return new DecisionTreeControllerImpl(
-        ControllerConfig.controllerConfig(cpuScaleUpThreshold, cpuScaleDownThreshold, callRateScaleUpThreshold, 1000));
+        return new DecisionTreeControllerImpl(ControllerConfig.controllerConfig(cpuScaleUpThreshold,
+                                                                                cpuScaleDownThreshold,
+                                                                                callRateScaleUpThreshold,
+                                                                                1000));
     }
 
     /**

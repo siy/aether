@@ -23,9 +23,9 @@ import java.util.regex.Pattern;
  * </ul>
  */
 public final class ConfigValidator {
-    private static final Set<Integer>VALID_NODE_COUNTS = Set.of(3, 5, 7);
+    private static final Set<Integer> VALID_NODE_COUNTS = Set.of(3, 5, 7);
     private static final Pattern HEAP_PATTERN = Pattern.compile("^\\d+[mMgG]$");
-    private static final Set<String>VALID_GC = Set.of("zgc", "g1");
+    private static final Set<String> VALID_GC = Set.of("zgc", "g1");
 
     private ConfigValidator() {}
 
@@ -51,9 +51,9 @@ public final class ConfigValidator {
         int nodes = cluster.nodes();
         if (nodes < 3) {
             errors.add("Minimum 3 nodes required for fault tolerance. Got: " + nodes);
-        }else if (nodes % 2 == 0) {
+        } else if (nodes % 2 == 0) {
             errors.add("Node count must be odd (3, 5, 7) for quorum. Got: " + nodes);
-        }else if (nodes > 7) {
+        } else if (nodes > 7) {
             errors.add("Maximum recommended node count is 7. Got: " + nodes
                        + ". More nodes add overhead without proportional benefit.");
         }

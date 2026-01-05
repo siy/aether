@@ -23,25 +23,34 @@ package org.pragmatica.aether.metrics;
  * @param latencyTrend         Latency trend (positive = increasing)
  * @param errorTrend           Error rate trend (positive = increasing)
  */
-public record DerivedMetrics(
- // Rates (per second)
- double requestRate,
- double errorRate,
- double gcRate,
- // Percentiles
+public record DerivedMetrics(// Rates (per second)
+double requestRate,
+double errorRate,
+double gcRate,
+// Percentiles
 double latencyP50,
- double latencyP95,
- double latencyP99,
- // Saturation signals
+double latencyP95,
+double latencyP99,
+// Saturation signals
 double eventLoopSaturation,
- double heapSaturation,
- double backpressureRate,
- // Trends (1-minute deltas)
+double heapSaturation,
+double backpressureRate,
+// Trends (1-minute deltas)
 double cpuTrend,
- double latencyTrend,
- double errorTrend) {
-    public static final DerivedMetrics EMPTY = new DerivedMetrics(
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+double latencyTrend,
+double errorTrend) {
+    public static final DerivedMetrics EMPTY = new DerivedMetrics(0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0);
 
     /**
      * Overall system health score (0.0-1.0, higher is healthier).
@@ -55,7 +64,7 @@ double cpuTrend,
         double errorScore = Math.max(0, 1.0 - errorRate * 10);
         // 10% error = 0
         // Weighted average
-        return (latencyScore * 0.3 + eventLoopScore * 0.3 + heapScore * 0.2 + errorScore * 0.2);
+        return ( latencyScore * 0.3 + eventLoopScore * 0.3 + heapScore * 0.2 + errorScore * 0.2);
     }
 
     /**

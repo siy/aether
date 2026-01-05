@@ -58,8 +58,13 @@ public final class NetworkMetricsAggregator {
             backpressureEvents += metrics.backpressureEvents();
             lastBackpressure = Math.max(lastBackpressure, metrics.lastBackpressureTimestamp());
         }
-        return new NetworkMetrics(
-        bytesRead, bytesWritten, messagesRead, messagesWritten, activeConnections, backpressureEvents, lastBackpressure);
+        return new NetworkMetrics(bytesRead,
+                                  bytesWritten,
+                                  messagesRead,
+                                  messagesWritten,
+                                  activeConnections,
+                                  backpressureEvents,
+                                  lastBackpressure);
     }
 
     /**
@@ -86,7 +91,12 @@ public final class NetworkMetricsAggregator {
             backpressureEvents += metrics.backpressureEvents();
             lastBackpressure = Math.max(lastBackpressure, metrics.lastBackpressureTimestamp());
         }
-        return new NetworkMetrics(
-        bytesRead, bytesWritten, messagesRead, messagesWritten, activeConnections, backpressureEvents, lastBackpressure);
+        return new NetworkMetrics(bytesRead,
+                                  bytesWritten,
+                                  messagesRead,
+                                  messagesWritten,
+                                  activeConnections,
+                                  backpressureEvents,
+                                  lastBackpressure);
     }
 }

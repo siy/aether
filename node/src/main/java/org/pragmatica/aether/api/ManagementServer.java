@@ -115,41 +115,41 @@ class ManagementServerImpl implements ManagementServer {
     public Promise<Unit> start() {
         return Promise.promise(promise -> {
                                    var bootstrap = new ServerBootstrap().group(bossGroup, workerGroup)
-                                                   .channel(NioServerSocketChannel.class)
-                                                   .childHandler(new ChannelInitializer<SocketChannel>() {
+                                                                        .channel(NioServerSocketChannel.class)
+                                                                        .childHandler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                                                                     ChannelPipeline p = ch.pipeline();
-                                                                     sslContext.onPresent(ctx -> p.addLast(ctx.newHandler(ch.alloc())));
-                                                                     p.addLast(new HttpServerCodec());
-                                                                     p.addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
-                                                                     p.addLast(new WebSocketServerProtocolHandler("/ws/dashboard",
-                                                                                                                  null,
-                                                                                                                  true));
-                                                                     p.addLast(new DashboardWebSocketHandler(metricsPublisher));
-                                                                     p.addLast(new HttpRequestHandler(nodeSupplier,
-                                                                                                      alertManager,
-                                                                                                      observability));
-                                                                 }
+                                                                                          ChannelPipeline p = ch.pipeline();
+                                                                                          sslContext.onPresent(ctx -> p.addLast(ctx.newHandler(ch.alloc())));
+                                                                                          p.addLast(new HttpServerCodec());
+                                                                                          p.addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
+                                                                                          p.addLast(new WebSocketServerProtocolHandler("/ws/dashboard",
+                                                                                                                                       null,
+                                                                                                                                       true));
+                                                                                          p.addLast(new DashboardWebSocketHandler(metricsPublisher));
+                                                                                          p.addLast(new HttpRequestHandler(nodeSupplier,
+                                                                                                                           alertManager,
+                                                                                                                           observability));
+                                                                                      }
         });
                                    bootstrap.bind(port)
                                             .addListener(future -> {
                                                              if (future.isSuccess()) {
-                                                             serverChannel = ((io.netty.channel.ChannelFuture) future).channel();
-                                                             metricsPublisher.start();
-                                                             var protocol = sslContext.isPresent()
-                                                                            ? "HTTPS"
-                                                                            : "HTTP";
-                                                             log.info("{} management server started on port {} (dashboard at /dashboard)",
-                                                                      protocol,
-                                                                      port);
-                                                             promise.succeed(unit());
-                                                         }else {
-                                                             log.error("Failed to start management server on port {}",
-                                                                       port,
-                                                                       future.cause());
-                                                             promise.fail(Causes.fromThrowable(future.cause()));
-                                                         }
+                                                                 serverChannel = ((io.netty.channel.ChannelFuture) future).channel();
+                                                                 metricsPublisher.start();
+                                                                 var protocol = sslContext.isPresent()
+                                                                                ? "HTTPS"
+                                                                                : "HTTP";
+                                                                 log.info("{} management server started on port {} (dashboard at /dashboard)",
+                                                                          protocol,
+                                                                          port);
+                                                                 promise.succeed(unit());
+                                                             } else {
+                                                                 log.error("Failed to start management server on port {}",
+                                                                           port,
+                                                                           future.cause());
+                                                                 promise.fail(Causes.fromThrowable(future.cause()));
+                                                             }
                                                          });
                                });
     }
@@ -159,11 +159,11 @@ class ManagementServerImpl implements ManagementServer {
         return Promise.promise(promise -> {
                                    metricsPublisher.stop();
                                    if (serverChannel != null) {
-                                   serverChannel.close()
-                                                .addListener(_ -> shutdownEventLoops(promise));
-                               }else {
-                                   shutdownEventLoops(promise);
-                               }
+                                       serverChannel.close()
+                                                    .addListener(_ -> shutdownEventLoops(promise));
+                                   } else {
+                                       shutdownEventLoops(promise);
+                                   }
                                });
     }
 
@@ -209,12 +209,12 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         log.debug("Received {} {}", method, uri);
         if (method == HttpMethod.GET) {
             handleGet(ctx, uri);
-        }else if (method == HttpMethod.POST || method == HttpMethod.PUT) {
+        } else if (method == HttpMethod.POST || method == HttpMethod.PUT) {
             // Handle both POST and PUT for repository uploads (Maven uses PUT)
             handlePost(ctx, uri, request);
-        }else if (method == HttpMethod.DELETE) {
+        } else if (method == HttpMethod.DELETE) {
             handleDelete(ctx, uri);
-        }else {
+        } else {
             sendError(ctx, HttpResponseStatus.METHOD_NOT_ALLOWED);
         }
     }
@@ -250,42 +250,42 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             var path = extractPath(uri);
             if (path.equals("/invocation-metrics/slow")) {
                 sendJson(ctx, buildSlowInvocationsResponse(node));
-            }else if (path.equals("/invocation-metrics/strategy")) {
+            } else if (path.equals("/invocation-metrics/strategy")) {
                 sendJson(ctx, buildStrategyResponse(node));
-            }else if (path.equals("/invocation-metrics")) {
+            } else if (path.equals("/invocation-metrics")) {
                 var artifactFilter = extractQueryParam(uri, "artifact");
                 var methodFilter = extractQueryParam(uri, "method");
                 sendJson(ctx, buildInvocationMetricsResponse(node, artifactFilter, methodFilter));
-            }else {
+            } else {
                 sendError(ctx, HttpResponseStatus.NOT_FOUND);
             }
             return;
         }
         var response = switch (uri) {
-            case"/status" -> buildStatusResponse(node);
-            case"/nodes" -> buildNodesResponse(node);
-            case"/slices" -> buildSlicesResponse(node);
-            case"/slices/status" -> buildSlicesStatusResponse(node);
-            case"/metrics" -> buildMetricsResponse(node);
-            case"/thresholds" -> alertManager.thresholdsAsJson();
-            case"/alerts" -> buildAlertsResponse();
-            case"/alerts/active" -> alertManager.activeAlertsAsJson();
-            case"/alerts/history" -> alertManager.alertHistoryAsJson();
-            case"/health" -> buildHealthResponse(node);
-            case"/controller/config" -> buildControllerConfigResponse(node);
-            case"/controller/status" -> buildControllerStatusResponse(node);
+            case "/status" -> buildStatusResponse(node);
+            case "/nodes" -> buildNodesResponse(node);
+            case "/slices" -> buildSlicesResponse(node);
+            case "/slices/status" -> buildSlicesStatusResponse(node);
+            case "/metrics" -> buildMetricsResponse(node);
+            case "/thresholds" -> alertManager.thresholdsAsJson();
+            case "/alerts" -> buildAlertsResponse();
+            case "/alerts/active" -> alertManager.activeAlertsAsJson();
+            case "/alerts/history" -> alertManager.alertHistoryAsJson();
+            case "/health" -> buildHealthResponse(node);
+            case "/controller/config" -> buildControllerConfigResponse(node);
+            case "/controller/status" -> buildControllerStatusResponse(node);
             default -> (String) null;
         };
         if (response != null) {
             sendJson(ctx, response);
-        }else {
+        } else {
             sendError(ctx, HttpResponseStatus.NOT_FOUND);
         }
     }
 
     private void serveDashboardFile(ChannelHandlerContext ctx, String filename, String contentType) {
         try (InputStream is = getClass()
-                              .getResourceAsStream("/dashboard/" + filename)) {
+                                      .getResourceAsStream("/dashboard/" + filename)) {
             if (is == null) {
                 sendError(ctx, HttpResponseStatus.NOT_FOUND);
                 return;
@@ -313,10 +313,9 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             .handleGet(uri)
             .onSuccess(response -> {
                            var httpStatus = HttpResponseStatus.valueOf(response.statusCode());
-                           var httpResponse = new DefaultFullHttpResponse(
-        HttpVersion.HTTP_1_1,
-        httpStatus,
-        Unpooled.wrappedBuffer(response.content()));
+                           var httpResponse = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
+                                                                          httpStatus,
+                                                                          Unpooled.wrappedBuffer(response.content()));
                            httpResponse.headers()
                                        .set(HttpHeaderNames.CONTENT_TYPE,
                                             response.contentType());
@@ -347,15 +346,15 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             return;
         }
         switch (uri) {
-            case"/deploy" -> handleDeploy(ctx, node, body);
-            case"/scale" -> handleScale(ctx, node, body);
-            case"/undeploy" -> handleUndeploy(ctx, node, body);
-            case"/blueprint" -> handleBlueprint(ctx, node, body);
-            case"/controller/config" -> handleControllerConfig(ctx, node, body);
-            case"/controller/evaluate" -> handleControllerEvaluate(ctx, node);
-            case"/thresholds" -> handleSetThreshold(ctx, body);
-            case"/alerts/clear" -> handleClearAlerts(ctx);
-            case"/invocation-metrics/strategy" -> handleSetStrategy(ctx, node, body);
+            case "/deploy" -> handleDeploy(ctx, node, body);
+            case "/scale" -> handleScale(ctx, node, body);
+            case "/undeploy" -> handleUndeploy(ctx, node, body);
+            case "/blueprint" -> handleBlueprint(ctx, node, body);
+            case "/controller/config" -> handleControllerConfig(ctx, node, body);
+            case "/controller/evaluate" -> handleControllerEvaluate(ctx, node);
+            case "/thresholds" -> handleSetThreshold(ctx, body);
+            case "/alerts/clear" -> handleClearAlerts(ctx);
+            case "/invocation-metrics/strategy" -> handleSetStrategy(ctx, node, body);
             default -> sendError(ctx, HttpResponseStatus.NOT_FOUND);
         }
     }
@@ -391,10 +390,9 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             .handlePut(uri, content)
             .onSuccess(response -> {
                            var httpStatus = HttpResponseStatus.valueOf(response.statusCode());
-                           var httpResponse = new DefaultFullHttpResponse(
-        HttpVersion.HTTP_1_1,
-        httpStatus,
-        Unpooled.wrappedBuffer(response.content()));
+                           var httpResponse = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
+                                                                          httpStatus,
+                                                                          Unpooled.wrappedBuffer(response.content()));
                            httpResponse.headers()
                                        .set(HttpHeaderNames.CONTENT_TYPE,
                                             response.contentType());
@@ -528,16 +526,16 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                                 .map(spec -> {
                                          AetherKey key = new AetherKey.BlueprintKey(spec.artifact());
                                          AetherValue value = new AetherValue.BlueprintValue(spec.instances());
-                                         return (KVCommand<AetherKey>) new KVCommand.Put<>(key, value);
+                                         return ( KVCommand<AetherKey>) new KVCommand.Put<>(key, value);
                                      })
                                 .toList();
                                       if (commands.isEmpty()) {
-                                      sendJson(ctx,
-                                               "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
-                                                                                                     .asString()
-                                               + "\",\"slices\":0}");
-                                      return;
-                                  }
+                                          sendJson(ctx,
+                                                   "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
+                                                                                                         .asString()
+                                                   + "\",\"slices\":0}");
+                                          return;
+                                      }
                                       node.apply(commands)
                                           .onSuccess(_ -> sendJson(ctx,
                                                                    "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
@@ -557,15 +555,15 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         if (uri.equals("/rolling-updates")) {
             // List all active rolling updates
             sendJson(ctx, buildRollingUpdatesResponse(node));
-        }else if (uri.startsWith("/rolling-update/") && uri.endsWith("/health")) {
+        } else if (uri.startsWith("/rolling-update/") && uri.endsWith("/health")) {
             // GET /rolling-update/{id}/health
             var updateId = extractUpdateId(uri, "/health");
             sendJson(ctx, buildRollingUpdateHealthResponse(node, updateId));
-        }else if (uri.startsWith("/rolling-update/")) {
+        } else if (uri.startsWith("/rolling-update/")) {
             // GET /rolling-update/{id}
             var updateId = uri.substring("/rolling-update/".length());
             sendJson(ctx, buildRollingUpdateResponse(node, updateId));
-        }else {
+        } else {
             sendError(ctx, HttpResponseStatus.NOT_FOUND);
         }
     }
@@ -573,19 +571,19 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private void handleRollingUpdatePost(ChannelHandlerContext ctx, AetherNode node, String uri, String body) {
         if (uri.equals("/rolling-update/start")) {
             handleRollingUpdateStart(ctx, node, body);
-        }else if (uri.endsWith("/routing")) {
+        } else if (uri.endsWith("/routing")) {
             var updateId = extractUpdateId(uri, "/routing");
             handleRollingUpdateRouting(ctx, node, updateId, body);
-        }else if (uri.endsWith("/approve")) {
+        } else if (uri.endsWith("/approve")) {
             var updateId = extractUpdateId(uri, "/approve");
             handleRollingUpdateApprove(ctx, node, updateId);
-        }else if (uri.endsWith("/complete")) {
+        } else if (uri.endsWith("/complete")) {
             var updateId = extractUpdateId(uri, "/complete");
             handleRollingUpdateComplete(ctx, node, updateId);
-        }else if (uri.endsWith("/rollback")) {
+        } else if (uri.endsWith("/rollback")) {
             var updateId = extractUpdateId(uri, "/rollback");
             handleRollingUpdateRollback(ctx, node, updateId);
-        }else {
+        } else {
             sendError(ctx, HttpResponseStatus.NOT_FOUND);
         }
     }
@@ -1044,20 +1042,18 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         boolean first = true;
         for (var snapshot : snapshots) {
             // Apply artifact filter (partial match) - skip if filter present and doesn't match
-            var skipByArtifact = artifactFilter.fold(
-            () -> false,
-            filter -> !snapshot.artifact()
-                               .asString()
-                               .contains(filter));
+            var skipByArtifact = artifactFilter.fold(() -> false,
+                                                     filter -> !snapshot.artifact()
+                                                                        .asString()
+                                                                        .contains(filter));
             if (skipByArtifact) {
                 continue;
             }
             // Apply method filter (exact match) - skip if filter present and doesn't match
-            var skipByMethod = methodFilter.fold(
-            () -> false,
-            filter -> !snapshot.methodName()
-                               .name()
-                               .equals(filter));
+            var skipByMethod = methodFilter.fold(() -> false,
+                                                 filter -> !snapshot.methodName()
+                                                                    .name()
+                                                                    .equals(filter));
             if (skipByMethod) {
                 continue;
             }
@@ -1195,19 +1191,18 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                                        .matcher(body);
             var currentConfig = node.controller()
                                     .getConfiguration();
-            var newConfig = org.pragmatica.aether.controller.ControllerConfig.controllerConfig(
-            cpuUpMatch.find()
-            ? Double.parseDouble(cpuUpMatch.group(1))
-            : currentConfig.cpuScaleUpThreshold(),
-            cpuDownMatch.find()
-            ? Double.parseDouble(cpuDownMatch.group(1))
-            : currentConfig.cpuScaleDownThreshold(),
-            callRateMatch.find()
-            ? Double.parseDouble(callRateMatch.group(1))
-            : currentConfig.callRateScaleUpThreshold(),
-            intervalMatch.find()
-            ? Long.parseLong(intervalMatch.group(1))
-            : currentConfig.evaluationIntervalMs());
+            var newConfig = org.pragmatica.aether.controller.ControllerConfig.controllerConfig(cpuUpMatch.find()
+                                                                                               ? Double.parseDouble(cpuUpMatch.group(1))
+                                                                                               : currentConfig.cpuScaleUpThreshold(),
+                                                                                               cpuDownMatch.find()
+                                                                                               ? Double.parseDouble(cpuDownMatch.group(1))
+                                                                                               : currentConfig.cpuScaleDownThreshold(),
+                                                                                               callRateMatch.find()
+                                                                                               ? Double.parseDouble(callRateMatch.group(1))
+                                                                                               : currentConfig.callRateScaleUpThreshold(),
+                                                                                               intervalMatch.find()
+                                                                                               ? Long.parseLong(intervalMatch.group(1))
+                                                                                               : currentConfig.evaluationIntervalMs());
             node.controller()
                 .updateConfiguration(newConfig);
             sendJson(ctx, "{\"status\":\"updated\",\"config\":" + newConfig.toJson() + "}");

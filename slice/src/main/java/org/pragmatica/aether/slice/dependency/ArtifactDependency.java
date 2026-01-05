@@ -19,10 +19,9 @@ import org.pragmatica.lang.utils.Causes;
  * @param artifactId     Maven artifact ID
  * @param versionPattern Version pattern for compatibility checking
  */
-public record ArtifactDependency(
- String groupId,
- String artifactId,
- VersionPattern versionPattern) {
+public record ArtifactDependency(String groupId,
+                                 String artifactId,
+                                 VersionPattern versionPattern) {
     /**
      * Parse artifact dependency from string.
      * <p>
@@ -96,8 +95,8 @@ public record ArtifactDependency(
     static final Cause EMPTY_LINE = Causes.cause("Dependency line is empty");
     static final Cause COMMENT_LINE = Causes.cause("Dependency line is a comment");
     static final Cause SECTION_HEADER = Causes.cause("Line is a section header");
-    private static final Fn1<Cause, String>INVALID_FORMAT = Causes.forOneValue("Invalid artifact dependency format: %s. Expected groupId:artifactId:versionPattern");
-    private static final Fn1<Cause, String>EMPTY_GROUP_ID = Causes.forOneValue("Empty group ID in dependency: %s");
-    private static final Fn1<Cause, String>EMPTY_ARTIFACT_ID = Causes.forOneValue("Empty artifact ID in dependency: %s");
-    private static final Fn1<Cause, String>EMPTY_VERSION = Causes.forOneValue("Empty version pattern in dependency: %s");
+    private static final Fn1<Cause, String> INVALID_FORMAT = Causes.forOneValue("Invalid artifact dependency format: %s. Expected groupId:artifactId:versionPattern");
+    private static final Fn1<Cause, String> EMPTY_GROUP_ID = Causes.forOneValue("Empty group ID in dependency: %s");
+    private static final Fn1<Cause, String> EMPTY_ARTIFACT_ID = Causes.forOneValue("Empty artifact ID in dependency: %s");
+    private static final Fn1<Cause, String> EMPTY_VERSION = Causes.forOneValue("Empty version pattern in dependency: %s");
 }

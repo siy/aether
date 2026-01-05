@@ -147,11 +147,10 @@ public interface RollingUpdateManager {
     /**
      * Health metrics for comparing old and new version performance.
      */
-    record VersionHealthMetrics(
-    String updateId,
-    VersionMetrics oldVersion,
-    VersionMetrics newVersion,
-    long collectedAt) {
+    record VersionHealthMetrics(String updateId,
+                                VersionMetrics oldVersion,
+                                VersionMetrics newVersion,
+                                long collectedAt) {
         public boolean isNewVersionHealthy(HealthThresholds thresholds) {
             return thresholds.isHealthy(newVersion.errorRate, newVersion.p99LatencyMs);
         }
@@ -160,11 +159,10 @@ public interface RollingUpdateManager {
     /**
      * Metrics for a single version.
      */
-    record VersionMetrics(
-    Version version,
-    long requestCount,
-    long errorCount,
-    double errorRate,
-    long p99LatencyMs,
-    long avgLatencyMs) {}
+    record VersionMetrics(Version version,
+                          long requestCount,
+                          long errorCount,
+                          double errorRate,
+                          long p99LatencyMs,
+                          long avgLatencyMs) {}
 }

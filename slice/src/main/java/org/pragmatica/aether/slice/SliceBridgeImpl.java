@@ -38,18 +38,16 @@ import java.util.Map;
  * @see SliceBridge
  * @see Slice
  */
-public record SliceBridgeImpl(
- Artifact artifact,
- Slice slice,
- Map<String, InternalMethod> methodMap,
- SerializerFactory serializerFactory) implements SliceBridge {
+public record SliceBridgeImpl(Artifact artifact,
+                              Slice slice,
+                              Map<String, InternalMethod> methodMap,
+                              SerializerFactory serializerFactory) implements SliceBridge {
     /**
      * Internal method descriptor containing type information for serialization.
      */
-    public record InternalMethod(
-    SliceMethod< ? , ? > method,
-    TypeToken< ? > parameterType,
-    TypeToken< ? > returnType) {}
+    public record InternalMethod(SliceMethod< ? , ? > method,
+                                 TypeToken< ? > parameterType,
+                                 TypeToken< ? > returnType) {}
 
     /**
      * Create a SliceBridgeImpl from a Slice instance.
@@ -64,27 +62,26 @@ public record SliceBridgeImpl(
                                               SerializerFactory serializerFactory) {
         var methodMap = slice.methods()
                              .stream()
-                             .collect(java.util.stream.Collectors.toMap(
-        m -> m.name()
-              .name(),
-        m -> new InternalMethod(m,
-                                m.parameterType(),
-                                m.returnType())));
+                             .collect(java.util.stream.Collectors.toMap(m -> m.name()
+                                                                              .name(),
+                                                                        m -> new InternalMethod(m,
+                                                                                                m.parameterType(),
+                                                                                                m.returnType())));
         return new SliceBridgeImpl(artifact, slice, Map.copyOf(methodMap), serializerFactory);
     }
 
     @Override
-    public Promise<byte[] > invoke(String methodName, byte[] input) {
+    public Promise<byte[]> invoke(String methodName, byte[] input) {
         return lookupMethod(methodName)
-               .async()
-               .flatMap(internalMethod -> acquireSerializationPair()
-                                          .flatMap(pair -> deserializeInput(pair.deserializer(),
-                                                                            input,
-                                                                            internalMethod.parameterType())
-                                                           .flatMap(parameter -> invokeMethod(internalMethod.method(),
-                                                                                              parameter)
-                                                                                 .flatMap(response -> serializeResponse(pair.serializer(),
-                                                                                                                        response)))));
+                           .async()
+                           .flatMap(internalMethod -> acquireSerializationPair()
+                                                                              .flatMap(pair -> deserializeInput(pair.deserializer(),
+                                                                                                                input,
+                                                                                                                internalMethod.parameterType())
+                                                                                                               .flatMap(parameter -> invokeMethod(internalMethod.method(),
+                                                                                                                                                  parameter)
+                                                                                                                                                 .flatMap(response -> serializeResponse(pair.serializer(),
+                                                                                                                                                                                        response)))));
     }
 
     @Override
@@ -120,8 +117,7 @@ public record SliceBridgeImpl(
 
     @SuppressWarnings("unchecked")
     private <T> Promise<T> deserializeInput(Deserializer deserializer, byte[] input, TypeToken<T> typeToken) {
-        return Promise.lift(
-        Causes::fromThrowable, () -> (T) deserializer.decode(input));
+        return Promise.lift(Causes::fromThrowable, () -> (T) deserializer.decode(input));
     }
 
     @SuppressWarnings("unchecked")
@@ -131,11 +127,10 @@ public record SliceBridgeImpl(
                       .flatMap(promise -> promise);
     }
 
-    private <R> Promise<byte[] > serializeResponse(Serializer serializer, R response) {
-        return Promise.lift(
-        Causes::fromThrowable, () -> serializer.encode(response));
+    private <R> Promise<byte[]> serializeResponse(Serializer serializer, R response) {
+        return Promise.lift(Causes::fromThrowable, () -> serializer.encode(response));
     }
 
     // Error constants
-    private static final Fn1<Cause, String>METHOD_NOT_FOUND = Causes.forOneValue("Method not found: {0}");
+    private static final Fn1<Cause, String> METHOD_NOT_FOUND = Causes.forOneValue("Method not found: {0}");
 }

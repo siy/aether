@@ -37,7 +37,7 @@ public interface SliceManifest {
      */
     static Result<SliceManifestInfo> read(URL jarUrl) {
         return readManifest(jarUrl)
-               .flatMap(SliceManifest::parseManifest);
+                           .flatMap(SliceManifest::parseManifest);
     }
 
     /**
@@ -70,15 +70,15 @@ public interface SliceManifest {
                            () -> new JarFile(jarPath))
                      .flatMap(jarFile -> {
                                   try (jarFile) {
-                                  var manifest = jarFile.getManifest();
-                                  return manifest == null
-                                         ? MANIFEST_NOT_FOUND_FN.apply(jarUrl.toString())
-                                                                .result()
-                                         : Result.success(manifest);
-                              } catch (IOException e) {
-                                  return Causes.fromThrowable(e)
-                                               .result();
-                              }
+                                      var manifest = jarFile.getManifest();
+                                      return manifest == null
+                                             ? MANIFEST_NOT_FOUND_FN.apply(jarUrl.toString())
+                                                                    .result()
+                                             : Result.success(manifest);
+                                  } catch (IOException e) {
+                                      return Causes.fromThrowable(e)
+                                                   .result();
+                                  }
                               });
     }
 
@@ -86,8 +86,8 @@ public interface SliceManifest {
         return Result.lift(Causes::fromThrowable,
                            () -> {
                                try (var is = manifestUrl.openStream()) {
-                               return new Manifest(is);
-                           }
+                                   return new Manifest(is);
+                               }
                            });
     }
 
@@ -111,7 +111,7 @@ public interface SliceManifest {
     record SliceManifestInfo(Artifact artifact, String sliceClassName) {}
 
     // Error causes
-    Fn1<Cause, String>MANIFEST_NOT_FOUND_FN = Causes.forOneValue("Manifest not found in JAR: %s");
+    Fn1<Cause, String> MANIFEST_NOT_FOUND_FN = Causes.forOneValue("Manifest not found in JAR: %s");
     Cause MANIFEST_NOT_FOUND = Causes.cause("Manifest not found in ClassLoader resources");
     Cause MISSING_ARTIFACT_ATTR = Causes.cause("Missing required manifest attribute: " + SLICE_ARTIFACT_ATTR
                                                + ". Slice JARs must declare artifact coordinates in manifest.");

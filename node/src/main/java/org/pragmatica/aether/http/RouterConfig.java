@@ -10,10 +10,9 @@ import org.pragmatica.net.tcp.TlsConfig;
  * @param maxContentLength Maximum content length for requests
  * @param tls              TLS configuration (empty for plain HTTP)
  */
-public record RouterConfig(
- int port,
- int maxContentLength,
- Option<TlsConfig> tls) {
+public record RouterConfig(int port,
+                           int maxContentLength,
+                           Option<TlsConfig> tls) {
     public static final int DEFAULT_PORT = 8081;
     public static final int DEFAULT_MAX_CONTENT_LENGTH = 1024 * 1024;
 

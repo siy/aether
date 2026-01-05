@@ -314,7 +314,7 @@ class SliceInvokerImpl implements SliceInvoker {
     @Override
     public Promise<Unit> invoke(Artifact slice, MethodName method, Object request) {
         return selectEndpoint(slice, method)
-               .flatMap(endpoint -> sendFireAndForget(endpoint, slice, method, request));
+                             .flatMap(endpoint -> sendFireAndForget(endpoint, slice, method, request));
     }
 
     private Promise<Unit> sendFireAndForget(Endpoint endpoint, Artifact slice, MethodName method, Object request) {
@@ -334,7 +334,7 @@ class SliceInvokerImpl implements SliceInvoker {
             return INVOKER_STOPPED.promise();
         }
         return selectEndpoint(slice, method)
-               .flatMap(endpoint -> sendRequestResponse(endpoint, slice, method, request));
+                             .flatMap(endpoint -> sendRequestResponse(endpoint, slice, method, request));
     }
 
     @SuppressWarnings("unchecked")
@@ -342,8 +342,12 @@ class SliceInvokerImpl implements SliceInvoker {
         var payload = serializeRequest(request);
         var correlationId = KSUID.ksuid()
                                  .toString();
-        return Promise.promise(pendingPromise -> setupPendingInvocation(
-        (Promise<Object>)(Promise< ? >) pendingPromise, correlationId, endpoint, slice, method, payload));
+        return Promise.promise(pendingPromise -> setupPendingInvocation((Promise<Object>)(Promise< ? >) pendingPromise,
+                                                                        correlationId,
+                                                                        endpoint,
+                                                                        slice,
+                                                                        method,
+                                                                        payload));
     }
 
     private void setupPendingInvocation(Promise<Object> pendingPromise,
@@ -355,7 +359,7 @@ class SliceInvokerImpl implements SliceInvoker {
         var pending = new PendingInvocation(pendingPromise, System.currentTimeMillis());
         pendingInvocations.put(correlationId, pending);
         pendingPromise.timeout(timeSpan(timeoutMs)
-                               .millis())
+                                       .millis())
                       .onResult(_ -> pendingInvocations.remove(correlationId));
         var invokeRequest = new InvokeRequest(self, correlationId, slice, method, payload, true);
         network.send(endpoint.nodeId(), invokeRequest);
@@ -393,8 +397,8 @@ class SliceInvokerImpl implements SliceInvoker {
 
     private <R> void executeWithRetry(Promise<R> promise, RetryContext<R> ctx) {
         invokeAndWait(ctx.slice, ctx.method, ctx.request, ctx.responseType)
-        .onSuccess(promise::succeed)
-        .onFailure(cause -> handleRetryFailure(promise, ctx, cause));
+                     .onSuccess(promise::succeed)
+                     .onFailure(cause -> handleRetryFailure(promise, ctx, cause));
     }
 
     private <R> void handleRetryFailure(Promise<R> promise, RetryContext<R> ctx, Cause cause) {
@@ -404,7 +408,7 @@ class SliceInvokerImpl implements SliceInvoker {
         }
         if (ctx.attempt < ctx.maxRetries) {
             scheduleRetry(promise, ctx, cause);
-        }else {
+        } else {
             log.warn("Invocation failed after {} retries: {}.{} - {}",
                      ctx.maxRetries,
                      ctx.slice,
@@ -471,7 +475,7 @@ class SliceInvokerImpl implements SliceInvoker {
                                       .result());
                 log.error("Failed to deserialize response [{}]: {}", response.correlationId(), e.getMessage());
             }
-        }else {
+        } else {
             var errorMessage = new String(response.payload());
             promise.resolve(new InvocationError(errorMessage).result());
             log.debug("Invocation failed [{}]: {}", response.correlationId(), errorMessage);

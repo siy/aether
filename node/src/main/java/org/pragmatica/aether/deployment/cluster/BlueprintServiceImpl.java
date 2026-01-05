@@ -24,10 +24,9 @@ public interface BlueprintServiceImpl {
     static BlueprintService blueprintService(ClusterNode<KVCommand<AetherKey>> cluster,
                                              KVStore<AetherKey, AetherValue> store,
                                              Repository repository) {
-        record blueprintService(
-        ClusterNode<KVCommand<AetherKey>> cluster,
-        KVStore<AetherKey, AetherValue> store,
-        Repository repository) implements BlueprintService {
+        record blueprintService(ClusterNode<KVCommand<AetherKey>> cluster,
+                                KVStore<AetherKey, AetherValue> store,
+                                Repository repository) implements BlueprintService {
             @Override
             public Promise<ExpandedBlueprint> publish(String dsl) {
                 return BlueprintParser.parse(dsl)

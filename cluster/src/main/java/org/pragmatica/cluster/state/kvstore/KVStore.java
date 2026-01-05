@@ -63,7 +63,7 @@ public class KVStore<K extends StructuredKey, V> implements StateMachine<KVComma
     }
 
     @Override
-    public Result<byte[] > makeSnapshot() {
+    public Result<byte[]> makeSnapshot() {
         return Result.lift(Causes::fromThrowable, () -> serializer.encode(new HashMap<>(storage)));
     }
 

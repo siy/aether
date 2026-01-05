@@ -49,7 +49,7 @@ public final class MinuteAggregator {
     public void addSample(ComprehensiveSnapshot snapshot) {
         lock.writeLock()
             .lock();
-        try{
+        try {
             long minute = MinuteAggregate.alignToMinute(snapshot.timestamp());
             // Check for minute rollover
             if (currentMinute != minute && !currentSamples.isEmpty()) {
@@ -60,7 +60,7 @@ public final class MinuteAggregator {
             if (snapshot.avgLatencyMs() > 0) {
                 currentLatencies.add(snapshot.avgLatencyMs());
             }
-        } finally{
+        } finally {
             lock.writeLock()
                 .unlock();
         }
@@ -72,9 +72,9 @@ public final class MinuteAggregator {
     public void recordEvent() {
         lock.writeLock()
             .lock();
-        try{
-            currentEventCount++ ;
-        } finally{
+        try {
+            currentEventCount++;
+        } finally {
             lock.writeLock()
                 .unlock();
         }
@@ -86,11 +86,11 @@ public final class MinuteAggregator {
     public void flush() {
         lock.writeLock()
             .lock();
-        try{
+        try {
             if (!currentSamples.isEmpty()) {
                 finalizeCurrentMinute();
             }
-        } finally{
+        } finally {
             lock.writeLock()
                 .unlock();
         }
@@ -102,9 +102,9 @@ public final class MinuteAggregator {
     public List<MinuteAggregate> all() {
         lock.readLock()
             .lock();
-        try{
+        try {
             return aggregates.toList();
-        } finally{
+        } finally {
             lock.readLock()
                 .unlock();
         }
@@ -116,13 +116,13 @@ public final class MinuteAggregator {
     public List<MinuteAggregate> recent(int count) {
         lock.readLock()
             .lock();
-        try{
+        try {
             var all = aggregates.toList();
             if (all.size() <= count) {
                 return all;
             }
             return all.subList(all.size() - count, all.size());
-        } finally{
+        } finally {
             lock.readLock()
                 .unlock();
         }
@@ -134,9 +134,9 @@ public final class MinuteAggregator {
     public List<MinuteAggregate> since(long timestamp) {
         lock.readLock()
             .lock();
-        try{
+        try {
             return aggregates.filter(a -> a.minuteTimestamp() >= timestamp);
-        } finally{
+        } finally {
             lock.readLock()
                 .unlock();
         }
@@ -151,21 +151,21 @@ public final class MinuteAggregator {
     public float[][] toTTMInput(int windowMinutes) {
         lock.readLock()
             .lock();
-        try{
+        try {
             var recentAggregates = recent(windowMinutes);
             float[][] result = new float[windowMinutes][];
             // Initialize with zeros
-            for (int i = 0; i < windowMinutes; i++ ) {
+            for (int i = 0; i < windowMinutes; i++) {
                 result[i] = new float[MinuteAggregate.featureNames().length];
             }
             // Fill from the end (most recent last)
             int offset = windowMinutes - recentAggregates.size();
-            for (int i = 0; i < recentAggregates.size(); i++ ) {
+            for (int i = 0; i < recentAggregates.size(); i++) {
                 result[offset + i] = recentAggregates.get(i)
                                                      .toFeatureArray();
             }
             return result;
-        } finally{
+        } finally {
             lock.readLock()
                 .unlock();
         }
@@ -177,9 +177,9 @@ public final class MinuteAggregator {
     public int currentSampleCount() {
         lock.readLock()
             .lock();
-        try{
+        try {
             return currentSamples.size();
-        } finally{
+        } finally {
             lock.readLock()
                 .unlock();
         }
@@ -191,9 +191,9 @@ public final class MinuteAggregator {
     public int aggregateCount() {
         lock.readLock()
             .lock();
-        try{
+        try {
             return aggregates.size();
-        } finally{
+        } finally {
             lock.readLock()
                 .unlock();
         }

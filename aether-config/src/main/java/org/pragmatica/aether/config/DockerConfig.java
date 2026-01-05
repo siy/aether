@@ -5,9 +5,8 @@ package org.pragmatica.aether.config;
  * @param network Docker network name
  * @param image   Docker image to use for nodes
  */
-public record DockerConfig(
- String network,
- String image) {
+public record DockerConfig(String network,
+                           String image) {
     public static final String DEFAULT_NETWORK = "aether-network";
     public static final String DEFAULT_IMAGE = "ghcr.io/siy/aether-node:latest";
 

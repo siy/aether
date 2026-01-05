@@ -35,11 +35,11 @@ import java.util.List;
  * </pre>
  */
 public interface BlueprintParser {
-    Fn1<Cause, String>FILE_ERROR = Causes.forOneValue("Failed to read file: %s");
+    Fn1<Cause, String> FILE_ERROR = Causes.forOneValue("Failed to read file: %s");
     Cause MISSING_ID = Causes.cause("Missing blueprint id");
-    Fn1<Cause, String>INVALID_SLICE = Causes.forOneValue("Invalid slice definition: %s");
-    Fn1<Cause, String>MISSING_ARTIFACT = Causes.forOneValue("Missing artifact for slice: %s");
-    Fn1<Cause, String>INVALID_ARTIFACT = Causes.forOneValue("Invalid artifact format: %s");
+    Fn1<Cause, String> INVALID_SLICE = Causes.forOneValue("Invalid slice definition: %s");
+    Fn1<Cause, String> MISSING_ARTIFACT = Causes.forOneValue("Missing artifact for slice: %s");
+    Fn1<Cause, String> INVALID_ARTIFACT = Causes.forOneValue("Invalid artifact format: %s");
 
     static Result<Blueprint> parse(String dsl) {
         if (dsl == null || dsl.isBlank()) {
@@ -68,7 +68,7 @@ public interface BlueprintParser {
         }
         return BlueprintId.blueprintId(idOpt.unwrap())
                           .flatMap(id -> parseSlices(doc)
-                                         .map(slices -> Blueprint.blueprint(id, slices)));
+                                                    .map(slices -> Blueprint.blueprint(id, slices)));
     }
 
     private static Result<List<SliceSpec>> parseSlices(TomlDocument doc) {

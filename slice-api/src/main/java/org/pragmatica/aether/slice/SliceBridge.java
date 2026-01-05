@@ -48,7 +48,7 @@ public interface SliceBridge {
      * @param input      Serialized input parameter (Fury format)
      * @return Promise resolving to serialized response (Fury format)
      */
-    Promise<byte[] > invoke(String methodName, byte[] input);
+    Promise<byte[]> invoke(String methodName, byte[] input);
 
     /**
      * Start the slice lifecycle.

@@ -35,21 +35,18 @@ public interface KryoSerializerFactoryProvider extends SerializerFactoryProvider
     }
 
     private static SerializerFactory pooledFactory(Serializer serializer, Deserializer deserializer, int poolSize) {
-        record pooledFactory(
-        BlockingQueue<Serializer> serializerPool,
-        BlockingQueue<Deserializer> deserializerPool) implements SerializerFactory {
+        record pooledFactory(BlockingQueue<Serializer> serializerPool,
+                             BlockingQueue<Deserializer> deserializerPool) implements SerializerFactory {
             @Override
             public Promise<Serializer> serializer() {
                 // Async blocking take from pool
-                return Promise.lift(
-                Causes::fromThrowable, serializerPool::take);
+                return Promise.lift(Causes::fromThrowable, serializerPool::take);
             }
 
             @Override
             public Promise<Deserializer> deserializer() {
                 // Async blocking take from pool
-                return Promise.lift(
-                Causes::fromThrowable, deserializerPool::take);
+                return Promise.lift(Causes::fromThrowable, deserializerPool::take);
             }
 
             // Release back to pool after use

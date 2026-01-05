@@ -71,7 +71,7 @@ public sealed interface BindingSource {
         }
     }
 
-    Fn1<Cause, String>INVALID_BINDING_SOURCE = Causes.forOneValue("Invalid binding source format: %s");
+    Fn1<Cause, String> INVALID_BINDING_SOURCE = Causes.forOneValue("Invalid binding source format: %s");
 
     static Result<BindingSource> parse(String input) {
         if (input.equals("body")) {
@@ -95,12 +95,12 @@ public sealed interface BindingSource {
                                          .result();
         }
         return switch (prefix) {
-            case"path" -> Result.success(new PathVar(suffix));
-            case"query" -> Result.success(new QueryVar(suffix));
-            case"header" -> Result.success(new Header(suffix));
-            case"cookie" -> Result.success(new Cookie(suffix));
-            case"request" -> Result.success(new RequestField(suffix));
-            case"metadata" -> Result.success(new Metadata(suffix));
+            case "path" -> Result.success(new PathVar(suffix));
+            case "query" -> Result.success(new QueryVar(suffix));
+            case "header" -> Result.success(new Header(suffix));
+            case "cookie" -> Result.success(new Cookie(suffix));
+            case "request" -> Result.success(new RequestField(suffix));
+            case "metadata" -> Result.success(new Metadata(suffix));
             default -> INVALID_BINDING_SOURCE.apply(input)
                                              .result();
         };

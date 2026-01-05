@@ -18,10 +18,9 @@ import org.pragmatica.lang.utils.Causes;
  * @param maxLatencyMs maximum allowed p99 latency in milliseconds (default 500ms)
  * @param requireManualApproval if true, requires explicit approval regardless of metrics
  */
-public record HealthThresholds(
- double maxErrorRate,
- long maxLatencyMs,
- boolean requireManualApproval) {
+public record HealthThresholds(double maxErrorRate,
+                               long maxLatencyMs,
+                               boolean requireManualApproval) {
     private static final Cause INVALID_ERROR_RATE = Causes.cause("Error rate must be between 0.0 and 1.0");
     private static final Cause NEGATIVE_LATENCY = Causes.cause("Latency must be non-negative");
 

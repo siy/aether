@@ -101,7 +101,7 @@ public record VersionRouting(int newWeight, int oldWeight) {
      */
     public double newVersionPercentage() {
         if (totalWeight() == 0) return 0.0;
-        return ( double) newWeight / totalWeight() * 100.0;
+        return (double) newWeight / totalWeight() * 100.0;
     }
 
     /**

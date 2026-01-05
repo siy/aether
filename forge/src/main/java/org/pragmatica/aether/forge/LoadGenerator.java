@@ -79,28 +79,38 @@ public final class LoadGenerator {
         // POST /api/orders - place order
         var placeOrderConfig = config.entryPointConfig("placeOrder");
         generators.put("placeOrder",
-                       new EntryPointGenerator(
-        "placeOrder", placeOrderConfig.buildGenerator("placeOrder"), "POST", "/api/orders"));
+                       new EntryPointGenerator("placeOrder",
+                                               placeOrderConfig.buildGenerator("placeOrder"),
+                                               "POST",
+                                               "/api/orders"));
         // GET /api/orders/{id} - get order status
         var getOrderConfig = config.entryPointConfig("getOrderStatus");
         generators.put("getOrderStatus",
-                       new EntryPointGenerator(
-        "getOrderStatus", getOrderConfig.buildGenerator("getOrderStatus"), "GET", "/api/orders/{id}"));
+                       new EntryPointGenerator("getOrderStatus",
+                                               getOrderConfig.buildGenerator("getOrderStatus"),
+                                               "GET",
+                                               "/api/orders/{id}"));
         // DELETE /api/orders/{id} - cancel order
         var cancelConfig = config.entryPointConfig("cancelOrder");
         generators.put("cancelOrder",
-                       new EntryPointGenerator(
-        "cancelOrder", cancelConfig.buildGenerator("cancelOrder"), "DELETE", "/api/orders/{id}"));
+                       new EntryPointGenerator("cancelOrder",
+                                               cancelConfig.buildGenerator("cancelOrder"),
+                                               "DELETE",
+                                               "/api/orders/{id}"));
         // GET /api/inventory/{productId} - check stock
         var checkStockConfig = config.entryPointConfig("checkStock");
         generators.put("checkStock",
-                       new EntryPointGenerator(
-        "checkStock", checkStockConfig.buildGenerator("checkStock"), "GET", "/api/inventory/{id}"));
+                       new EntryPointGenerator("checkStock",
+                                               checkStockConfig.buildGenerator("checkStock"),
+                                               "GET",
+                                               "/api/inventory/{id}"));
         // GET /api/pricing/{productId} - get price
         var getPriceConfig = config.entryPointConfig("getPrice");
         generators.put("getPrice",
-                       new EntryPointGenerator(
-        "getPrice", getPriceConfig.buildGenerator("getPrice"), "GET", "/api/pricing/{id}"));
+                       new EntryPointGenerator("getPrice",
+                                               getPriceConfig.buildGenerator("getPrice"),
+                                               "GET",
+                                               "/api/pricing/{id}"));
     }
 
     /**
@@ -172,7 +182,7 @@ public final class LoadGenerator {
             log.info("Setting {} rate to {} req/sec", entryPoint, requestsPerSecond);
             generator.setRate(requestsPerSecond);
             entryPointMetrics.setRate(entryPoint, requestsPerSecond);
-        }else {
+        } else {
             log.warn("Unknown entry point: {}", entryPoint);
         }
     }
@@ -282,9 +292,9 @@ public final class LoadGenerator {
                                         .uri(uri)
                                         .timeout(REQUEST_TIMEOUT);
         switch (generator.method) {
-            case"POST" -> requestBuilder.header("Content-Type", "application/json")
-                                        .POST(HttpRequest.BodyPublishers.ofString(requestData.body()));
-            case"DELETE" -> requestBuilder.DELETE();
+            case "POST" -> requestBuilder.header("Content-Type", "application/json")
+                                         .POST(HttpRequest.BodyPublishers.ofString(requestData.body()));
+            case "DELETE" -> requestBuilder.DELETE();
             default -> requestBuilder.GET();
         }
         httpClient.sendAsync(requestBuilder.build(),
@@ -292,12 +302,12 @@ public final class LoadGenerator {
                   .thenAccept(response -> {
                                   var latencyNanos = System.nanoTime() - startTime;
                                   if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                                  metrics.recordSuccess(latencyNanos);
-                                  entryPointMetrics.recordSuccess(generator.name, latencyNanos);
-                              }else {
-                                  metrics.recordFailure(latencyNanos);
-                                  entryPointMetrics.recordFailure(generator.name, latencyNanos);
-                              }
+                                      metrics.recordSuccess(latencyNanos);
+                                      entryPointMetrics.recordSuccess(generator.name, latencyNanos);
+                                  } else {
+                                      metrics.recordFailure(latencyNanos);
+                                      entryPointMetrics.recordFailure(generator.name, latencyNanos);
+                                  }
                               })
                   .exceptionally(e -> {
                                      var latencyNanos = System.nanoTime() - startTime;

@@ -110,7 +110,7 @@ public interface ArtifactMapper {
         }
         var result = new StringBuilder();
         var chars = pascalCase.toCharArray();
-        for (int i = 0; i < chars.length; i++ ) {
+        for (int i = 0; i < chars.length; i++) {
             var c = chars[i];
             if (Character.isUpperCase(c)) {
                 // Add hyphen before uppercase (except at start)

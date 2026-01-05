@@ -34,8 +34,9 @@ public record CancelOrderSlice() implements Slice {
     private static final String INVENTORY = "org.pragmatica-lite.aether.demo:inventory-service:0.1.0";
 
     // Status that allow cancellation
-    private static final Set<OrderStatus>CANCELLABLE_STATUSES = Set.of(
-    OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PROCESSING);
+    private static final Set<OrderStatus> CANCELLABLE_STATUSES = Set.of(OrderStatus.PENDING,
+                                                                        OrderStatus.CONFIRMED,
+                                                                        OrderStatus.PROCESSING);
 
     private OrderRepository repository() {
         return OrderRepository.instance();
@@ -50,23 +51,20 @@ public record CancelOrderSlice() implements Slice {
     }
 
     @Override
-    public List<SliceMethod< ? , ? >> methods() {
-        return List.of(
-        new SliceMethod<>(
-        MethodName.methodName("cancelOrder")
-                  .expect("Invalid method name: cancelOrder"),
-        this::execute,
-        new TypeToken<CancelOrderResponse>() {},
-        new TypeToken<CancelOrderRequest>() {}));
+    public List<SliceMethod< ?, ? >> methods() {
+        return List.of(new SliceMethod<>(MethodName.methodName("cancelOrder")
+                                                   .expect("Invalid method name: cancelOrder"),
+                                         this::execute,
+                                         new TypeToken<CancelOrderResponse>() {},
+                                         new TypeToken<CancelOrderRequest>() {}));
     }
 
     @Override
     public List<SliceRoute> routes() {
-        return List.of(
-        SliceRoute.delete("/api/orders/{orderId}", "cancelOrder")
-                  .withPathVar("orderId")
-                  .withBody()
-                  .build());
+        return List.of(SliceRoute.delete("/api/orders/{orderId}", "cancelOrder")
+                                 .withPathVar("orderId")
+                                 .withBody()
+                                 .build());
     }
 
     private Promise<CancelOrderResponse> execute(CancelOrderRequest request) {
@@ -79,10 +77,10 @@ public record CancelOrderSlice() implements Slice {
 
     private Promise<OrderWithContext> findAndValidateOrder(ValidCancelOrderRequest validRequest) {
         return repository()
-               .findById(validRequest.orderId()
-                                     .value())
-               .fold(() -> orderNotFound(validRequest),
-                     order -> validateCancellable(order, validRequest));
+                         .findById(validRequest.orderId()
+                                               .value())
+                         .fold(() -> orderNotFound(validRequest),
+                               order -> validateCancellable(order, validRequest));
     }
 
     private Promise<OrderWithContext> orderNotFound(ValidCancelOrderRequest validRequest) {
@@ -92,10 +90,9 @@ public record CancelOrderSlice() implements Slice {
 
     private Promise<OrderWithContext> validateCancellable(StoredOrder order, ValidCancelOrderRequest validRequest) {
         if (!CANCELLABLE_STATUSES.contains(order.status())) {
-            return new CancelOrderError.OrderNotCancellable(
-            validRequest.orderId()
-                        .value(),
-            "Order is in " + order.status() + " status").promise();
+            return new CancelOrderError.OrderNotCancellable(validRequest.orderId()
+                                                                        .value(),
+                                                            "Order is in " + order.status() + " status").promise();
         }
         return Promise.success(new OrderWithContext(validRequest, order));
     }
@@ -112,10 +109,10 @@ public record CancelOrderSlice() implements Slice {
 
     private Promise<StockReleased> releaseStock(String reservationId) {
         return invoker()
-               .invokeAndWait(INVENTORY,
-                              "releaseStock",
-                              new ReleaseStockRequest(reservationId),
-                              StockReleased.class);
+                      .invokeAndWait(INVENTORY,
+                                     "releaseStock",
+                                     new ReleaseStockRequest(reservationId),
+                                     StockReleased.class);
     }
 
     private Promise<OrderWithReleases> validateReleases(List<Result<StockReleased>> results,
@@ -123,8 +120,7 @@ public record CancelOrderSlice() implements Slice {
         var allSuccess = results.stream()
                                 .allMatch(Result::isSuccess);
         if (!allSuccess) {
-            return new CancelOrderError.StockReleaseFailed(
-            new CancelOrderError.InvalidRequest("Some reservations could not be released")).promise();
+            return new CancelOrderError.StockReleaseFailed(new CancelOrderError.InvalidRequest("Some reservations could not be released")).promise();
         }
         return Promise.success(new OrderWithReleases(context.request(), context.order()));
     }
@@ -134,14 +130,13 @@ public record CancelOrderSlice() implements Slice {
                              .orderId()
                              .value();
         repository()
-        .updateStatus(orderId, OrderStatus.CANCELLED);
-        return new CancelOrderResponse(
-        context.request()
-               .orderId(),
-        OrderStatus.CANCELLED,
-        context.request()
-               .reason(),
-        Instant.now());
+                  .updateStatus(orderId, OrderStatus.CANCELLED);
+        return new CancelOrderResponse(context.request()
+                                              .orderId(),
+                                       OrderStatus.CANCELLED,
+                                       context.request()
+                                              .reason(),
+                                       Instant.now());
     }
 
     // Pipeline context records

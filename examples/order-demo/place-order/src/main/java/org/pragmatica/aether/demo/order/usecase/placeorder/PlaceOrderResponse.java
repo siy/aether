@@ -6,8 +6,7 @@ import org.pragmatica.aether.demo.order.domain.OrderStatus;
 
 import java.util.List;
 
-public record PlaceOrderResponse(
- OrderId orderId,
- OrderStatus status,
- Money total,
- List<String> reservationIds) {}
+public record PlaceOrderResponse(OrderId orderId,
+                                 OrderStatus status,
+                                 Money total,
+                                 List<String> reservationIds) {}

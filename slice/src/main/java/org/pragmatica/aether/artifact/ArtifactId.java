@@ -13,7 +13,7 @@ public record ArtifactId(String id) {
                      .map(ArtifactId::new);
     }
 
-    @ Override
+    @Override
     public String toString() {
         return id;
     }

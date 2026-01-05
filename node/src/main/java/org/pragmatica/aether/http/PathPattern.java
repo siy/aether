@@ -73,7 +73,7 @@ public record PathPattern(HttpMethod method,
             return Option.none();
         }
         var variables = new HashMap<String, String>();
-        for (int i = 0; i < variableNames.size(); i++ ) {
+        for (int i = 0; i < variableNames.size(); i++) {
             variables.put(variableNames.get(i), matcher.group(i + 1));
         }
         return Option.some(variables);

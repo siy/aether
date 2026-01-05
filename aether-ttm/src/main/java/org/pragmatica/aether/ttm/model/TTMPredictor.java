@@ -67,7 +67,7 @@ final class NoOpTTMPredictor implements TTMPredictor {
         return 0.0;
     }
 
-    @ Override
+    @Override
     public boolean isReady() {
         return false;
     }

@@ -7,18 +7,17 @@ import org.pragmatica.lang.Result;
 
 import java.util.List;
 
-public record ValidPlaceOrderRequest(
- CustomerId customerId,
- List<ValidOrderItem> items,
- String discountCode) {
+public record ValidPlaceOrderRequest(CustomerId customerId,
+                                     List<ValidOrderItem> items,
+                                     String discountCode) {
     public record ValidOrderItem(String productId, int quantity) {}
 
     public static Result<ValidPlaceOrderRequest> validPlaceOrderRequest(PlaceOrderRequest raw) {
         return CustomerId.customerId(raw.customerId())
                          .flatMap(customerId -> validateItems(raw.items())
-                                                .map(items -> new ValidPlaceOrderRequest(customerId,
-                                                                                         items,
-                                                                                         raw.discountCode())));
+                                                             .map(items -> new ValidPlaceOrderRequest(customerId,
+                                                                                                      items,
+                                                                                                      raw.discountCode())));
     }
 
     private static Result<List<ValidOrderItem>> validateItems(List<PlaceOrderRequest.OrderItemRequest> items) {

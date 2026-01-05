@@ -39,7 +39,7 @@ public final class MethodMetrics {
     public MethodMetrics(MethodName methodName) {
         this.methodName = methodName;
         this.histogram = new AtomicInteger[HISTOGRAM_SIZE];
-        for (int i = 0; i < HISTOGRAM_SIZE; i++ ) {
+        for (int i = 0; i < HISTOGRAM_SIZE; i++) {
             histogram[i] = new AtomicInteger();
         }
     }
@@ -73,7 +73,7 @@ public final class MethodMetrics {
         var snapshotFailure = failureCount.getAndSet(0);
         var snapshotDuration = totalDurationNs.getAndSet(0);
         var snapshotHistogram = new int[HISTOGRAM_SIZE];
-        for (int i = 0; i < HISTOGRAM_SIZE; i++ ) {
+        for (int i = 0; i < HISTOGRAM_SIZE; i++) {
             snapshotHistogram[i] = histogram[i].getAndSet(0);
         }
         return new Snapshot(methodName,
@@ -89,7 +89,7 @@ public final class MethodMetrics {
      */
     public Snapshot snapshot() {
         var snapshotHistogram = new int[HISTOGRAM_SIZE];
-        for (int i = 0; i < HISTOGRAM_SIZE; i++ ) {
+        for (int i = 0; i < HISTOGRAM_SIZE; i++) {
             snapshotHistogram[i] = histogram[i].get();
         }
         return new Snapshot(methodName,
@@ -158,7 +158,7 @@ public final class MethodMetrics {
             if (count == 0) return 0;
             long target = (count * percentile) / 100;
             long cumulative = 0;
-            for (int i = 0; i < histogram.length; i++ ) {
+            for (int i = 0; i < histogram.length; i++) {
                 cumulative += histogram[i];
                 if (cumulative >= target) {
                     return bucketUpperBound(i);

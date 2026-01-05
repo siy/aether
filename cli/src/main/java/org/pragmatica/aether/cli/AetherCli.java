@@ -82,7 +82,7 @@ public class AetherCli implements Runnable {
         // Check if this is REPL mode (no subcommand)
         if (isReplMode(args)) {
             cli.runRepl(cmd);
-        }else {
+        } else {
             // Batch mode
             int exitCode = cmd.execute(args);
             System.exit(exitCode);
@@ -115,21 +115,21 @@ public class AetherCli implements Runnable {
         // Parse args manually to get --connect and --config
         String connectArg = null;
         Path configArg = null;
-        for (int i = 0; i < args.length; i++ ) {
+        for (int i = 0; i < args.length; i++) {
             if ((args[i].equals("-c") || args[i].equals("--connect")) && i + 1 < args.length) {
                 connectArg = args[i + 1];
-            }else if (args[i].startsWith("--connect=")) {
+            } else if (args[i].startsWith("--connect=")) {
                 connectArg = args[i].substring("--connect=".length());
-            }else if (args[i].equals("--config") && i + 1 < args.length) {
+            } else if (args[i].equals("--config") && i + 1 < args.length) {
                 configArg = Path.of(args[i + 1]);
-            }else if (args[i].startsWith("--config=")) {
+            } else if (args[i].startsWith("--config=")) {
                 configArg = Path.of(args[i].substring("--config=".length()));
             }
         }
         // Priority: --connect > config file > default
         if (connectArg != null) {
             nodeAddress = connectArg;
-        }else if (configArg != null && Files.exists(configArg)) {
+        } else if (configArg != null && Files.exists(configArg)) {
             ConfigLoader.load(configArg)
                         .onSuccess(config -> {
                                        var port = config.cluster()
@@ -142,7 +142,7 @@ public class AetherCli implements Runnable {
                                        nodeAddress = DEFAULT_ADDRESS;
                                    });
             configPath = configArg;
-        }else {
+        } else {
             nodeAddress = DEFAULT_ADDRESS;
         }
     }
@@ -204,7 +204,7 @@ public class AetherCli implements Runnable {
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 return response.body();
-            }else {
+            } else {
                 return "{\"error\":\"HTTP " + response.statusCode() + ": " + response.body() + "\"}";
             }
         } catch (Exception e) {
@@ -223,7 +223,7 @@ public class AetherCli implements Runnable {
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 return response.body();
-            }else {
+            } else {
                 return "{\"error\":\"HTTP " + response.statusCode() + ": " + response.body() + "\"}";
             }
         } catch (Exception e) {
@@ -245,7 +245,7 @@ public class AetherCli implements Runnable {
                                .isEmpty()
                        ? "{\"status\":\"ok\"}"
                        : response.body();
-            }else {
+            } else {
                 return "{\"error\":\"HTTP " + response.statusCode() + ": " + response.body() + "\"}";
             }
         } catch (Exception e) {
@@ -263,7 +263,7 @@ public class AetherCli implements Runnable {
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 return response.body();
-            }else {
+            } else {
                 return "{\"error\":\"HTTP " + response.statusCode() + ": " + response.body() + "\"}";
             }
         } catch (Exception e) {
@@ -765,17 +765,17 @@ public class AetherCli implements Runnable {
                     // Show current strategy
                     var response = metricsParent.parent.fetchFromNode("/invocation-metrics/strategy");
                     System.out.println(formatJson(response));
-                }else {
+                } else {
                     // Set strategy
                     String body;
                     switch (type.toLowerCase()) {
-                        case"fixed" -> {
+                        case "fixed" -> {
                             var thresholdMs = param1 != null
                                               ? param1
                                               : 100;
                             body = "{\"type\":\"fixed\",\"thresholdMs\":" + thresholdMs + "}";
                         }
-                        case"adaptive" -> {
+                        case "adaptive" -> {
                             var minMs = param1 != null
                                         ? param1
                                         : 10;
@@ -861,7 +861,7 @@ public class AetherCli implements Runnable {
                     sb.append("}");
                     var response = controllerParent.parent.postToNode("/controller/config", sb.toString());
                     System.out.println(formatJson(response));
-                }else {
+                } else {
                     // Show current config
                     var response = controllerParent.parent.fetchFromNode("/controller/config");
                     System.out.println(formatJson(response));
@@ -1046,38 +1046,38 @@ public class AetherCli implements Runnable {
         var sb = new StringBuilder();
         int indent = 0;
         boolean inString = false;
-        for (int i = 0; i < json.length(); i++ ) {
+        for (int i = 0; i < json.length(); i++) {
             char c = json.charAt(i);
             if (c == '"' && (i == 0 || json.charAt(i - 1) != '\\')) {
                 inString = !inString;
                 sb.append(c);
-            }else if (!inString) {
+            } else if (!inString) {
                 switch (c) {
-                    case'{', '[' -> {
+                    case '{', '[' -> {
                         sb.append(c);
                         sb.append('\n');
-                        indent++ ;
+                        indent++;
                         sb.append("  ".repeat(indent));
                     }
-                    case'}', ']' -> {
+                    case '}', ']' -> {
                         sb.append('\n');
-                        indent-- ;
+                        indent--;
                         sb.append("  ".repeat(indent));
                         sb.append(c);
                     }
-                    case',' -> {
+                    case ',' -> {
                         sb.append(c);
                         sb.append('\n');
                         sb.append("  ".repeat(indent));
                     }
-                    case':' -> sb.append(": ");
+                    case ':' -> sb.append(": ");
                     default -> {
                         if (!Character.isWhitespace(c)) {
                             sb.append(c);
                         }
                     }
                 }
-            }else {
+            } else {
                 sb.append(c);
             }
         }

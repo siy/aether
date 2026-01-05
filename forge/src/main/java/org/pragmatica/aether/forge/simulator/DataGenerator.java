@@ -113,16 +113,16 @@ public sealed interface DataGenerator {
     /**
      * Generates order request data for placeOrder entry point.
      */
-    record OrderRequestGenerator(
-    ProductIdGenerator productGenerator,
-    CustomerIdGenerator customerGenerator,
-    IntRange quantityRange) implements DataGenerator {
+    record OrderRequestGenerator(ProductIdGenerator productGenerator,
+                                 CustomerIdGenerator customerGenerator,
+                                 IntRange quantityRange) implements DataGenerator {
         private static final Cause GENERATORS_NULL = Causes.cause("All generators must be non-null");
 
         @Override
         public OrderRequestData generate(Random random) {
-            return new OrderRequestData(
-            customerGenerator.generate(random), productGenerator.generate(random), quantityRange.random(random));
+            return new OrderRequestData(customerGenerator.generate(random),
+                                        productGenerator.generate(random),
+                                        quantityRange.random(random));
         }
 
         public static Result<OrderRequestGenerator> orderRequestGenerator(ProductIdGenerator productGenerator,
@@ -135,8 +135,9 @@ public sealed interface DataGenerator {
         }
 
         public static OrderRequestGenerator withDefaults() {
-            return new OrderRequestGenerator(
-            ProductIdGenerator.withDefaults(), CustomerIdGenerator.withDefaults(), IntRange.exactly(1));
+            return new OrderRequestGenerator(ProductIdGenerator.withDefaults(),
+                                             CustomerIdGenerator.withDefaults(),
+                                             IntRange.exactly(1));
         }
 
         /**
@@ -144,11 +145,10 @@ public sealed interface DataGenerator {
          */
         public record OrderRequestData(String customerId, String productId, int quantity) {
             public String toJson() {
-                return String.format(
-                "{\"customerId\":\"%s\",\"items\":[{\"productId\":\"%s\",\"quantity\":%d}]}",
-                customerId,
-                productId,
-                quantity);
+                return String.format("{\"customerId\":\"%s\",\"items\":[{\"productId\":\"%s\",\"quantity\":%d}]}",
+                                     customerId,
+                                     productId,
+                                     quantity);
             }
         }
     }
@@ -159,7 +159,7 @@ public sealed interface DataGenerator {
      * Thread-safe for concurrent load generation.
      */
     record OrderIdGenerator(Queue<String> orderIdPool, int maxPoolSize) implements DataGenerator {
-        private static final Queue<String>SHARED_POOL = new ConcurrentLinkedQueue<>();
+        private static final Queue<String> SHARED_POOL = new ConcurrentLinkedQueue<>();
         private static final int DEFAULT_MAX_POOL_SIZE = 1000;
         private static final Cause POOL_NULL = Causes.cause("orderIdPool cannot be null");
         private static final Cause MAX_POOL_NOT_POSITIVE = Causes.cause("maxPoolSize must be positive");

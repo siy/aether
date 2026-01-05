@@ -46,22 +46,19 @@ public record PlaceOrderSlice() implements Slice {
     }
 
     @Override
-    public List<SliceMethod< ? , ? >> methods() {
-        return List.of(
-        new SliceMethod<>(
-        MethodName.methodName("placeOrder")
-                  .expect("Invalid method name: placeOrder"),
-        this::execute,
-        new TypeToken<PlaceOrderResponse>() {},
-        new TypeToken<PlaceOrderRequest>() {}));
+    public List<SliceMethod< ?, ? >> methods() {
+        return List.of(new SliceMethod<>(MethodName.methodName("placeOrder")
+                                                   .expect("Invalid method name: placeOrder"),
+                                         this::execute,
+                                         new TypeToken<PlaceOrderResponse>() {},
+                                         new TypeToken<PlaceOrderRequest>() {}));
     }
 
     @Override
     public List<SliceRoute> routes() {
-        return List.of(
-        SliceRoute.post("/api/orders", "placeOrder")
-                  .withBody()
-                  .build());
+        return List.of(SliceRoute.post("/api/orders", "placeOrder")
+                                 .withBody()
+                                 .build());
     }
 
     private Promise<PlaceOrderResponse> execute(PlaceOrderRequest request) {
@@ -84,11 +81,11 @@ public record PlaceOrderSlice() implements Slice {
 
     private Promise<StockAvailability> checkStock(ValidPlaceOrderRequest.ValidOrderItem item) {
         return invoker()
-               .invokeAndWait(INVENTORY,
-                              "checkStock",
-                              new CheckStockRequest(item.productId(),
-                                                    item.quantity()),
-                              StockAvailability.class);
+                      .invokeAndWait(INVENTORY,
+                                     "checkStock",
+                                     new CheckStockRequest(item.productId(),
+                                                           item.quantity()),
+                                     StockAvailability.class);
     }
 
     private Promise<ValidWithStockCheck> validateStockResults(List<Result<StockAvailability>> results,
@@ -110,15 +107,15 @@ public record PlaceOrderSlice() implements Slice {
                                                                                item.quantity()))
                                .toList();
         return invoker()
-               .invokeAndWait(PRICING,
-                              "calculateTotal",
-                              new CalculateTotalRequest(lineItems,
-                                                        context.request()
-                                                               .discountCode()),
-                              OrderTotal.class)
-               .map(total -> new ValidWithPrice(context.request(),
-                                                total))
-               .mapError(PlaceOrderError.PricingFailed::new);
+                      .invokeAndWait(PRICING,
+                                     "calculateTotal",
+                                     new CalculateTotalRequest(lineItems,
+                                                               context.request()
+                                                                      .discountCode()),
+                                     OrderTotal.class)
+                      .map(total -> new ValidWithPrice(context.request(),
+                                                       total))
+                      .mapError(PlaceOrderError.PricingFailed::new);
     }
 
     private Promise<ValidWithReservations> reserveAllStock(ValidWithPrice context) {
@@ -134,12 +131,12 @@ public record PlaceOrderSlice() implements Slice {
 
     private Promise<StockReservation> reserveStock(ValidPlaceOrderRequest.ValidOrderItem item, OrderId orderId) {
         return invoker()
-               .invokeAndWait(INVENTORY,
-                              "reserveStock",
-                              new ReserveStockRequest(item.productId(),
-                                                      item.quantity(),
-                                                      orderId.value()),
-                              StockReservation.class);
+                      .invokeAndWait(INVENTORY,
+                                     "reserveStock",
+                                     new ReserveStockRequest(item.productId(),
+                                                             item.quantity(),
+                                                             orderId.value()),
+                                     StockReservation.class);
     }
 
     private Promise<ValidWithReservations> validateReservationResults(List<Result<StockReservation>> results,
@@ -161,31 +158,29 @@ public record PlaceOrderSlice() implements Slice {
                            .stream()
                            .map(this::toOrderItem)
                            .toList();
-        var order = new OrderRepository.StoredOrder(
-        context.orderId(),
-        context.request()
-               .customerId(),
-        OrderStatus.CONFIRMED,
-        context.total()
-               .total(),
-        items,
-        context.reservations()
-               .stream()
-               .map(StockReservation::reservationId)
-               .toList(),
-        java.time.Instant.now(),
-        java.time.Instant.now());
+        var order = new OrderRepository.StoredOrder(context.orderId(),
+                                                    context.request()
+                                                           .customerId(),
+                                                    OrderStatus.CONFIRMED,
+                                                    context.total()
+                                                           .total(),
+                                                    items,
+                                                    context.reservations()
+                                                           .stream()
+                                                           .map(StockReservation::reservationId)
+                                                           .toList(),
+                                                    java.time.Instant.now(),
+                                                    java.time.Instant.now());
         OrderRepository.instance()
                        .save(order);
-        return new PlaceOrderResponse(
-        context.orderId(),
-        OrderStatus.CONFIRMED,
-        context.total()
-               .total(),
-        context.reservations()
-               .stream()
-               .map(StockReservation::reservationId)
-               .toList());
+        return new PlaceOrderResponse(context.orderId(),
+                                      OrderStatus.CONFIRMED,
+                                      context.total()
+                                             .total(),
+                                      context.reservations()
+                                             .stream()
+                                             .map(StockReservation::reservationId)
+                                             .toList());
     }
 
     private OrderRepository.OrderItem toOrderItem(ValidPlaceOrderRequest.ValidOrderItem item) {
@@ -199,9 +194,8 @@ public record PlaceOrderSlice() implements Slice {
 
     private record ValidWithPrice(ValidPlaceOrderRequest request, OrderTotal total) {}
 
-    private record ValidWithReservations(
-    ValidPlaceOrderRequest request,
-    OrderTotal total,
-    OrderId orderId,
-    List<StockReservation> reservations) {}
+    private record ValidWithReservations(ValidPlaceOrderRequest request,
+                                         OrderTotal total,
+                                         OrderId orderId,
+                                         List<StockReservation> reservations) {}
 }

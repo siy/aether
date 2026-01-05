@@ -27,7 +27,7 @@ public final class LocalSliceInvoker implements SliceInvoker {
     private static final Logger log = LoggerFactory.getLogger(LocalSliceInvoker.class);
 
     private final Map<Artifact, Slice> slices = new ConcurrentHashMap<>();
-    private final Map<String, SliceMethod< ? , ? >> methodCache = new ConcurrentHashMap<>();
+    private final Map<String, SliceMethod< ?, ? >> methodCache = new ConcurrentHashMap<>();
 
     public static LocalSliceInvoker localSliceInvoker() {
         return new LocalSliceInvoker();
@@ -46,7 +46,7 @@ public final class LocalSliceInvoker implements SliceInvoker {
     @Override
     public Promise<Unit> invoke(Artifact slice, MethodName method, Object request) {
         return invokeAndWait(slice, method, request, Object.class)
-               .map(_ -> unit());
+                            .map(_ -> unit());
     }
 
     @Override

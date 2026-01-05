@@ -190,7 +190,7 @@ public sealed interface ThresholdStrategy {
             }
 
             long averageNs() {
-                return ( long) ema;
+                return (long) ema;
             }
         }
     }

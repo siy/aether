@@ -78,7 +78,7 @@ final class TTMPredictorImpl implements TTMPredictor {
         int seqLen = input.length;
         int features = input[0].length;
         float[] flatInput = new float[seqLen * features];
-        for (int i = 0; i < seqLen; i++ ) {
+        for (int i = 0; i < seqLen; i++) {
             System.arraycopy(input[i], 0, flatInput, i * features, features);
         }
         // Create tensor with shape [1, seqLen, features]

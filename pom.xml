@@ -50,7 +50,7 @@
         <netty.version>4.2.9.Final</netty.version>
         <kryo.version>5.6.2</kryo.version>
         <fury-core.version>0.10.2</fury-core.version>
-        <jbct.version>0.4.5</jbct.version>
+        <jbct.version>0.4.6</jbct.version>
         <jbct.skip>false</jbct.skip>
         <micrometer.version>1.16.1</micrometer.version>
         <onnxruntime.version>1.23.2</onnxruntime.version>

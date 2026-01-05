@@ -58,7 +58,7 @@ public final class EventBuffer {
             buffer[head] = event;
             head = (head + 1) % capacity;
             if (size < capacity) {
-                size++ ;
+                size++;
             }
         } finally{
             lock.writeLock()
@@ -75,7 +75,7 @@ public final class EventBuffer {
         try{
             var result = new ArrayList<ClusterEvent>(size);
             long cutoff = System.currentTimeMillis() - retentionMs;
-            for (int i = 0; i < size; i++ ) {
+            for (int i = 0; i < size; i++) {
                 int idx = (head - size + i + capacity) % capacity;
                 var event = buffer[idx];
                 if (event != null && event.timestamp() >= timestamp && event.timestamp() >= cutoff) {
@@ -101,12 +101,12 @@ public final class EventBuffer {
             long cutoff = System.currentTimeMillis() - retentionMs;
             int added = 0;
             // Iterate from newest to oldest
-            for (int i = 0; i < size && added < actualCount; i++ ) {
+            for (int i = 0; i < size && added < actualCount; i++) {
                 int idx = (head - 1 - i + capacity) % capacity;
                 var event = buffer[idx];
                 if (event != null && event.timestamp() >= cutoff) {
                     result.addFirst(event);
-                    added++ ;
+                    added++;
                 }
             }
             return result;
@@ -132,7 +132,7 @@ public final class EventBuffer {
         try{
             var result = new ArrayList<T>();
             long cutoff = System.currentTimeMillis() - retentionMs;
-            for (int i = 0; i < size; i++ ) {
+            for (int i = 0; i < size; i++) {
                 int idx = (head - size + i + capacity) % capacity;
                 var event = buffer[idx];
                 if (event != null && type.isInstance(event) && event.timestamp() >= cutoff) {
@@ -155,11 +155,11 @@ public final class EventBuffer {
         try{
             long cutoff = System.currentTimeMillis() - retentionMs;
             int count = 0;
-            for (int i = 0; i < size; i++ ) {
+            for (int i = 0; i < size; i++) {
                 int idx = (head - size + i + capacity) % capacity;
                 var event = buffer[idx];
                 if (event != null && event.timestamp() >= cutoff) {
-                    count++ ;
+                    count++;
                 }
             }
             return count;
@@ -176,7 +176,7 @@ public final class EventBuffer {
         lock.writeLock()
             .lock();
         try{
-            for (int i = 0; i < capacity; i++ ) {
+            for (int i = 0; i < capacity; i++) {
                 buffer[i] = null;
             }
             head = 0;
@@ -191,12 +191,12 @@ public final class EventBuffer {
         // Called with write lock held
         long cutoff = System.currentTimeMillis() - retentionMs;
         int evicted = 0;
-        for (int i = 0; i < size; i++ ) {
+        for (int i = 0; i < size; i++) {
             int idx = (head - size + i + capacity) % capacity;
             var event = buffer[idx];
             if (event != null && event.timestamp() < cutoff) {
                 buffer[idx] = null;
-                evicted++ ;
+                evicted++;
             } else {
                 break;
             }

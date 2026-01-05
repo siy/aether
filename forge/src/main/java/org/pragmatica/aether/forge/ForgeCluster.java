@@ -65,7 +65,7 @@ public final class ForgeCluster {
         log.info("Starting Forge cluster with {} nodes", initialClusterSize);
         // Create node infos for initial cluster
         var initialNodes = new ArrayList<NodeInfo>();
-        for (int i = 1; i <= initialClusterSize; i++ ) {
+        for (int i = 1; i <= initialClusterSize; i++) {
             var nodeId = nodeId("node-" + i);
             var port = BASE_PORT + i - 1;
             var info = nodeInfo(nodeId, nodeAddress("localhost", port));
@@ -75,7 +75,7 @@ public final class ForgeCluster {
         nodeCounter.set(initialClusterSize);
         // Create and start all nodes
         var startPromises = new ArrayList<Promise<Unit>>();
-        for (int i = 0; i < initialClusterSize; i++ ) {
+        for (int i = 0; i < initialClusterSize; i++) {
             var nodeInfo = initialNodes.get(i);
             var node = createNode(nodeInfo.id(), BASE_PORT + i, BASE_MGMT_PORT + i, initialNodes);
             nodes.put(nodeInfo.id()
@@ -246,19 +246,18 @@ public final class ForgeCluster {
                                          var clusterPort = nodeInfos.get(entry.getKey())
                                                                     .address()
                                                                     .port();
-                                         return new NodeStatus(
-        entry.getKey(),
-        clusterPort,
-        BASE_MGMT_PORT + (clusterPort - BASE_PORT),
-        "healthy",
-        currentLeader()
-        .fold(() -> false,
-              leaderId -> leaderId.equals(entry.getKey())));
+                                         return new NodeStatus(entry.getKey(),
+                                                               clusterPort,
+                                                               BASE_MGMT_PORT + (clusterPort - BASE_PORT),
+                                                               "healthy",
+                                                               currentLeader()
+                                                                            .fold(() -> false,
+                                                                                  leaderId -> leaderId.equals(entry.getKey())));
                                      })
                                 .toList();
         return new ClusterStatus(nodeStatuses, currentLeader()
-                                              .fold(() -> "none",
-                                                    leader -> leader));
+                                                            .fold(() -> "none",
+                                                                  leader -> leader));
     }
 
     /**
@@ -283,19 +282,17 @@ public final class ForgeCluster {
     }
 
     private AetherNode createNode(NodeId nodeId, int port, int mgmtPort, List<NodeInfo> coreNodes) {
-        var topology = new TopologyConfig(
-        nodeId, timeSpan(500)
-               .millis(), timeSpan(100)
-                         .millis(), coreNodes);
-        var config = new AetherNodeConfig(
-        topology,
-        ProtocolConfig.testConfig(),
-        SliceActionConfig.defaultConfiguration(furySerializerFactoryProvider()),
-        mgmtPort,
-        Option.empty(),
-        DHTConfig.FULL,
-        Option.empty(),
-        org.pragmatica.aether.config.TTMConfig.disabled());
+        var topology = new TopologyConfig(nodeId, timeSpan(500)
+                                                          .millis(), timeSpan(100)
+                                                                             .millis(), coreNodes);
+        var config = new AetherNodeConfig(topology,
+                                          ProtocolConfig.testConfig(),
+                                          SliceActionConfig.defaultConfiguration(furySerializerFactoryProvider()),
+                                          mgmtPort,
+                                          Option.empty(),
+                                          DHTConfig.FULL,
+                                          Option.empty(),
+                                          org.pragmatica.aether.config.TTMConfig.disabled());
         return AetherNode.aetherNode(config)
                          .unwrap();
     }
@@ -314,14 +311,13 @@ public final class ForgeCluster {
                              var cpuUsage = metrics.getOrDefault("cpu.usage", 0.0);
                              var heapUsed = metrics.getOrDefault("heap.used", 0.0);
                              var heapMax = metrics.getOrDefault("heap.max", 1.0);
-                             return new NodeMetrics(
-        nodeId,
-        currentLeader()
-        .fold(() -> false,
-              l -> l.equals(nodeId)),
-        cpuUsage,
-        (long)(heapUsed / 1024 / 1024),
-        (long)(heapMax / 1024 / 1024));
+                             return new NodeMetrics(nodeId,
+                                                    currentLeader()
+                                                                 .fold(() -> false,
+                                                                       l -> l.equals(nodeId)),
+                                                    cpuUsage,
+                                                    (long)(heapUsed / 1024 / 1024),
+                                                    (long)(heapMax / 1024 / 1024));
                          })
                     .toList();
     }
@@ -329,27 +325,24 @@ public final class ForgeCluster {
     /**
      * Status of a single node.
      */
-    public record NodeStatus(
-    String id,
-    int port,
-    int mgmtPort,
-    String state,
-    boolean isLeader) {}
+    public record NodeStatus(String id,
+                             int port,
+                             int mgmtPort,
+                             String state,
+                             boolean isLeader) {}
 
     /**
      * Status of the entire cluster.
      */
-    public record ClusterStatus(
-    List<NodeStatus> nodes,
-    String leaderId) {}
+    public record ClusterStatus(List<NodeStatus> nodes,
+                                String leaderId) {}
 
     /**
      * Per-node metrics for dashboard display.
      */
-    public record NodeMetrics(
-    String nodeId,
-    boolean isLeader,
-    double cpuUsage,
-    long heapUsedMb,
-    long heapMaxMb) {}
+    public record NodeMetrics(String nodeId,
+                              boolean isLeader,
+                              double cpuUsage,
+                              long heapUsedMb,
+                              long heapMaxMb) {}
 }

@@ -129,13 +129,13 @@ public final class DerivedMetricsCalculator {
             double firstHalfCpu = 0, secondHalfCpu = 0;
             double firstHalfLatency = 0, secondHalfLatency = 0;
             long firstHalfErrors = 0, secondHalfErrors = 0;
-            for (int i = 0; i < halfN; i++ ) {
+            for (int i = 0; i < halfN; i++) {
                 var sample = sampleList.get(i);
                 firstHalfCpu += sample.cpuUsage();
                 firstHalfLatency += sample.avgLatencyMs();
                 firstHalfErrors += sample.failedInvocations();
             }
-            for (int i = halfN; i < n; i++ ) {
+            for (int i = halfN; i < n; i++) {
                 var sample = sampleList.get(i);
                 secondHalfCpu += sample.cpuUsage();
                 secondHalfLatency += sample.avgLatencyMs();

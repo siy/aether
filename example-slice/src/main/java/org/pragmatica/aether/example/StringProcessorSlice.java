@@ -14,7 +14,7 @@ import java.util.List;
  */
 public record StringProcessorSlice() implements Slice {
     @Override
-    public List<SliceMethod< ? , ? >> methods() {
+    public List<SliceMethod< ?, ? >> methods() {
         return List.of();
     }
 }

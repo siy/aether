@@ -154,7 +154,7 @@ class ArtifactStoreImpl implements ArtifactStore {
         var chunks = splitIntoChunks(content);
         // Store all chunks
         var chunkPromises = new ArrayList<Promise<Unit>>();
-        for (int i = 0; i < chunks.size(); i++ ) {
+        for (int i = 0; i < chunks.size(); i++) {
             var chunkKey = chunkKey(artifact, i);
             chunkPromises.add(dht.put(chunkKey, chunks.get(i)));
         }
@@ -183,7 +183,7 @@ class ArtifactStoreImpl implements ArtifactStore {
 
     private Promise<byte[]> resolveChunks(Artifact artifact, ArtifactMetadata meta) {
         var chunkPromises = new ArrayList<Promise<Option<byte[]>>>();
-        for (int i = 0; i < meta.chunkCount(); i++ ) {
+        for (int i = 0; i < meta.chunkCount(); i++) {
             chunkPromises.add(dht.get(chunkKey(artifact, i)));
         }
         return Promise.allOf(chunkPromises)
@@ -228,7 +228,7 @@ class ArtifactStoreImpl implements ArtifactStore {
 
     private Promise<Unit> deleteChunksAndMeta(Artifact artifact, ArtifactMetadata meta) {
         var deletePromises = new ArrayList<Promise<Boolean>>();
-        for (int i = 0; i < meta.chunkCount(); i++ ) {
+        for (int i = 0; i < meta.chunkCount(); i++) {
             deletePromises.add(dht.remove(chunkKey(artifact, i)));
         }
         deletePromises.add(dht.remove(metaKey(artifact)));

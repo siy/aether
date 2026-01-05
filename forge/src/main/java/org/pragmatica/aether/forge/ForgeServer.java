@@ -179,7 +179,7 @@ public final class ForgeServer {
                 Desktop.getDesktop()
                        .browse(new URI(url));
                 log.info("Opened browser to {}", url);
-            }else {
+            } else {
                 log.info("Could not open browser automatically. Please navigate to: {}", url);
             }
         } catch (Exception e) {
@@ -223,7 +223,7 @@ public final class ForgeServer {
             // Route to appropriate handler
             if (path.startsWith("/api/")) {
                 apiHandler.channelRead(ctx, request.retain());
-            }else {
+            } else {
                 staticHandler.channelRead(ctx, request.retain());
             }
         }

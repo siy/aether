@@ -66,7 +66,7 @@ public interface SliceFactory {
                                           dependencies.size())
                                          .result();
         }
-        for (int i = 0; i < parameters.length; i++ ) {
+        for (int i = 0; i < parameters.length; i++) {
             var parameter = parameters[i];
             var dependency = dependencies.get(i);
             var descriptor = descriptors.get(i);
@@ -89,7 +89,7 @@ public interface SliceFactory {
                            () -> {
                                method.setAccessible(true);
                                var instance = method.invoke(null, dependencies.toArray());
-                               return ( Slice) instance;
+                               return (Slice) instance;
                            });
     }
 

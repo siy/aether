@@ -120,7 +120,7 @@ public record DependencyFile(List<ArtifactDependency> api,
                 continue;
             }
             if (errorResult[0] != null) {
-                return ( Result<DependencyFile>) errorResult[0];
+                return (Result<DependencyFile>) errorResult[0];
             }
         }
         return Result.success(new DependencyFile(List.copyOf(api), List.copyOf(shared), List.copyOf(slices)));

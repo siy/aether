@@ -45,7 +45,7 @@ public record SliceBridgeImpl(Artifact artifact,
     /**
      * Internal method descriptor containing type information for serialization.
      */
-    public record InternalMethod(SliceMethod< ? , ? > method,
+    public record InternalMethod(SliceMethod< ?, ? > method,
                                  TypeToken< ? > parameterType,
                                  TypeToken< ? > returnType) {}
 
@@ -121,7 +121,7 @@ public record SliceBridgeImpl(Artifact artifact,
     }
 
     @SuppressWarnings("unchecked")
-    private <T, R> Promise<R> invokeMethod(SliceMethod< ? , ? > method, T parameter) {
+    private <T, R> Promise<R> invokeMethod(SliceMethod< ?, ? > method, T parameter) {
         return Promise.lift(Causes::fromThrowable,
                             () -> ((SliceMethod<R, T>) method).apply(parameter))
                       .flatMap(promise -> promise);

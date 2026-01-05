@@ -61,7 +61,7 @@ public interface KryoSerializerFactoryProvider extends SerializerFactoryProvider
         // Initialize pools with instances
         BlockingQueue<Serializer> serializerQueue = new ArrayBlockingQueue<>(poolSize);
         BlockingQueue<Deserializer> deserializerQueue = new ArrayBlockingQueue<>(poolSize);
-        for (int i = 0; i < poolSize; i++ ) {
+        for (int i = 0; i < poolSize; i++) {
             serializerQueue.offer(serializer);
             deserializerQueue.offer(deserializer);
         }

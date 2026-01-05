@@ -76,7 +76,7 @@ Map<String, Double> custom) {
         if (heapMax <= 0) {
             return 0.0;
         }
-        return ( double) heapUsed / heapMax;
+        return (double) heapUsed / heapMax;
     }
 
     /**
@@ -86,7 +86,7 @@ Map<String, Double> custom) {
         if (totalInvocations <= 0) {
             return 1.0;
         }
-        return ( double) successfulInvocations / totalInvocations;
+        return (double) successfulInvocations / totalInvocations;
     }
 
     /**
@@ -96,7 +96,7 @@ Map<String, Double> custom) {
         if (totalInvocations <= 0) {
             return 0.0;
         }
-        return ( double) failedInvocations / totalInvocations;
+        return (double) failedInvocations / totalInvocations;
     }
 
     /**

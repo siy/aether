@@ -49,7 +49,7 @@ public final class MinuteAggregator {
     public void addSample(ComprehensiveSnapshot snapshot) {
         lock.writeLock()
             .lock();
-        try {
+        try{
             long minute = MinuteAggregate.alignToMinute(snapshot.timestamp());
             // Check for minute rollover
             if (currentMinute != minute && !currentSamples.isEmpty()) {
@@ -60,7 +60,7 @@ public final class MinuteAggregator {
             if (snapshot.avgLatencyMs() > 0) {
                 currentLatencies.add(snapshot.avgLatencyMs());
             }
-        } finally {
+        } finally{
             lock.writeLock()
                 .unlock();
         }
@@ -72,9 +72,9 @@ public final class MinuteAggregator {
     public void recordEvent() {
         lock.writeLock()
             .lock();
-        try {
+        try{
             currentEventCount++;
-        } finally {
+        } finally{
             lock.writeLock()
                 .unlock();
         }
@@ -86,11 +86,11 @@ public final class MinuteAggregator {
     public void flush() {
         lock.writeLock()
             .lock();
-        try {
+        try{
             if (!currentSamples.isEmpty()) {
                 finalizeCurrentMinute();
             }
-        } finally {
+        } finally{
             lock.writeLock()
                 .unlock();
         }
@@ -102,9 +102,9 @@ public final class MinuteAggregator {
     public List<MinuteAggregate> all() {
         lock.readLock()
             .lock();
-        try {
+        try{
             return aggregates.toList();
-        } finally {
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -116,13 +116,13 @@ public final class MinuteAggregator {
     public List<MinuteAggregate> recent(int count) {
         lock.readLock()
             .lock();
-        try {
+        try{
             var all = aggregates.toList();
             if (all.size() <= count) {
                 return all;
             }
             return all.subList(all.size() - count, all.size());
-        } finally {
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -134,9 +134,9 @@ public final class MinuteAggregator {
     public List<MinuteAggregate> since(long timestamp) {
         lock.readLock()
             .lock();
-        try {
+        try{
             return aggregates.filter(a -> a.minuteTimestamp() >= timestamp);
-        } finally {
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -151,7 +151,7 @@ public final class MinuteAggregator {
     public float[][] toTTMInput(int windowMinutes) {
         lock.readLock()
             .lock();
-        try {
+        try{
             var recentAggregates = recent(windowMinutes);
             float[][] result = new float[windowMinutes][];
             // Initialize with zeros
@@ -165,7 +165,7 @@ public final class MinuteAggregator {
                                                      .toFeatureArray();
             }
             return result;
-        } finally {
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -177,9 +177,9 @@ public final class MinuteAggregator {
     public int currentSampleCount() {
         lock.readLock()
             .lock();
-        try {
+        try{
             return currentSamples.size();
-        } finally {
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -191,9 +191,9 @@ public final class MinuteAggregator {
     public int aggregateCount() {
         lock.readLock()
             .lock();
-        try {
+        try{
             return aggregates.size();
-        } finally {
+        } finally{
             lock.readLock()
                 .unlock();
         }
@@ -266,7 +266,7 @@ public final class MinuteAggregator {
     private int countEventsInMinute(long minuteTimestamp) {
         var events = EventPublisher.since(minuteTimestamp);
         return (int) events.stream()
-                           .filter(e -> e.timestamp() < minuteTimestamp + 60_000L)
-                           .count();
+                          .filter(e -> e.timestamp() < minuteTimestamp + 60_000L)
+                          .count();
     }
 }

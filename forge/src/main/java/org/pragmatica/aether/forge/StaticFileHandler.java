@@ -28,21 +28,20 @@ public final class StaticFileHandler extends SimpleChannelInboundHandler<FullHtt
     private static final Logger log = LoggerFactory.getLogger(StaticFileHandler.class);
 
     private static final String STATIC_PREFIX = "static/";
-    private static final Map<String, String>CONTENT_TYPES = Map.of(
-    ".html",
-    "text/html; charset=utf-8",
-    ".css",
-    "text/css; charset=utf-8",
-    ".js",
-    "application/javascript; charset=utf-8",
-    ".json",
-    "application/json; charset=utf-8",
-    ".png",
-    "image/png",
-    ".svg",
-    "image/svg+xml",
-    ".ico",
-    "image/x-icon");
+    private static final Map<String, String> CONTENT_TYPES = Map.of(".html",
+                                                                    "text/html; charset=utf-8",
+                                                                    ".css",
+                                                                    "text/css; charset=utf-8",
+                                                                    ".js",
+                                                                    "application/javascript; charset=utf-8",
+                                                                    ".json",
+                                                                    "application/json; charset=utf-8",
+                                                                    ".png",
+                                                                    "image/png",
+                                                                    ".svg",
+                                                                    "image/svg+xml",
+                                                                    ".ico",
+                                                                    "image/x-icon");
 
     private StaticFileHandler() {}
 
@@ -76,11 +75,11 @@ public final class StaticFileHandler extends SimpleChannelInboundHandler<FullHtt
                                             ? finalPath.substring(1)
                                             : finalPath);
         loadResource(resourcePath)
-        .onEmpty(() -> {
-                     log.debug("Static file not found: {}", resourcePath);
-                     sendError(ctx, NOT_FOUND, "File not found: " + finalPath);
-                 })
-        .onPresent(content -> sendStaticContent(ctx, finalPath, content));
+                    .onEmpty(() -> {
+                                 log.debug("Static file not found: {}", resourcePath);
+                                 sendError(ctx, NOT_FOUND, "File not found: " + finalPath);
+                             })
+                    .onPresent(content -> sendStaticContent(ctx, finalPath, content));
     }
 
     private void sendStaticContent(ChannelHandlerContext ctx, String path, byte[] content) {
@@ -98,10 +97,10 @@ public final class StaticFileHandler extends SimpleChannelInboundHandler<FullHtt
            .addListener(ChannelFutureListener.CLOSE);
     }
 
-    private Option<byte[] > loadResource(String path) {
+    private Option<byte[]> loadResource(String path) {
         try (InputStream is = getClass()
-                              .getClassLoader()
-                              .getResourceAsStream(path)) {
+                                      .getClassLoader()
+                                      .getResourceAsStream(path)) {
             if (is == null) {
                 return Option.empty();
             }

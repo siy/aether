@@ -175,13 +175,13 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
         allEntries.add(route(QuorumStateNotification.class, consensus::quorumState));
         allEntries.add(route(Ping.class, network::handlePing));
         allEntries.add(route(Pong.class, network::handlePong));
-        record rabiaNode <C extends Command>(NodeConfig config,
-                                             StateMachine<C> stateMachine,
-                                             ClusterNetwork network,
-                                             TopologyManager topologyManager,
-                                             RabiaEngine<C> consensus,
-                                             LeaderManager leaderManager,
-                                             List<Entry< ? >> routeEntries) implements RabiaNode<C> {
+        record rabiaNode<C extends Command>(NodeConfig config,
+                                            StateMachine<C> stateMachine,
+                                            ClusterNetwork network,
+                                            TopologyManager topologyManager,
+                                            RabiaEngine<C> consensus,
+                                            LeaderManager leaderManager,
+                                            List<Entry< ? >> routeEntries) implements RabiaNode<C> {
             @Override
             public NodeId self() {
                 return config()
@@ -211,13 +211,13 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
                                 .apply(commands);
             }
         }
-        return new rabiaNode <>(config,
-                                stateMachine,
-                                network,
-                                topologyManager,
-                                consensus,
-                                leaderManager,
-                                List.copyOf(allEntries));
+        return new rabiaNode<>(config,
+                               stateMachine,
+                               network,
+                               topologyManager,
+                               consensus,
+                               leaderManager,
+                               List.copyOf(allEntries));
     }
 
     /**

@@ -119,7 +119,7 @@ public final class AetherUp {
 
     private static Map<String, String> parseArgs(String[] args) {
         var options = new HashMap<String, String>();
-        for (int i = 0; i < args.length; i++ ) {
+        for (int i = 0; i < args.length; i++) {
             var arg = args[i];
             switch (arg) {
                 case "-h", "--help" -> options.put("help", "true");

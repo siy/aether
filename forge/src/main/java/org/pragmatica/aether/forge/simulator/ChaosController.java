@@ -184,31 +184,28 @@ public final class ChaosController {
     /**
      * Active chaos event with metadata.
      */
-    public record ActiveChaosEvent(
-    String eventId,
-    ChaosEvent event,
-    Instant startedAt) {
+    public record ActiveChaosEvent(String eventId,
+                                   ChaosEvent event,
+                                   Instant startedAt) {
         public String toJson() {
-            return String.format(
-            "{\"eventId\":\"%s\",\"type\":\"%s\",\"description\":\"%s\",\"startedAt\":\"%s\",\"duration\":\"%s\"}",
-            eventId,
-            event.type(),
-            event.description(),
-            startedAt,
-            event.duration() != null
-            ? event.duration()
-                   .toSeconds() + "s"
-            : "indefinite");
+            return String.format("{\"eventId\":\"%s\",\"type\":\"%s\",\"description\":\"%s\",\"startedAt\":\"%s\",\"duration\":\"%s\"}",
+                                 eventId,
+                                 event.type(),
+                                 event.description(),
+                                 startedAt,
+                                 event.duration() != null
+                                 ? event.duration()
+                                        .toSeconds() + "s"
+                                 : "indefinite");
         }
     }
 
     /**
      * Chaos controller status.
      */
-    public record ChaosStatus(
-    boolean enabled,
-    int activeEventCount,
-    List<ActiveChaosEvent> activeEvents) {
+    public record ChaosStatus(boolean enabled,
+                              int activeEventCount,
+                              List<ActiveChaosEvent> activeEvents) {
         public String toJson() {
             var eventsJson = new StringBuilder("[");
             var first = true;
@@ -218,8 +215,10 @@ public final class ChaosController {
                 eventsJson.append(event.toJson());
             }
             eventsJson.append("]");
-            return String.format(
-            "{\"enabled\":%b,\"activeEventCount\":%d,\"activeEvents\":%s}", enabled, activeEventCount, eventsJson);
+            return String.format("{\"enabled\":%b,\"activeEventCount\":%d,\"activeEvents\":%s}",
+                                 enabled,
+                                 activeEventCount,
+                                 eventsJson);
         }
     }
 

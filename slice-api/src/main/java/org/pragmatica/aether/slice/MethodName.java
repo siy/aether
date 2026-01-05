@@ -13,7 +13,7 @@ public record MethodName(String name) {
                      .map(MethodName::new);
     }
 
-    @ Override
+    @Override
     public String toString() {
         return name;
     }

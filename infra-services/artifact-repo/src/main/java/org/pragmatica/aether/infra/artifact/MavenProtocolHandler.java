@@ -219,7 +219,7 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
         if (parts.length < 3) return Option.none();
         var artifactIdStr = parts[parts.length - 2];
         var groupPath = new StringBuilder();
-        for (int i = 0; i < parts.length - 2; i++ ) {
+        for (int i = 0; i < parts.length - 2; i++) {
             if (i > 0) groupPath.append(".");
             groupPath.append(parts[i]);
         }
@@ -237,7 +237,7 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
         var versionStr = parts[parts.length - 2];
         var artifactIdStr = parts[parts.length - 3];
         var groupPath = new StringBuilder();
-        for (int i = 0; i < parts.length - 3; i++ ) {
+        for (int i = 0; i < parts.length - 3; i++) {
             if (i > 0) groupPath.append(".");
             groupPath.append(parts[i]);
         }

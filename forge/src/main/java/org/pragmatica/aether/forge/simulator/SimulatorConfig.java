@@ -23,11 +23,10 @@ import static org.pragmatica.lang.Unit.unit;
  * Supports per-entry-point rate configuration and slice settings.
  * Can be loaded from JSON file or constructed programmatically.
  */
-public record SimulatorConfig(
- Map<String, EntryPointConfig> entryPoints,
- Map<String, SliceConfig> slices,
- boolean loadGeneratorEnabled,
- double globalRateMultiplier) {
+public record SimulatorConfig(Map<String, EntryPointConfig> entryPoints,
+                              Map<String, SliceConfig> slices,
+                              boolean loadGeneratorEnabled,
+                              double globalRateMultiplier) {
     private static final Logger log = LoggerFactory.getLogger(SimulatorConfig.class);
 
     private static final Cause ENTRY_POINTS_NULL = Causes.cause("entryPoints cannot be null");
@@ -37,14 +36,13 @@ public record SimulatorConfig(
     /**
      * Configuration for a single entry point.
      */
-    public record EntryPointConfig(
-    int callsPerSecond,
-    boolean enabled,
-    List<String> products,
-    List<String> customerIds,
-    int minQuantity,
-    int maxQuantity) {
-        private static final List<String>DEFAULT_PRODUCTS = List.of("PROD-ABC123", "PROD-DEF456", "PROD-GHI789");
+    public record EntryPointConfig(int callsPerSecond,
+                                   boolean enabled,
+                                   List<String> products,
+                                   List<String> customerIds,
+                                   int minQuantity,
+                                   int maxQuantity) {
+        private static final List<String> DEFAULT_PRODUCTS = List.of("PROD-ABC123", "PROD-DEF456", "PROD-GHI789");
 
         public static EntryPointConfig defaultConfig() {
             return new EntryPointConfig(0, true, List.of(), List.of(), 1, 5);
@@ -69,14 +67,14 @@ public record SimulatorConfig(
         public DataGenerator buildGenerator(String entryPointName) {
             var productGen = new DataGenerator.ProductIdGenerator(effectiveProducts());
             return switch (entryPointName) {
-                case"placeOrder" -> new DataGenerator.OrderRequestGenerator(
-                productGen,
-                DataGenerator.CustomerIdGenerator.withDefaults(),
-                DataGenerator.IntRange.of(minQuantity, maxQuantity)
-                             .unwrap());
-                case"getOrderStatus", "cancelOrder" -> DataGenerator.OrderIdGenerator.withSharedPool();
-                case"checkStock" -> new DataGenerator.StockCheckGenerator(productGen);
-                case"getPrice" -> new DataGenerator.PriceCheckGenerator(productGen);
+                case "placeOrder" -> new DataGenerator.OrderRequestGenerator(productGen,
+                                                                             DataGenerator.CustomerIdGenerator.withDefaults(),
+                                                                             DataGenerator.IntRange.of(minQuantity,
+                                                                                                       maxQuantity)
+                                                                                          .unwrap());
+                case "getOrderStatus", "cancelOrder" -> DataGenerator.OrderIdGenerator.withSharedPool();
+                case "checkStock" -> new DataGenerator.StockCheckGenerator(productGen);
+                case "getPrice" -> new DataGenerator.PriceCheckGenerator(productGen);
                 default -> productGen;
             };
         }
@@ -84,14 +82,13 @@ public record SimulatorConfig(
         public String toJson() {
             var productsJson = formatStringList(products);
             var customerIdsJson = formatStringList(customerIds);
-            return String.format(
-            "{\"callsPerSecond\":%d,\"enabled\":%b,\"products\":%s,\"customerIds\":%s,\"minQuantity\":%d,\"maxQuantity\":%d}",
-            callsPerSecond,
-            enabled,
-            productsJson,
-            customerIdsJson,
-            minQuantity,
-            maxQuantity);
+            return String.format("{\"callsPerSecond\":%d,\"enabled\":%b,\"products\":%s,\"customerIds\":%s,\"minQuantity\":%d,\"maxQuantity\":%d}",
+                                 callsPerSecond,
+                                 enabled,
+                                 productsJson,
+                                 customerIdsJson,
+                                 minQuantity,
+                                 maxQuantity);
         }
 
         private static String formatStringList(List<String> list) {
@@ -108,14 +105,13 @@ public record SimulatorConfig(
     /**
      * Configuration for a slice.
      */
-    public record SliceConfig(
-    String stockMode,
-    int refillRate,
-    int baseLatencyMs,
-    int jitterMs,
-    double failureRate,
-    double spikeChance,
-    int spikeLatencyMs) {
+    public record SliceConfig(String stockMode,
+                              int refillRate,
+                              int baseLatencyMs,
+                              int jitterMs,
+                              double failureRate,
+                              double spikeChance,
+                              int spikeLatencyMs) {
         private static final Cause INVALID_STOCK_MODE = Causes.cause("stockMode must be 'infinite' or 'realistic'");
         private static final Cause BASE_LATENCY_NEGATIVE = Causes.cause("baseLatencyMs must be >= 0");
         private static final Cause JITTER_NEGATIVE = Causes.cause("jitterMs must be >= 0");
@@ -195,15 +191,14 @@ public record SimulatorConfig(
         }
 
         public String toJson() {
-            return String.format(
-            "{\"stockMode\":\"%s\",\"refillRate\":%d,\"baseLatencyMs\":%d,\"jitterMs\":%d,\"failureRate\":%.4f,\"spikeChance\":%.4f,\"spikeLatencyMs\":%d}",
-            stockMode,
-            refillRate,
-            baseLatencyMs,
-            jitterMs,
-            failureRate,
-            spikeChance,
-            spikeLatencyMs);
+            return String.format("{\"stockMode\":\"%s\",\"refillRate\":%d,\"baseLatencyMs\":%d,\"jitterMs\":%d,\"failureRate\":%.4f,\"spikeChance\":%.4f,\"spikeLatencyMs\":%d}",
+                                 stockMode,
+                                 refillRate,
+                                 baseLatencyMs,
+                                 jitterMs,
+                                 failureRate,
+                                 spikeChance,
+                                 spikeLatencyMs);
         }
     }
 
@@ -346,10 +341,10 @@ public record SimulatorConfig(
             return defaultConfig();
         }
         return loadFromFile(path)
-               .onFailure(cause -> log.warn("Failed to load config: {}, using defaults",
-                                            cause.message()))
-               .fold(_ -> defaultConfig(),
-                     config -> config);
+                           .onFailure(cause -> log.warn("Failed to load config: {}, using defaults",
+                                                        cause.message()))
+                           .fold(_ -> defaultConfig(),
+                                 config -> config);
     }
 
     /**

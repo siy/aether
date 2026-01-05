@@ -238,7 +238,7 @@ public interface ClusterDeploymentManager {
                         var sliceKey = new SliceNodeKey(artifact, node);
                         if (!sliceStates.containsKey(sliceKey)) {
                             issueLoadCommand(sliceKey);
-                            added++ ;
+                            added++;
                         }
                     }
                 }
@@ -252,8 +252,8 @@ public interface ClusterDeploymentManager {
                     // For multiple instances per node, we'd need instance numbering
                     // For now, just issue the command (will be idempotent if already exists)
                     issueLoadCommand(sliceKey);
-                    added++ ;
-                    nodeIndex++ ;
+                    added++;
+                    nodeIndex++;
                 }
             }
 

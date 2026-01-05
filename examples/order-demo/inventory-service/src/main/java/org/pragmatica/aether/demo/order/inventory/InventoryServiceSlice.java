@@ -40,8 +40,8 @@ public record InventoryServiceSlice() implements Slice {
 
     // milliseconds
     // Stock data
-    private static final Map<String, AtomicInteger>STOCK = new ConcurrentHashMap<>();
-    private static final Map<String, ReservedStock>RESERVATIONS = new ConcurrentHashMap<>();
+    private static final Map<String, AtomicInteger> STOCK = new ConcurrentHashMap<>();
+    private static final Map<String, ReservedStock> RESERVATIONS = new ConcurrentHashMap<>();
 
     // Metrics
     private static final AtomicLong TOTAL_RESERVATIONS = new AtomicLong();
@@ -106,8 +106,11 @@ public record InventoryServiceSlice() implements Slice {
      * Get inventory metrics.
      */
     public static InventoryMetrics getMetrics() {
-        return new InventoryMetrics(
-        TOTAL_RESERVATIONS.get(), TOTAL_RELEASES.get(), STOCK_OUTS.get(), INFINITE_MODE.get(), REFILL_RATE.get());
+        return new InventoryMetrics(TOTAL_RESERVATIONS.get(),
+                                    TOTAL_RELEASES.get(),
+                                    STOCK_OUTS.get(),
+                                    INFINITE_MODE.get(),
+                                    REFILL_RATE.get());
     }
 
     /**
@@ -129,43 +132,38 @@ public record InventoryServiceSlice() implements Slice {
         STOCK.forEach((productId, stock) -> {
                           var current = stock.get();
                           if (current < INITIAL_STOCK) {
-                          var newValue = Math.min(current + refillAmount, INITIAL_STOCK);
-                          stock.set(newValue);
-                      }
+                              var newValue = Math.min(current + refillAmount, INITIAL_STOCK);
+                              stock.set(newValue);
+                          }
                       });
     }
 
     /**
      * Inventory metrics record.
      */
-    public record InventoryMetrics(
-    long totalReservations,
-    long totalReleases,
-    long stockOuts,
-    boolean infiniteMode,
-    int refillRate) {}
+    public record InventoryMetrics(long totalReservations,
+                                   long totalReleases,
+                                   long stockOuts,
+                                   boolean infiniteMode,
+                                   int refillRate) {}
 
     @Override
-    public List<SliceMethod< ? , ? >> methods() {
-        return List.of(
-        new SliceMethod<>(
-        MethodName.methodName("checkStock")
-                  .expect("Invalid method name: checkStock"),
-        this::checkStock,
-        new TypeToken<StockAvailability>() {},
-        new TypeToken<CheckStockRequest>() {}),
-        new SliceMethod<>(
-        MethodName.methodName("reserveStock")
-                  .expect("Invalid method name: reserveStock"),
-        this::reserveStock,
-        new TypeToken<StockReservation>() {},
-        new TypeToken<ReserveStockRequest>() {}),
-        new SliceMethod<>(
-        MethodName.methodName("releaseStock")
-                  .expect("Invalid method name: releaseStock"),
-        this::releaseStock,
-        new TypeToken<StockReleased>() {},
-        new TypeToken<ReleaseStockRequest>() {}));
+    public List<SliceMethod< ?, ? >> methods() {
+        return List.of(new SliceMethod<>(MethodName.methodName("checkStock")
+                                                   .expect("Invalid method name: checkStock"),
+                                         this::checkStock,
+                                         new TypeToken<StockAvailability>() {},
+                                         new TypeToken<CheckStockRequest>() {}),
+                       new SliceMethod<>(MethodName.methodName("reserveStock")
+                                                   .expect("Invalid method name: reserveStock"),
+                                         this::reserveStock,
+                                         new TypeToken<StockReservation>() {},
+                                         new TypeToken<ReserveStockRequest>() {}),
+                       new SliceMethod<>(MethodName.methodName("releaseStock")
+                                                   .expect("Invalid method name: releaseStock"),
+                                         this::releaseStock,
+                                         new TypeToken<StockReleased>() {},
+                                         new TypeToken<ReleaseStockRequest>() {}));
     }
 
     @Override

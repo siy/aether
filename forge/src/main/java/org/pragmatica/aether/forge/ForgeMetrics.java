@@ -71,7 +71,7 @@ public final class ForgeMetrics {
         requestsPerSecond = (totalDelta * 1000.0) / elapsed;
         if (totalDelta > 0) {
             successRate = (successDelta * 100.0) / totalDelta;
-        }else {
+        } else {
             successRate = 100.0;
         }
         // Calculate average latency from recent requests
@@ -93,8 +93,11 @@ public final class ForgeMetrics {
      * Get current metrics for dashboard.
      */
     public MetricsSnapshot currentMetrics() {
-        return new MetricsSnapshot(
-        requestsPerSecond, successRate, avgLatencyMs, totalSuccess.get(), totalFailures.get());
+        return new MetricsSnapshot(requestsPerSecond,
+                                   successRate,
+                                   avgLatencyMs,
+                                   totalSuccess.get(),
+                                   totalFailures.get());
     }
 
     /**
@@ -118,12 +121,11 @@ public final class ForgeMetrics {
     /**
      * Metrics snapshot for dashboard.
      */
-    public record MetricsSnapshot(
-    double requestsPerSecond,
-    double successRate,
-    double avgLatencyMs,
-    long totalSuccess,
-    long totalFailures) {
+    public record MetricsSnapshot(double requestsPerSecond,
+                                  double successRate,
+                                  double avgLatencyMs,
+                                  long totalSuccess,
+                                  long totalFailures) {
         public long totalRequests() {
             return totalSuccess + totalFailures;
         }

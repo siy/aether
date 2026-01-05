@@ -115,91 +115,91 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         try{
             if (path.equals("/api/status") && method == HttpMethod.GET) {
                 handleStatus(ctx);
-            }else if (path.equals("/api/add-node") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/add-node") && method == HttpMethod.POST) {
                 handleAddNode(ctx);
-            }else if (path.startsWith("/api/kill/") && method == HttpMethod.POST) {
+            } else if (path.startsWith("/api/kill/") && method == HttpMethod.POST) {
                 handleKillNode(ctx,
                                path.substring("/api/kill/".length()));
-            }else if (path.startsWith("/api/crash/") && method == HttpMethod.POST) {
+            } else if (path.startsWith("/api/crash/") && method == HttpMethod.POST) {
                 handleCrashNode(ctx,
                                 path.substring("/api/crash/".length()));
-            }else if (path.equals("/api/rolling-restart") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/rolling-restart") && method == HttpMethod.POST) {
                 handleRollingRestart(ctx);
-            }else if (path.startsWith("/api/load/set/") && method == HttpMethod.POST) {
+            } else if (path.startsWith("/api/load/set/") && method == HttpMethod.POST) {
                 handleSetLoad(ctx,
                               path.substring("/api/load/set/".length()));
-            }else if (path.equals("/api/load/ramp") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/load/ramp") && method == HttpMethod.POST) {
                 handleRampLoad(ctx, request);
-            }else if (path.equals("/api/events") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/events") && method == HttpMethod.GET) {
                 handleEvents(ctx);
-            }else if (path.equals("/api/reset-metrics") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/reset-metrics") && method == HttpMethod.POST) {
                 handleResetMetrics(ctx);
-            }else if (path.equals("/api/node-metrics") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/node-metrics") && method == HttpMethod.GET) {
                 handleNodeMetrics(ctx);
-            }else if (path.equals("/api/orders") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/orders") && method == HttpMethod.POST) {
                 handlePlaceOrder(ctx, request);
-            }else if (path.startsWith("/api/orders/") && method == HttpMethod.GET) {
+            } else if (path.startsWith("/api/orders/") && method == HttpMethod.GET) {
                 handleGetOrderStatus(ctx,
                                      path.substring("/api/orders/".length()));
-            }else if (path.startsWith("/api/orders/") && method == HttpMethod.DELETE) {
+            } else if (path.startsWith("/api/orders/") && method == HttpMethod.DELETE) {
                 handleCancelOrder(ctx,
                                   path.substring("/api/orders/".length()),
                                   request);
-            }else if (path.startsWith("/api/inventory/") && method == HttpMethod.GET) {
+            } else if (path.startsWith("/api/inventory/") && method == HttpMethod.GET) {
                 handleCheckStock(ctx,
                                  path.substring("/api/inventory/".length()));
-            }else if (path.startsWith("/api/pricing/") && method == HttpMethod.GET) {
+            } else if (path.startsWith("/api/pricing/") && method == HttpMethod.GET) {
                 handleGetPrice(ctx,
                                path.substring("/api/pricing/".length()));
-            }else if (path.equals("/api/simulator/metrics") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/simulator/metrics") && method == HttpMethod.GET) {
                 handleSimulatorMetrics(ctx);
-            }else if (path.startsWith("/api/simulator/rate/") && method == HttpMethod.POST) {
+            } else if (path.startsWith("/api/simulator/rate/") && method == HttpMethod.POST) {
                 handleSimulatorRate(ctx,
                                     path.substring("/api/simulator/rate/".length()),
                                     request);
-            }else if (path.equals("/api/simulator/entrypoints") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/simulator/entrypoints") && method == HttpMethod.GET) {
                 handleSimulatorEntryPoints(ctx);
-            }else if (path.equals("/api/simulator/config") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/simulator/config") && method == HttpMethod.GET) {
                 handleGetConfig(ctx);
-            }else if (path.equals("/api/simulator/config") && method == HttpMethod.PUT) {
+            } else if (path.equals("/api/simulator/config") && method == HttpMethod.PUT) {
                 handlePutConfig(ctx, request);
-            }else if (path.equals("/api/simulator/config/multiplier") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/simulator/config/multiplier") && method == HttpMethod.POST) {
                 handleSetMultiplier(ctx, request);
-            }else if (path.equals("/api/simulator/config/enabled") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/simulator/config/enabled") && method == HttpMethod.POST) {
                 handleSetEnabled(ctx, request);
-            }else if (path.equals("/api/inventory/mode") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/inventory/mode") && method == HttpMethod.GET) {
                 handleGetInventoryMode(ctx);
-            }else if (path.equals("/api/inventory/mode") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/inventory/mode") && method == HttpMethod.POST) {
                 handleSetInventoryMode(ctx, request);
-            }else if (path.equals("/api/inventory/metrics") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/inventory/metrics") && method == HttpMethod.GET) {
                 handleInventoryMetrics(ctx);
-            }else if (path.equals("/api/inventory/stock") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/inventory/stock") && method == HttpMethod.GET) {
                 handleInventoryStock(ctx);
-            }else if (path.equals("/api/inventory/reset") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/inventory/reset") && method == HttpMethod.POST) {
                 handleInventoryReset(ctx);
-            }else if (path.equals("/api/chaos/status") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/chaos/status") && method == HttpMethod.GET) {
                 handleChaosStatus(ctx);
-            }else if (path.equals("/api/chaos/enable") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/chaos/enable") && method == HttpMethod.POST) {
                 handleChaosEnable(ctx, request);
-            }else if (path.equals("/api/chaos/inject") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/chaos/inject") && method == HttpMethod.POST) {
                 handleChaosInject(ctx, request);
-            }else if (path.startsWith("/api/chaos/stop/") && method == HttpMethod.POST) {
+            } else if (path.startsWith("/api/chaos/stop/") && method == HttpMethod.POST) {
                 handleChaosStop(ctx,
                                 path.substring("/api/chaos/stop/".length()));
-            }else if (path.equals("/api/chaos/stop-all") && method == HttpMethod.POST) {
+            } else if (path.equals("/api/chaos/stop-all") && method == HttpMethod.POST) {
                 handleChaosStopAll(ctx);
-            }else if (path.equals("/api/simulator/mode") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/simulator/mode") && method == HttpMethod.GET) {
                 handleGetMode(ctx);
-            }else if (path.equals("/api/simulator/modes") && method == HttpMethod.GET) {
+            } else if (path.equals("/api/simulator/modes") && method == HttpMethod.GET) {
                 handleGetModes(ctx);
-            }else if (path.startsWith("/api/simulator/mode/") && method == HttpMethod.PUT) {
+            } else if (path.startsWith("/api/simulator/mode/") && method == HttpMethod.PUT) {
                 handleSetMode(ctx,
                               path.substring("/api/simulator/mode/".length()));
-            }else if (path.startsWith("/repository/") && method == HttpMethod.GET) {
+            } else if (path.startsWith("/repository/") && method == HttpMethod.GET) {
                 handleRepositoryGet(ctx, path);
-            }else if (path.startsWith("/repository/") && (method == HttpMethod.PUT || method == HttpMethod.POST)) {
+            } else if (path.startsWith("/repository/") && (method == HttpMethod.PUT || method == HttpMethod.POST)) {
                 handleRepositoryPut(ctx, path, request);
-            }else {
+            } else {
                 sendResponse(ctx, NOT_FOUND, "{\"error\": \"Not found\"}");
             }
         } catch (Exception e) {
@@ -211,8 +211,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     private void handleStatus(ChannelHandlerContext ctx) {
         var clusterStatus = cluster.status();
         var metricsSnapshot = metrics.currentMetrics();
-        var loadStatus = new LoadStatus(
-        loadGenerator.currentRate(), loadGenerator.targetRate(), loadGenerator.isRunning());
+        var loadStatus = new LoadStatus(loadGenerator.currentRate(),
+                                        loadGenerator.targetRate(),
+                                        loadGenerator.isRunning());
         var response = new StatusResponse(clusterStatus,
                                           metricsSnapshot,
                                           loadStatus,
@@ -501,7 +502,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                 applyLoadGeneratorSettings(newConfig);
                 addEvent("MULTIPLIER_SET", "Global rate multiplier set to " + multiplier);
                 sendResponse(ctx, OK, "{\"success\":true,\"multiplier\":" + multiplier + "}");
-            }else {
+            } else {
                 sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing multiplier\"}");
             }
         } catch (Exception e) {
@@ -527,7 +528,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                                                                 ? "enabled"
                                                                 : "disabled"));
                 sendResponse(ctx, OK, "{\"success\":true,\"enabled\":" + enabled + "}");
-            }else {
+            } else {
                 sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing enabled\"}");
             }
         } catch (Exception e) {
@@ -565,7 +566,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                              "{\"success\":true,\"mode\":\"" + (infiniteInventoryMode
                                                                 ? "infinite"
                                                                 : "realistic") + "\"}");
-            }else {
+            } else {
                 sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing mode\"}");
             }
         } catch (Exception e) {
@@ -577,13 +578,12 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      * Handle inventory metrics request - simulated.
      */
     private void handleInventoryMetrics(ChannelHandlerContext ctx) {
-        var json = String.format(
-        "{\"totalReservations\":%d,\"totalReleases\":%d,\"stockOuts\":%d,\"infiniteMode\":%b,\"refillRate\":%d}",
-        simulatedReservations,
-        simulatedReleases,
-        simulatedStockOuts,
-        infiniteInventoryMode,
-        100);
+        var json = String.format("{\"totalReservations\":%d,\"totalReleases\":%d,\"stockOuts\":%d,\"infiniteMode\":%b,\"refillRate\":%d}",
+                                 simulatedReservations,
+                                 simulatedReleases,
+                                 simulatedStockOuts,
+                                 infiniteInventoryMode,
+                                 100);
         sendResponse(ctx, OK, json);
     }
 
@@ -634,7 +634,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         sendResponse(ctx, OK, "{\"success\":true,\"enabled\":" + enabled + "}");
     }
 
-    private static final Fn1<Cause, String>UNKNOWN_CHAOS_TYPE = Causes.forOneValue("Unknown chaos type: {}");
+    private static final Fn1<Cause, String> UNKNOWN_CHAOS_TYPE = Causes.forOneValue("Unknown chaos type: {}");
 
     /**
      * Inject a chaos event.
@@ -647,37 +647,37 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         var durationSeconds = extractLong(body, "durationSeconds", 60);
         var duration = Duration.ofSeconds(durationSeconds);
         parseChaosEvent(body, type, duration)
-        .async()
-        .flatMap(chaosController::injectChaos)
-        .onSuccess(eventId -> sendChaosSuccess(ctx, eventId, type))
-        .onFailure(cause -> sendChaosError(ctx, cause));
+                       .async()
+                       .flatMap(chaosController::injectChaos)
+                       .onSuccess(eventId -> sendChaosSuccess(ctx, eventId, type))
+                       .onFailure(cause -> sendChaosError(ctx, cause));
     }
 
     private Result<ChaosEvent> parseChaosEvent(String body, String type, Duration duration) {
         return switch (type.toUpperCase()) {
-            case"NODE_KILL" -> ChaosEvent.NodeKill.kill(extractString(body, "nodeId", null),
-                                                        duration)
-                                         .map(e -> e);
-            case"LATENCY_SPIKE" -> ChaosEvent.LatencySpike.addLatency(extractString(body, "nodeId", null),
-                                                                      extractLong(body, "latencyMs", 500),
-                                                                      duration)
-                                             .map(e -> e);
-            case"SLICE_CRASH" -> ChaosEvent.SliceCrash.crashSlice(extractString(body, "artifact", null),
-                                                                  extractString(body, "nodeId", null),
-                                                                  duration)
-                                           .map(e -> e);
-            case"INVOCATION_FAILURE" -> ChaosEvent.InvocationFailure.forSlice(extractString(body, "artifact", null),
-                                                                              extractDouble(body, "failureRate", 0.5),
-                                                                              duration)
-                                                  .map(e -> e);
-            case"CPU_SPIKE" -> ChaosEvent.CpuSpike.onNode(extractString(body, "nodeId", null),
-                                                          extractDouble(body, "level", 0.8),
-                                                          duration)
-                                         .map(e -> e);
-            case"MEMORY_PRESSURE" -> ChaosEvent.MemoryPressure.onNode(extractString(body, "nodeId", null),
-                                                                      extractDouble(body, "level", 0.9),
-                                                                      duration)
-                                               .map(e -> e);
+            case "NODE_KILL" -> ChaosEvent.NodeKill.kill(extractString(body, "nodeId", null),
+                                                         duration)
+                                          .map(e -> e);
+            case "LATENCY_SPIKE" -> ChaosEvent.LatencySpike.addLatency(extractString(body, "nodeId", null),
+                                                                       extractLong(body, "latencyMs", 500),
+                                                                       duration)
+                                              .map(e -> e);
+            case "SLICE_CRASH" -> ChaosEvent.SliceCrash.crashSlice(extractString(body, "artifact", null),
+                                                                   extractString(body, "nodeId", null),
+                                                                   duration)
+                                            .map(e -> e);
+            case "INVOCATION_FAILURE" -> ChaosEvent.InvocationFailure.forSlice(extractString(body, "artifact", null),
+                                                                               extractDouble(body, "failureRate", 0.5),
+                                                                               duration)
+                                                   .map(e -> e);
+            case "CPU_SPIKE" -> ChaosEvent.CpuSpike.onNode(extractString(body, "nodeId", null),
+                                                           extractDouble(body, "level", 0.8),
+                                                           duration)
+                                          .map(e -> e);
+            case "MEMORY_PRESSURE" -> ChaosEvent.MemoryPressure.onNode(extractString(body, "nodeId", null),
+                                                                       extractDouble(body, "level", 0.9),
+                                                                       duration)
+                                                .map(e -> e);
             default -> UNKNOWN_CHAOS_TYPE.apply(type)
                                          .result();
         };
@@ -755,8 +755,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         addEvent("MODE_CHANGED", "Simulator mode changed from " + oldModeName + " to " + newMode.displayName());
         sendResponse(ctx,
                      OK,
-                     String.format(
-        "{\"success\":true,\"previousMode\":\"%s\",\"currentMode\":\"%s\"}", oldModeName, newMode.name()));
+                     String.format("{\"success\":true,\"previousMode\":\"%s\",\"currentMode\":\"%s\"}",
+                                   oldModeName,
+                                   newMode.name()));
     }
 
     // ==================== Simulated Order API Handlers ====================
@@ -766,8 +767,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handlePlaceOrder(ChannelHandlerContext ctx, FullHttpRequest request) {
         applySimulation("place-order")
-        .onSuccess(_ -> sendPlaceOrderSuccess(ctx))
-        .onFailure(cause -> sendErrorResponse(ctx, INTERNAL_SERVER_ERROR, cause));
+                       .onSuccess(_ -> sendPlaceOrderSuccess(ctx))
+                       .onFailure(cause -> sendErrorResponse(ctx, INTERNAL_SERVER_ERROR, cause));
     }
 
     private void sendPlaceOrderSuccess(ChannelHandlerContext ctx) {
@@ -790,8 +791,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handleGetOrderStatus(ChannelHandlerContext ctx, String orderId) {
         applySimulation("get-order-status")
-        .onSuccess(_ -> sendOrderStatusSuccess(ctx, orderId))
-        .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
+                       .onSuccess(_ -> sendOrderStatusSuccess(ctx, orderId))
+                       .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
     }
 
     private void sendOrderStatusSuccess(ChannelHandlerContext ctx, String orderId) {
@@ -816,8 +817,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                           .toString(StandardCharsets.UTF_8);
         var reason = extractString(body, "reason", "User requested cancellation");
         applySimulation("cancel-order")
-        .onSuccess(_ -> sendCancelOrderSuccess(ctx, orderId, reason))
-        .onFailure(cause -> sendErrorResponse(ctx, BAD_REQUEST, cause));
+                       .onSuccess(_ -> sendCancelOrderSuccess(ctx, orderId, reason))
+                       .onFailure(cause -> sendErrorResponse(ctx, BAD_REQUEST, cause));
     }
 
     private void sendCancelOrderSuccess(ChannelHandlerContext ctx, String orderId, String reason) {
@@ -832,8 +833,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handleCheckStock(ChannelHandlerContext ctx, String productId) {
         applySimulation("inventory-service")
-        .onSuccess(_ -> sendCheckStockSuccess(ctx, productId))
-        .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
+                       .onSuccess(_ -> sendCheckStockSuccess(ctx, productId))
+                       .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
     }
 
     private void sendCheckStockSuccess(ChannelHandlerContext ctx, String productId) {
@@ -851,8 +852,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handleGetPrice(ChannelHandlerContext ctx, String productId) {
         applySimulation("pricing-service")
-        .onSuccess(_ -> sendGetPriceSuccess(ctx, productId))
-        .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
+                       .onSuccess(_ -> sendGetPriceSuccess(ctx, productId))
+                       .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
     }
 
     private void sendGetPriceSuccess(ChannelHandlerContext ctx, String productId) {
@@ -918,9 +919,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                         .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
             ctx.writeAndFlush(httpResponse)
                .addListener(ChannelFutureListener.CLOSE);
-        }else if (response.statusCode() == 404) {
+        } else if (response.statusCode() == 404) {
             sendResponse(ctx, NOT_FOUND, "{\"error\": \"Artifact not found\"}");
-        }else {
+        } else {
             sendResponse(ctx,
                          HttpResponseStatus.valueOf(response.statusCode()),
                          new String(response.content(), StandardCharsets.UTF_8));

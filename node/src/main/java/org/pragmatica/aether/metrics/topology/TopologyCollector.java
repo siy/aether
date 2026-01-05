@@ -138,7 +138,7 @@ public final class TopologyCollector {
                 nodeInfos.add(ClusterTopology.NodeInfo.suspected(nodeIdStr, address));
             } else {
                 nodeInfos.add(ClusterTopology.NodeInfo.healthy(nodeIdStr, address, isLeader));
-                healthyCount++ ;
+                healthyCount++;
             }
         }
         // Get slice info from KV store

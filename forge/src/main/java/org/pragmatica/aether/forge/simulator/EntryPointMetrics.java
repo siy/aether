@@ -33,7 +33,7 @@ public final class EntryPointMetrics {
      */
     public void recordSuccess(String entryPoint, long latencyNanos) {
         getOrCreate(entryPoint)
-        .recordSuccess(latencyNanos);
+                   .recordSuccess(latencyNanos);
     }
 
     /**
@@ -41,7 +41,7 @@ public final class EntryPointMetrics {
      */
     public void recordFailure(String entryPoint, long latencyNanos) {
         getOrCreate(entryPoint)
-        .recordFailure(latencyNanos);
+                   .recordFailure(latencyNanos);
     }
 
     /**
@@ -49,7 +49,7 @@ public final class EntryPointMetrics {
      */
     public void setRate(String entryPoint, int callsPerSecond) {
         getOrCreate(entryPoint).currentRate
-        .set(callsPerSecond);
+                   .set(callsPerSecond);
     }
 
     /**
@@ -106,7 +106,7 @@ public final class EntryPointMetrics {
         final AtomicLong[] histogram = new AtomicLong[BUCKET_BOUNDARIES_MS.length + 1];
 
         EntryPointStats() {
-            for (int i = 0; i < histogram.length; i++ ) {
+            for (int i = 0; i < histogram.length; i++) {
                 histogram[i] = new AtomicLong();
             }
         }
@@ -136,7 +136,7 @@ public final class EntryPointMetrics {
         }
 
         private int findBucket(long latencyMs) {
-            for (int i = 0; i < BUCKET_BOUNDARIES_MS.length; i++ ) {
+            for (int i = 0; i < BUCKET_BOUNDARIES_MS.length; i++) {
                 if (latencyMs <= BUCKET_BOUNDARIES_MS[i]) {
                     return i;
                 }
@@ -169,15 +169,14 @@ public final class EntryPointMetrics {
                       : 0.0;
             var p50 = estimatePercentile(50, total);
             var p99 = estimatePercentile(99, total);
-            return new EntryPointSnapshot(
-            name, rate, total, success, failure, successRate, avgLatencyMs, rps, p50, p99);
+            return new EntryPointSnapshot(name, rate, total, success, failure, successRate, avgLatencyMs, rps, p50, p99);
         }
 
         private double estimatePercentile(int percentile, long total) {
             if (total == 0) return 0.0;
             var targetCount = (long)(total * percentile / 100.0);
             long cumulative = 0;
-            for (int i = 0; i < histogram.length; i++ ) {
+            for (int i = 0; i < histogram.length; i++) {
                 cumulative += histogram[i].get();
                 if (cumulative >= targetCount) {
                     // Return bucket upper boundary
@@ -205,32 +204,30 @@ public final class EntryPointMetrics {
     /**
      * Snapshot of entry point metrics.
      */
-    public record EntryPointSnapshot(
-    String name,
-    int rate,
-    long totalCalls,
-    long successCalls,
-    long failureCalls,
-    double successRate,
-    double avgLatencyMs,
-    double requestsPerSecond,
-    double p50LatencyMs,
-    double p99LatencyMs) {
+    public record EntryPointSnapshot(String name,
+                                     int rate,
+                                     long totalCalls,
+                                     long successCalls,
+                                     long failureCalls,
+                                     double successRate,
+                                     double avgLatencyMs,
+                                     double requestsPerSecond,
+                                     double p50LatencyMs,
+                                     double p99LatencyMs) {
         public String toJson() {
-            return String.format(
-            "{\"name\":\"%s\",\"rate\":%d,\"totalCalls\":%d,\"successCalls\":%d,"
-            + "\"failureCalls\":%d,\"successRate\":%.2f,\"avgLatencyMs\":%.2f,"
-            + "\"requestsPerSecond\":%.1f,\"p50LatencyMs\":%.1f,\"p99LatencyMs\":%.1f}",
-            name,
-            rate,
-            totalCalls,
-            successCalls,
-            failureCalls,
-            successRate,
-            avgLatencyMs,
-            requestsPerSecond,
-            p50LatencyMs,
-            p99LatencyMs);
+            return String.format("{\"name\":\"%s\",\"rate\":%d,\"totalCalls\":%d,\"successCalls\":%d,"
+                                 + "\"failureCalls\":%d,\"successRate\":%.2f,\"avgLatencyMs\":%.2f,"
+                                 + "\"requestsPerSecond\":%.1f,\"p50LatencyMs\":%.1f,\"p99LatencyMs\":%.1f}",
+                                 name,
+                                 rate,
+                                 totalCalls,
+                                 successCalls,
+                                 failureCalls,
+                                 successRate,
+                                 avgLatencyMs,
+                                 requestsPerSecond,
+                                 p50LatencyMs,
+                                 p99LatencyMs);
         }
     }
 }

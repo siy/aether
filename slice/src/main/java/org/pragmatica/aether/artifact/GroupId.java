@@ -13,7 +13,7 @@ public record GroupId(String id) {
                      .map(GroupId::new);
     }
 
-    @ Override
+    @Override
     public String toString() {
         return id;
     }

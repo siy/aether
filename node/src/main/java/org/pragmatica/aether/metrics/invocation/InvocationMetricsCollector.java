@@ -206,7 +206,7 @@ public final class InvocationMetricsCollector {
             var idx = writeIndex.getAndIncrement() % MAX_SLOW_INVOCATIONS_PER_METHOD;
             slowBuffer[idx] = slow;
             if (count < MAX_SLOW_INVOCATIONS_PER_METHOD) {
-                count++ ;
+                count++;
             }
         }
 
@@ -215,7 +215,7 @@ public final class InvocationMetricsCollector {
             // Reset
             writeIndex.set(0);
             count = 0;
-            for (int i = 0; i < MAX_SLOW_INVOCATIONS_PER_METHOD; i++ ) {
+            for (int i = 0; i < MAX_SLOW_INVOCATIONS_PER_METHOD; i++) {
                 slowBuffer[i] = null;
             }
             return result;
@@ -227,7 +227,7 @@ public final class InvocationMetricsCollector {
             var startIdx = writeIndex.get() >= MAX_SLOW_INVOCATIONS_PER_METHOD
                            ? writeIndex.get() % MAX_SLOW_INVOCATIONS_PER_METHOD
                            : 0;
-            for (int i = 0; i < currentCount; i++ ) {
+            for (int i = 0; i < currentCount; i++) {
                 var idx = (startIdx + i) % MAX_SLOW_INVOCATIONS_PER_METHOD;
                 var slow = slowBuffer[idx];
                 if (slow != null) {

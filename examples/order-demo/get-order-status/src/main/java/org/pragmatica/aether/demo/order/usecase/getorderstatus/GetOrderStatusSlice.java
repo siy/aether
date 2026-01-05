@@ -24,22 +24,19 @@ public record GetOrderStatusSlice() implements Slice {
     }
 
     @Override
-    public List<SliceMethod< ? , ? >> methods() {
-        return List.of(
-        new SliceMethod<>(
-        MethodName.methodName("getOrderStatus")
-                  .expect("Invalid method name: getOrderStatus"),
-        this::execute,
-        new TypeToken<GetOrderStatusResponse>() {},
-        new TypeToken<GetOrderStatusRequest>() {}));
+    public List<SliceMethod< ?, ? >> methods() {
+        return List.of(new SliceMethod<>(MethodName.methodName("getOrderStatus")
+                                                   .expect("Invalid method name: getOrderStatus"),
+                                         this::execute,
+                                         new TypeToken<GetOrderStatusResponse>() {},
+                                         new TypeToken<GetOrderStatusRequest>() {}));
     }
 
     @Override
     public List<SliceRoute> routes() {
-        return List.of(
-        SliceRoute.get("/api/orders/{orderId}", "getOrderStatus")
-                  .withPathVar("orderId")
-                  .build());
+        return List.of(SliceRoute.get("/api/orders/{orderId}", "getOrderStatus")
+                                 .withPathVar("orderId")
+                                 .build());
     }
 
     private Promise<GetOrderStatusResponse> execute(GetOrderStatusRequest request) {
@@ -50,10 +47,10 @@ public record GetOrderStatusSlice() implements Slice {
 
     private Promise<GetOrderStatusResponse> findOrder(ValidGetOrderStatusRequest validRequest) {
         return repository()
-               .findById(validRequest.orderId()
-                                     .value())
-               .fold(() -> orderNotFound(validRequest),
-                     this::toResponse);
+                         .findById(validRequest.orderId()
+                                               .value())
+                         .fold(() -> orderNotFound(validRequest),
+                               this::toResponse);
     }
 
     private Promise<GetOrderStatusResponse> orderNotFound(ValidGetOrderStatusRequest validRequest) {
@@ -66,8 +63,12 @@ public record GetOrderStatusSlice() implements Slice {
                          .stream()
                          .map(this::toOrderItem)
                          .toList();
-        return Promise.success(new GetOrderStatusResponse(
-        order.orderId(), order.status(), order.total(), items, order.createdAt(), order.updatedAt()));
+        return Promise.success(new GetOrderStatusResponse(order.orderId(),
+                                                          order.status(),
+                                                          order.total(),
+                                                          items,
+                                                          order.createdAt(),
+                                                          order.updatedAt()));
     }
 
     private GetOrderStatusResponse.OrderItem toOrderItem(OrderRepository.OrderItem item) {

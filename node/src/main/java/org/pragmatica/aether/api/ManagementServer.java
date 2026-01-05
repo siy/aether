@@ -526,7 +526,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                                 .map(spec -> {
                                          AetherKey key = new AetherKey.BlueprintKey(spec.artifact());
                                          AetherValue value = new AetherValue.BlueprintValue(spec.instances());
-                                         return ( KVCommand<AetherKey>) new KVCommand.Put<>(key, value);
+                                         return (KVCommand<AetherKey>) new KVCommand.Put<>(key, value);
                                      })
                                 .toList();
                                       if (commands.isEmpty()) {

@@ -37,9 +37,9 @@ aether update complete <update-id>
 ## State Machine
 
 ```
-PENDING → DEPLOYING → DEPLOYED → ROUTING → VALIDATING → COMPLETING → COMPLETED
-                ↓          ↓          ↓          ↓           ↓
-             ROLLING_BACK ←─────────←─────────←─────────←────┘
+PENDING → DEPLOYING → DEPLOYED → ROUTING → COMPLETING → COMPLETED
+                ↓          ↓          ↓          ↓
+             ROLLING_BACK ←─────────←─────────←──┘
                     ↓
                ROLLED_BACK
 
@@ -52,7 +52,6 @@ Any state → FAILED
 | `DEPLOYING` | New version instances being deployed (0% traffic) |
 | `DEPLOYED` | New version healthy, ready for traffic routing |
 | `ROUTING` | Traffic being shifted according to routing ratio |
-| `VALIDATING` | Health validation of new version under traffic |
 | `COMPLETING` | Cleaning up old version instances |
 | `COMPLETED` | Update finished, old version removed |
 | `ROLLING_BACK` | Reverting to old version |
@@ -154,9 +153,6 @@ aether update complete <update-id>
 
 # Rollback to old version
 aether update rollback <update-id>
-
-# Manual approval (when --manual-approval was used)
-aether update approve <update-id>
 ```
 
 ## REST API

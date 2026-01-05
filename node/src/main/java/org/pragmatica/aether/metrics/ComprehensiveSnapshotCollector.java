@@ -127,6 +127,7 @@ public final class ComprehensiveSnapshotCollector {
         // Start GC collector
         gcCollector.start();
         // Start event loop collector with shared scheduler
+        // EventLoopGroups are registered by AetherNode after cluster starts via Server.bossGroup()/workerGroup()
         eventLoopCollector.start(scheduler);
         // Schedule snapshot collection
         collectionTask = scheduler.scheduleAtFixedRate(this::collectSnapshot,

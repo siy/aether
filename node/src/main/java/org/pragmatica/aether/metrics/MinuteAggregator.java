@@ -29,7 +29,6 @@ public final class MinuteAggregator {
     private long currentMinute = 0;
     private final List<ComprehensiveSnapshot> currentSamples = new ArrayList<>(60);
     private final List<Double> currentLatencies = new ArrayList<>(60);
-    private int currentEventCount = 0;
 
     private MinuteAggregator(int capacity) {
         this.aggregates = RingBuffer.ringBuffer(capacity);
@@ -60,20 +59,6 @@ public final class MinuteAggregator {
             if (snapshot.avgLatencyMs() > 0) {
                 currentLatencies.add(snapshot.avgLatencyMs());
             }
-        } finally{
-            lock.writeLock()
-                .unlock();
-        }
-    }
-
-    /**
-     * Record an event for the current minute.
-     */
-    public void recordEvent() {
-        lock.writeLock()
-            .lock();
-        try{
-            currentEventCount++;
         } finally{
             lock.writeLock()
                 .unlock();
@@ -231,10 +216,8 @@ public final class MinuteAggregator {
             p95 = percentile(sorted, 95);
             p99 = percentile(sorted, 99);
         }
-        // Get event count from EventPublisher if not tracked locally
-        int events = currentEventCount > 0
-                     ? currentEventCount
-                     : countEventsInMinute(currentMinute);
+        // Get event count from EventPublisher
+        int events = countEventsInMinute(currentMinute);
         var aggregate = new MinuteAggregate(currentMinute,
                                             sumCpu / n,
                                             sumHeap / n,
@@ -252,7 +235,6 @@ public final class MinuteAggregator {
         // Reset accumulators
         currentSamples.clear();
         currentLatencies.clear();
-        currentEventCount = 0;
     }
 
     private double percentile(double[] sorted, int percentile) {

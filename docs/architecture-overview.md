@@ -211,15 +211,14 @@ Manages rolling update operations with two-stage deployment model:
 Key operations:
 - `startUpdate()` - Start rolling update, deploy new version instances
 - `adjustRouting()` - Change traffic ratio (e.g., 1:3 = 25% new)
-- `approveRouting()` - Manual approval for routing changes
 - `completeUpdate()` - Finalize update, cleanup old version
 - `rollback()` - Revert to old version
 
 **State Machine**:
 ```
-PENDING → DEPLOYING → DEPLOYED → ROUTING → VALIDATING → COMPLETING → COMPLETED
-                                    ↓                         ↓
-                              ROLLING_BACK              ROLLED_BACK
+PENDING → DEPLOYING → DEPLOYED → ROUTING → COMPLETING → COMPLETED
+                                    ↓              ↓
+                              ROLLING_BACK   ROLLED_BACK
                                     ↓
                                  FAILED
 ```

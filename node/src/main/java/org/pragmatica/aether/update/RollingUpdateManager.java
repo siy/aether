@@ -63,7 +63,7 @@ public interface RollingUpdateManager {
     /**
      * Adjusts traffic routing between versions.
      *
-     * <p>Can only be called when update is in DEPLOYED, ROUTING, or VALIDATING state.
+     * <p>Can only be called when update is in DEPLOYED or ROUTING state.
      * The routing ratio is scaled to available instances.
      *
      * @param updateId the update to adjust
@@ -71,18 +71,6 @@ public interface RollingUpdateManager {
      * @return updated rolling update
      */
     Promise<RollingUpdate> adjustRouting(String updateId, VersionRouting newRouting);
-
-    /**
-     * Manually approves the current routing configuration.
-     *
-     * <p>Required when {@link HealthThresholds#requireManualApproval()} is true.
-     * Allows progression to the next stage even if automatic health checks
-     * would prevent it.
-     *
-     * @param updateId the update to approve
-     * @return updated rolling update
-     */
-    Promise<RollingUpdate> approveRouting(String updateId);
 
     /**
      * Completes the rolling update.

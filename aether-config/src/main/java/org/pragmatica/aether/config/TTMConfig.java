@@ -19,9 +19,9 @@ public record TTMConfig(String modelPath,
                         long evaluationIntervalMs,
                         double confidenceThreshold,
                         boolean enabled) {
-    private static final TTMConfig DEFAULT = new TTMConfig("models/ttm-aether.onnx", 60, 1, 60_000L, 0.7, true);
+    private static final TTMConfig DEFAULT = new TTMConfig("models/ttm-aether.onnx", 60, 1, 60_000L, 0.7, false);
 
-    private static final TTMConfig DISABLED = new TTMConfig("", 60, 1, 60_000L, 0.7, false);
+    private static final TTMConfig DISABLED = DEFAULT;
 
     public static TTMConfig defaults() {
         return DEFAULT;

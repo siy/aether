@@ -226,9 +226,9 @@ class RollingUpdateE2ETest {
 
     private String startRollingUpdate(String newVersion, int instances) {
         // POST /rolling-update/start
-        var artifact = newVersion.substring(0, newVersion.lastIndexOf(':'));
+        var artifactBase = newVersion.substring(0, newVersion.lastIndexOf(':'));
         var version = newVersion.substring(newVersion.lastIndexOf(':') + 1);
-        var body = "{\"artifact\":\"" + artifact + "\",\"version\":\"" + version +
+        var body = "{\"artifactBase\":\"" + artifactBase + "\",\"version\":\"" + version +
                    "\",\"instances\":" + instances + "}";
         return post("/rolling-update/start", body);
     }

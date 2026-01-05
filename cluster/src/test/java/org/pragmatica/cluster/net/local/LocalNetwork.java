@@ -8,10 +8,12 @@ import org.pragmatica.consensus.net.NetworkMessage;
 import org.pragmatica.consensus.NodeId;
 import org.pragmatica.consensus.topology.QuorumStateNotification;
 import org.pragmatica.consensus.topology.TopologyManager;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.io.TimeSpan;
 import org.pragmatica.messaging.MessageRouter;
+import org.pragmatica.net.tcp.Server;
 import org.pragmatica.utility.Sleep;
 
 import java.util.*;
@@ -118,6 +120,11 @@ public class LocalNetwork implements ClusterNetwork {
     @Override
     public Promise<Unit> stop() {
         return Promise.unitPromise();
+    }
+
+    @Override
+    public Option<Server> server() {
+        return Option.empty();
     }
 
     public void addNode(NodeId nodeId, Consumer<RabiaProtocolMessage> listener) {

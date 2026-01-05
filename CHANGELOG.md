@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Rolling Update Manager** - Multiple critical fixes
+  - State restoration race condition - no longer restores state in constructor before KVStore is ready
+  - Added 30-second timeouts to all KV-Store operations to prevent hangs
+  - P99 latency now correctly uses histogram percentile instead of average
+  - MANUAL cleanup policy now properly preserves old version for manual removal
+- **Leader checks** - Rolling update POST handlers now properly verify leader status before execution
+- **API endpoint fixes** - Comprehensive and derived metrics endpoints use correct field names
+- **E2E test fix** - `RollingUpdateE2ETest` now uses correct `artifactBase` field (was `artifact`)
+- **EventLoopMetricsCollector** - Now properly wired to receive Netty EventLoopGroups from Server after cluster starts
+
+### Changed
+- **pragmatica-lite** - Updated to version 0.9.9 with `Server.bossGroup()`/`workerGroup()` accessors
+- **TTMConfig** - Now defaults to disabled (`enabled=false`) - requires explicit opt-in
+- **RollingUpdateState** - Removed unused `VALIDATING` state and `approveRouting()` method
+  - Simplified state machine: `ROUTING → COMPLETING` (was `ROUTING → VALIDATING → COMPLETING`)
+  - Updated documentation to reflect simplified flow
+
+### Removed
+- **MinuteAggregator.recordEvent()** - Dead code removed; event counting uses EventPublisher fallback
+
 ## [0.7.1] - 2026-01-03
 
 ### Added

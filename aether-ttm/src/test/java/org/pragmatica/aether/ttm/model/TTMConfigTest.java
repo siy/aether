@@ -12,7 +12,7 @@ class TTMConfigTest {
     void defaults_providesValidConfig() {
         var config = TTMConfig.defaults();
 
-        assertThat(config.enabled()).isTrue();
+        assertThat(config.enabled()).isFalse(); // Disabled by default - requires explicit opt-in
         assertThat(config.inputWindowMinutes()).isEqualTo(60);
         assertThat(config.predictionHorizon()).isEqualTo(1);
         assertThat(config.evaluationIntervalMs()).isEqualTo(60_000L);

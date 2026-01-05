@@ -267,6 +267,8 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             case "/slices" -> buildSlicesResponse(node);
             case "/slices/status" -> buildSlicesStatusResponse(node);
             case "/metrics" -> buildMetricsResponse(node);
+            case "/metrics/comprehensive" -> buildComprehensiveMetricsResponse(node);
+            case "/metrics/derived" -> buildDerivedMetricsResponse(node);
             case "/thresholds" -> alertManager.thresholdsAsJson();
             case "/alerts" -> buildAlertsResponse();
             case "/alerts/active" -> alertManager.activeAlertsAsJson();
@@ -575,9 +577,6 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         } else if (uri.endsWith("/routing")) {
             var updateId = extractUpdateId(uri, "/routing");
             handleRollingUpdateRouting(ctx, node, updateId, body);
-        } else if (uri.endsWith("/approve")) {
-            var updateId = extractUpdateId(uri, "/approve");
-            handleRollingUpdateApprove(ctx, node, updateId);
         } else if (uri.endsWith("/complete")) {
             var updateId = extractUpdateId(uri, "/complete");
             handleRollingUpdateComplete(ctx, node, updateId);
@@ -604,6 +603,9 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private static final Pattern CLEANUP_POLICY_PATTERN = Pattern.compile("\"cleanupPolicy\"\\s*:\\s*\"([^\"]+)\"");
 
     private void handleRollingUpdateStart(ChannelHandlerContext ctx, AetherNode node, String body) {
+        if (!requireLeader(ctx, node)) {
+            return;
+        }
         var artifactBaseMatch = ARTIFACT_BASE_PATTERN.matcher(body);
         var versionMatch = VERSION_PATTERN.matcher(body);
         var instancesMatch = INSTANCES_PATTERN.matcher(body);
@@ -655,6 +657,9 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     private void handleRollingUpdateRouting(ChannelHandlerContext ctx, AetherNode node, String updateId, String body) {
+        if (!requireLeader(ctx, node)) {
+            return;
+        }
         var routingMatch = ROUTING_PATTERN.matcher(body);
         if (!routingMatch.find()) {
             sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing routing field");
@@ -673,17 +678,10 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                                              cause.message()));
     }
 
-    private void handleRollingUpdateApprove(ChannelHandlerContext ctx, AetherNode node, String updateId) {
-        node.rollingUpdateManager()
-            .approveRouting(updateId)
-            .onSuccess(update -> sendJson(ctx,
-                                          buildRollingUpdateJson(update)))
-            .onFailure(cause -> sendJsonError(ctx,
-                                              HttpResponseStatus.BAD_REQUEST,
-                                              cause.message()));
-    }
-
     private void handleRollingUpdateComplete(ChannelHandlerContext ctx, AetherNode node, String updateId) {
+        if (!requireLeader(ctx, node)) {
+            return;
+        }
         node.rollingUpdateManager()
             .completeUpdate(updateId)
             .onSuccess(update -> sendJson(ctx,
@@ -694,6 +692,9 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     private void handleRollingUpdateRollback(ChannelHandlerContext ctx, AetherNode node, String updateId) {
+        if (!requireLeader(ctx, node)) {
+            return;
+        }
         node.rollingUpdateManager()
             .rollback(updateId)
             .onSuccess(update -> sendJson(ctx,
@@ -967,6 +968,35 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         sb.append("}");
         sb.append("}");
         return sb.toString();
+    }
+
+    private String buildComprehensiveMetricsResponse(AetherNode node) {
+        var recent = node.snapshotCollector()
+                         .minuteAggregator()
+                         .recent(1);
+        if (recent.isEmpty()) {
+            return "{\"error\":\"No comprehensive metrics available yet\"}";
+        }
+        var agg = recent.get(0);
+        return "{" + "\"minuteTimestamp\":" + agg.minuteTimestamp() + "," + "\"avgCpuUsage\":" + agg.avgCpuUsage()
+               + "," + "\"avgHeapUsage\":" + agg.avgHeapUsage() + "," + "\"avgEventLoopLagMs\":" + agg.avgEventLoopLagMs()
+               + "," + "\"avgLatencyMs\":" + agg.avgLatencyMs() + "," + "\"totalInvocations\":" + agg.totalInvocations()
+               + "," + "\"totalGcPauseMs\":" + agg.totalGcPauseMs() + "," + "\"latencyP50\":" + agg.latencyP50() + ","
+               + "\"latencyP95\":" + agg.latencyP95() + "," + "\"latencyP99\":" + agg.latencyP99() + ","
+               + "\"errorRate\":" + agg.errorRate() + "," + "\"eventCount\":" + agg.eventCount() + ","
+               + "\"sampleCount\":" + agg.sampleCount() + "}";
+    }
+
+    private String buildDerivedMetricsResponse(AetherNode node) {
+        var derived = node.snapshotCollector()
+                          .derivedMetrics();
+        return "{" + "\"requestRate\":" + derived.requestRate() + "," + "\"errorRate\":" + derived.errorRate() + ","
+               + "\"gcRate\":" + derived.gcRate() + "," + "\"latencyP50\":" + derived.latencyP50() + ","
+               + "\"latencyP95\":" + derived.latencyP95() + "," + "\"latencyP99\":" + derived.latencyP99() + ","
+               + "\"eventLoopSaturation\":" + derived.eventLoopSaturation() + "," + "\"heapSaturation\":" + derived.heapSaturation()
+               + "," + "\"cpuTrend\":" + derived.cpuTrend() + "," + "\"latencyTrend\":" + derived.latencyTrend() + ","
+               + "\"errorTrend\":" + derived.errorTrend() + "," + "\"healthScore\":" + derived.healthScore() + ","
+               + "\"stressed\":" + derived.stressed() + "," + "\"hasCapacity\":" + derived.hasCapacity() + "}";
     }
 
     private String buildSlicesStatusResponse(AetherNode node) {
@@ -1353,6 +1383,22 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                         buf.readableBytes());
         ctx.writeAndFlush(response)
            .addListener(ChannelFutureListener.CLOSE);
+    }
+
+    /**
+     * Check if node is leader. Returns true if leader, sends error and returns false otherwise.
+     */
+    private boolean requireLeader(ChannelHandlerContext ctx, AetherNode node) {
+        if (!node.isLeader()) {
+            var leaderInfo = node.leader()
+                                 .map(id -> " Current leader: " + id.id())
+                                 .or("");
+            sendJsonError(ctx,
+                          HttpResponseStatus.SERVICE_UNAVAILABLE,
+                          "This operation requires the leader node." + leaderInfo);
+            return false;
+        }
+        return true;
     }
 
     private void sendJsonError(ChannelHandlerContext ctx, HttpResponseStatus status, String message) {

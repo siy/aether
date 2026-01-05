@@ -141,6 +141,11 @@ public interface AetherNode {
     TTMManager ttmManager();
 
     /**
+     * Get the comprehensive snapshot collector for detailed metrics.
+     */
+    ComprehensiveSnapshotCollector snapshotCollector();
+
+    /**
      * Get the number of currently connected peer nodes in the cluster.
      * This is a network-level count, not based on metrics exchange.
      */
@@ -247,6 +252,7 @@ public interface AetherNode {
                               AlertManager alertManager,
                               TTMManager ttmManager,
                               ComprehensiveSnapshotCollector snapshotCollector,
+                              EventLoopMetricsCollector eventLoopMetricsCollector,
                               Option<ManagementServer> managementServer,
                               Option<HttpRouter> httpRouter) implements AetherNode {
             private static final Logger log = LoggerFactory.getLogger(aetherNodeImpl.class);
@@ -295,8 +301,18 @@ public interface AetherNode {
 
             private Promise<Unit> startClusterAsync() {
                 clusterNode.start()
-                           .onSuccess(_ -> log.info("Aether node {} cluster formation complete",
-                                                    self()))
+                           .onSuccess(_ -> {
+                                          log.info("Aether node {} cluster formation complete",
+                                                   self());
+                                          // Register Netty EventLoopGroups for metrics collection
+                clusterNode.network()
+                           .server()
+                           .onPresent(server -> {
+                                          eventLoopMetricsCollector.register(server.bossGroup());
+                                          eventLoopMetricsCollector.register(server.workerGroup());
+                                          log.info("Registered EventLoopGroups for metrics collection");
+                                      });
+                                      })
                            .onFailure(cause -> log.error("Cluster formation failed: {}",
                                                          cause.message()));
                 return Promise.success(Unit.unit());
@@ -384,7 +400,7 @@ public interface AetherNode {
         // Create subsystem collectors for comprehensive snapshots
         var gcMetricsCollector = GCMetricsCollector.gcMetricsCollector();
         var eventLoopMetricsCollector = EventLoopMetricsCollector.eventLoopMetricsCollector();
-        // Note: EventLoopGroup registration happens in NettyClusterNetwork when available
+        // EventLoopGroups are registered in startClusterAsync() when Server becomes available
         // Create comprehensive snapshot collector (feeds TTM pipeline)
         var snapshotCollector = ComprehensiveSnapshotCollector.comprehensiveSnapshotCollector(gcMetricsCollector,
                                                                                               eventLoopMetricsCollector,
@@ -464,6 +480,7 @@ public interface AetherNode {
                                       alertManager,
                                       ttmManager,
                                       snapshotCollector,
+                                      eventLoopMetricsCollector,
                                       Option.empty(),
                                       httpRouter);
         // Build and wire ImmutableRouter, then create final node
@@ -499,6 +516,7 @@ public interface AetherNode {
                                                                alertManager,
                                                                ttmManager,
                                                                snapshotCollector,
+                                                               eventLoopMetricsCollector,
                                                                Option.some(managementServer),
                                                                httpRouter);
                                  }

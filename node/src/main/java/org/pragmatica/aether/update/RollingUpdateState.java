@@ -8,7 +8,7 @@ import java.util.Set;
  * <p>Two-stage model:
  * <ul>
  *   <li><b>Stage 1 (Deploy)</b>: PENDING → DEPLOYING → DEPLOYED</li>
- *   <li><b>Stage 2 (Route)</b>: DEPLOYED → ROUTING → VALIDATING → COMPLETING → COMPLETED</li>
+ *   <li><b>Stage 2 (Route)</b>: DEPLOYED → ROUTING → COMPLETING → COMPLETED</li>
  *   <li><b>Rollback</b>: Any state → ROLLING_BACK → ROLLED_BACK</li>
  *   <li><b>Failure</b>: Any state → FAILED</li>
  * </ul>
@@ -22,8 +22,6 @@ public enum RollingUpdateState {
     DEPLOYED,
     /** Traffic being shifted according to routing ratio */
     ROUTING,
-    /** Validating health of new version under traffic */
-    VALIDATING,
     /** Completing update (removing old version instances) */
     COMPLETING,
     /** Update successfully completed (old version removed) */
@@ -42,15 +40,11 @@ public enum RollingUpdateState {
             case PENDING -> Set.of(DEPLOYING, FAILED);
             case DEPLOYING -> Set.of(DEPLOYED, ROLLING_BACK, FAILED);
             case DEPLOYED -> Set.of(ROUTING, ROLLING_BACK, FAILED);
-            case ROUTING -> Set.of(ROUTING, VALIDATING, ROLLING_BACK, FAILED);
-            case VALIDATING -> Set.of(ROUTING, COMPLETING, ROLLING_BACK, FAILED);
+            case ROUTING -> Set.of(ROUTING, COMPLETING, ROLLING_BACK, FAILED);
             case COMPLETING -> Set.of(COMPLETED, ROLLING_BACK, FAILED);
-            case COMPLETED -> Set.of();
-            // Terminal state
+            case COMPLETED, ROLLED_BACK, FAILED -> Set.of();
+            // Terminal states
             case ROLLING_BACK -> Set.of(ROLLED_BACK, FAILED);
-            case ROLLED_BACK -> Set.of();
-            // Terminal state
-            case FAILED -> Set.of();
         };
     }
     /**
@@ -63,12 +57,12 @@ public enum RollingUpdateState {
      * Checks if this state allows traffic to new version.
      */
     public boolean allowsNewVersionTraffic() {
-        return this == ROUTING || this == VALIDATING || this == COMPLETING;
+        return this == ROUTING || this == COMPLETING;
     }
     /**
      * Checks if this state requires both versions to be running.
      */
     public boolean requiresBothVersions() {
-        return this == DEPLOYED || this == ROUTING || this == VALIDATING;
+        return this == DEPLOYED || this == ROUTING;
     }
 }

@@ -10,12 +10,26 @@
     </parent>
 
     <artifactId>example-slice</artifactId>
+    <name>Aether Example Slice - E-Commerce Order Domain</name>
+    <description>
+        Comprehensive demo showing @Slice annotation pattern with inter-slice dependencies,
+        value objects, error handling, and JBCT patterns in an e-commerce order domain.
+    </description>
 
     <dependencies>
+        <!-- Slice annotations -->
+        <dependency>
+            <groupId>org.pragmatica-lite.aether</groupId>
+            <artifactId>slice-annotations</artifactId>
+        </dependency>
+
+        <!-- Slice API - contains SliceInvokerFacade for generated proxies -->
         <dependency>
             <groupId>org.pragmatica-lite.aether</groupId>
             <artifactId>slice-api</artifactId>
         </dependency>
+
+        <!-- Pragmatica Lite Core for Result, Option, Promise -->
         <dependency>
             <groupId>org.pragmatica-lite</groupId>
             <artifactId>core</artifactId>
@@ -28,10 +42,32 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.pragmatica-lite</groupId>
+                            <artifactId>slice-processor</artifactId>
+                            <version>${jbct.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

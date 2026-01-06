@@ -8,7 +8,7 @@ import org.pragmatica.aether.invoke.InvocationMessage.InvokeRequest;
 import org.pragmatica.aether.invoke.InvocationMessage.InvokeResponse;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.SliceBridge;
-import org.pragmatica.aether.slice.SliceRuntime.SliceInvokerFacade;
+import org.pragmatica.aether.slice.SliceInvokerFacade;
 import org.pragmatica.aether.update.RollingUpdate;
 import org.pragmatica.aether.update.RollingUpdateManager;
 import org.pragmatica.consensus.net.ClusterNetwork;

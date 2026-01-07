@@ -166,6 +166,12 @@ public interface AetherNode {
      */
     <R> Promise<List<R>> apply(List<KVCommand<AetherKey>> commands);
 
+    /**
+     * Get the management server port for this node.
+     * Returns 0 if management server is disabled.
+     */
+    int managementPort();
+
     static Result<AetherNode> aetherNode(AetherNodeConfig config) {
         var delegateRouter = MessageRouter.DelegateRouter.delegate();
         var serializer = furySerializer(AetherCustomClasses::configure);
@@ -304,6 +310,9 @@ public interface AetherNode {
                            .onSuccess(_ -> {
                                           log.info("Aether node {} cluster formation complete",
                                                    self());
+                                          // Ensure NodeDeploymentManager is activated after cluster formation
+                // This guarantees activation even if QuorumStateNotification was missed
+                nodeDeploymentManager.onQuorumStateChange(QuorumStateNotification.ESTABLISHED);
                                           // Register Netty EventLoopGroups for metrics collection
                 clusterNode.network()
                            .server()
@@ -339,6 +348,11 @@ public interface AetherNode {
             public Option<NodeId> leader() {
                 return clusterNode.leaderManager()
                                   .leader();
+            }
+
+            @Override
+            public int managementPort() {
+                return config.managementPort();
             }
         }
         // Create invocation handler BEFORE deployment manager (needed for slice registration)

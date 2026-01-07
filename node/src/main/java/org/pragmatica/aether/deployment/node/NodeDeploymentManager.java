@@ -109,7 +109,7 @@ public interface NodeDeploymentManager {
                                                           .value();
                                       switch (value) {
                     case SliceNodeValue(SliceState state) -> {
-                                          log.debug("ValuePut received for key: {}, state: {}", sliceKey, state);
+                                          log.info("ValuePut received for key: {}, state: {}", sliceKey, state);
                                           recordDeployment(sliceKey, state);
                                           processStateTransition(sliceKey, state);
                                       }
@@ -447,10 +447,32 @@ public interface NodeDeploymentManager {
                                                     Promise< ? > operation,
                                                     SliceState successState,
                                                     SliceState failureState) {
+                log.debug("executeWithStateTransition: {} current={} success={} failure={}, operation.isResolved={}",
+                          sliceKey.artifact(),
+                          currentState,
+                          successState,
+                          failureState,
+                          operation.isResolved());
                 configuration.timeoutFor(currentState)
-                             .onSuccess(timeout -> operation.timeout(timeout)
-                                                            .onSuccess(_ -> transitionTo(sliceKey, successState))
-                                                            .onFailure(_ -> transitionTo(sliceKey, failureState)))
+                             .onSuccess(timeout -> {
+                                            log.debug("Got timeout {} for {}, setting up callbacks",
+                                                      timeout,
+                                                      sliceKey.artifact());
+                                            operation.timeout(timeout)
+                                                     .onSuccess(_ -> {
+                                                                    log.info("Operation succeeded for {}, transitioning to {}",
+                                                                             sliceKey.artifact(),
+                                                                             successState);
+                                                                    transitionTo(sliceKey, successState);
+                                                                })
+                                                     .onFailure(cause -> {
+                                                                    log.warn("Operation failed for {}: {}, transitioning to {}",
+                                                                             sliceKey.artifact(),
+                                                                             cause.message(),
+                                                                             failureState);
+                                                                    transitionTo(sliceKey, failureState);
+                                                                });
+                                        })
                              .onFailure(cause -> logStateUpdateFailure(sliceKey, cause));
             }
 
@@ -468,10 +490,16 @@ public interface NodeDeploymentManager {
             }
 
             private void updateSliceState(SliceNodeKey sliceKey, SliceState newState) {
+                log.debug("updateSliceState: {} -> {}",
+                          sliceKey,
+                          newState);
                 var value = new SliceNodeValue(newState);
                 KVCommand<AetherKey> command = new KVCommand.Put<>(sliceKey, value);
                 // Submit command to cluster for consensus
                 cluster.apply(List.of(command))
+                       .onSuccess(_ -> log.debug("State update succeeded: {} -> {}",
+                                                 sliceKey.artifact(),
+                                                 newState))
                        .onFailure(cause -> logStateUpdateFailure(sliceKey, cause));
             }
 
@@ -521,6 +549,8 @@ public interface NodeDeploymentManager {
                                  SliceActionConfig configuration,
                                  MessageRouter router,
                                  AtomicReference<NodeDeploymentState> state) implements NodeDeploymentManager {
+            private static final Logger log = LoggerFactory.getLogger(NodeDeploymentManager.class);
+
             @Override
             public void onValuePut(ValuePut<AetherKey, AetherValue> valuePut) {
                 state.get()
@@ -535,17 +565,27 @@ public interface NodeDeploymentManager {
 
             @Override
             public void onQuorumStateChange(QuorumStateNotification quorumStateNotification) {
+                log.info("Node {} received QuorumStateNotification: {}", self()
+                                                                             .id(), quorumStateNotification);
                 switch (quorumStateNotification) {
-                    case ESTABLISHED -> state()
-                                             .set(new NodeDeploymentState.ActiveNodeDeploymentState(self(),
-                                                                                                    sliceStore(),
-                                                                                                    configuration(),
-                                                                                                    cluster(),
-                                                                                                    kvStore(),
-                                                                                                    invocationHandler(),
-                                                                                                    routeRegistry(),
-                                                                                                    router(),
-                                                                                                    new ConcurrentHashMap<>()));
+                    case ESTABLISHED -> {
+                        // Only activate if currently dormant (idempotent)
+                        if (state()
+                                 .get() instanceof NodeDeploymentState.DormantNodeDeploymentState) {
+                            state()
+                                 .set(new NodeDeploymentState.ActiveNodeDeploymentState(self(),
+                                                                                        sliceStore(),
+                                                                                        configuration(),
+                                                                                        cluster(),
+                                                                                        kvStore(),
+                                                                                        invocationHandler(),
+                                                                                        routeRegistry(),
+                                                                                        router(),
+                                                                                        new ConcurrentHashMap<>()));
+                            log.info("Node {} NodeDeploymentManager activated", self()
+                                                                                    .id());
+                        }
+                    }
                     case DISAPPEARED -> {
                         // Clean up any pending operations before going dormant
                         // Individual Promise timeouts will handle their own cleanup

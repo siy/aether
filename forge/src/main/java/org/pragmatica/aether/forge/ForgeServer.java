@@ -1,5 +1,7 @@
 package org.pragmatica.aether.forge;
 
+import org.pragmatica.aether.forge.load.ConfigurableLoadRunner;
+import org.pragmatica.aether.forge.simulator.EntryPointMetrics;
 import org.pragmatica.lang.io.TimeSpan;
 
 import java.awt.*;
@@ -38,6 +40,7 @@ public final class ForgeServer {
 
     private ForgeCluster cluster;
     private LoadGenerator loadGenerator;
+    private ConfigurableLoadRunner configurableLoadRunner;
     private ForgeMetrics metrics;
     private ForgeApiHandler apiHandler;
     private StaticFileHandler staticHandler;
@@ -84,19 +87,21 @@ public final class ForgeServer {
         // Initialize components
         metrics = ForgeMetrics.forgeMetrics();
         cluster = ForgeCluster.forgeCluster(clusterSize);
-        loadGenerator = LoadGenerator.loadGenerator(port, metrics);
-        apiHandler = ForgeApiHandler.forgeApiHandler(cluster, loadGenerator, metrics);
+        var entryPointMetrics = EntryPointMetrics.entryPointMetrics();
+        loadGenerator = LoadGenerator.loadGenerator(port, metrics, entryPointMetrics);
+        configurableLoadRunner = ConfigurableLoadRunner.create(port, metrics, entryPointMetrics);
+        apiHandler = ForgeApiHandler.forgeApiHandler(cluster, loadGenerator, metrics, configurableLoadRunner);
         staticHandler = StaticFileHandler.staticFileHandler();
         // Start the cluster
         log.info("Starting {} node cluster...", clusterSize);
-        var startResult = cluster.start()
-                                 .await(TimeSpan.timeSpan(60)
-                                                .seconds());
-        if (startResult.isFailure()) {
-            startResult.onFailure(cause -> log.error("Failed to start cluster: {}", cause.message()));
-            System.exit(1);
-            return;
-        }
+        cluster.start()
+               .await(TimeSpan.timeSpan(60)
+                              .seconds())
+               .onFailure(cause -> {
+                   log.error("Failed to start cluster: {}",
+                             cause.message());
+                   System.exit(1);
+               });
         // Wait for cluster to stabilize
         Thread.sleep(2000);
         // Start metrics collection

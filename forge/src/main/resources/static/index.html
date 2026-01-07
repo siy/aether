@@ -22,6 +22,7 @@
         <!-- Navigation Tabs -->
         <nav class="nav-tabs">
             <button class="nav-tab active" data-page="overview">Overview</button>
+            <button class="nav-tab" data-page="load-testing">Load Testing</button>
             <button class="nav-tab" data-page="config">Configuration</button>
             <button class="nav-tab" data-page="alerts">Alerts</button>
             <button class="nav-tab" data-page="cluster">Cluster</button>
@@ -146,6 +147,79 @@
                             <button id="btn-apply-multiplier" class="btn btn-small btn-secondary">Apply</button>
                         </div>
                         <button id="btn-reset" class="btn btn-secondary btn-small">Reset</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page: Load Testing -->
+        <div id="page-load-testing" class="page">
+            <div class="load-testing-grid">
+                <!-- Configuration Upload -->
+                <div class="panel panel-wide">
+                    <h2>Configuration</h2>
+                    <div class="load-config-section">
+                        <textarea id="load-config-text" placeholder="Paste TOML configuration here...&#10;&#10;Example:&#10;[[load]]&#10;target = &quot;InventoryService.checkStock&quot;&#10;rate = &quot;100/s&quot;&#10;duration = &quot;5m&quot;&#10;&#10;[load.path]&#10;sku = &quot;${random:SKU-#####}&quot;" rows="10"></textarea>
+                        <div class="load-config-actions">
+                            <button id="btn-upload-config" class="btn btn-primary">Upload Config</button>
+                            <span id="load-config-status"></span>
+                        </div>
+                    </div>
+                    <div class="load-config-info" id="load-config-info">
+                        <span>No configuration loaded</span>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="panel">
+                    <h2>Controls</h2>
+                    <div class="load-controls-section">
+                        <div class="load-state-display">
+                            <span class="state-label">State:</span>
+                            <span id="load-runner-state" class="state-value">IDLE</span>
+                        </div>
+                        <div class="load-control-buttons">
+                            <button id="btn-load-start" class="btn btn-success">Start</button>
+                            <button id="btn-load-pause" class="btn btn-warning">Pause</button>
+                            <button id="btn-load-resume" class="btn btn-info">Resume</button>
+                            <button id="btn-load-stop" class="btn btn-danger">Stop</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Per-Target Metrics -->
+                <div class="panel panel-wide">
+                    <h2>Per-Target Metrics</h2>
+                    <div class="load-metrics-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Target</th>
+                                    <th>Rate (actual/target)</th>
+                                    <th>Requests</th>
+                                    <th>Success</th>
+                                    <th>Failures</th>
+                                    <th>Success %</th>
+                                    <th>Avg Latency</th>
+                                    <th>Remaining</th>
+                                </tr>
+                            </thead>
+                            <tbody id="load-targets-body">
+                                <tr><td colspan="8" class="placeholder">No targets running</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Pattern Help -->
+                <div class="panel">
+                    <h2>Pattern Reference</h2>
+                    <div class="pattern-help">
+                        <div class="pattern-item"><code>${uuid}</code> - Random UUID</div>
+                        <div class="pattern-item"><code>${random:SKU-#####}</code> - # = digit, ? = letter, * = alphanumeric</div>
+                        <div class="pattern-item"><code>${range:1-100}</code> - Random integer in range</div>
+                        <div class="pattern-item"><code>${choice:NYC,LAX,CHI}</code> - Random pick from list</div>
+                        <div class="pattern-item"><code>${seq:1000}</code> - Sequential counter</div>
                     </div>
                 </div>
             </div>

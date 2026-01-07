@@ -221,7 +221,6 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     private void handleGet(ChannelHandlerContext ctx, String uri) {
         var node = nodeSupplier.get();
-
         // Handle dashboard static files
         if (uri.equals("/dashboard") || uri.equals("/dashboard/")) {
             serveDashboardFile(ctx, "index.html", CONTENT_TYPE_HTML);
@@ -235,19 +234,17 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             serveDashboardFile(ctx, "dashboard.js", CONTENT_TYPE_JS);
             return;
         }
-
         // Handle /api/ prefixed endpoints
         if (uri.startsWith("/api/")) {
-            handleApiGet(ctx, node, uri.substring(4)); // Strip /api prefix
+            handleApiGet(ctx, node, uri.substring(4));
+            // Strip /api prefix
             return;
         }
-
         // Handle repository requests (no /api prefix)
         if (uri.startsWith("/repository/")) {
             handleRepositoryGet(ctx, node, uri);
             return;
         }
-
         sendError(ctx, HttpResponseStatus.NOT_FOUND);
     }
 
@@ -257,19 +254,16 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             sendText(ctx, "");
             return;
         }
-
         // Handle rolling update paths
         if (uri.startsWith("/rolling-update/") || uri.equals("/rolling-updates")) {
             handleRollingUpdateGet(ctx, node, uri);
             return;
         }
-
         // Handle Prometheus metrics endpoint
         if (uri.equals("/metrics/prometheus")) {
             sendPrometheus(ctx, observability.scrape());
             return;
         }
-
         // Handle invocation metrics with optional query parameters
         if (uri.startsWith("/invocation-metrics")) {
             var path = extractPath(uri);
@@ -286,7 +280,6 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             }
             return;
         }
-
         var response = switch (uri) {
             case "/status" -> buildStatusResponse(node);
             case "/nodes" -> buildNodesResponse(node);
@@ -304,10 +297,10 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             case "/controller/status" -> buildControllerStatusResponse(node);
             case "/ttm/status" -> buildTtmStatusResponse(node);
             case "/node-metrics" -> buildNodeMetricsResponse(node);
-            case "/events" -> "[]"; // Empty events for Node (Forge provides events)
+            case "/events" -> "[]";
+            // Empty events for Node (Forge provides events)
             default -> (String) null;
         };
-
         if (response != null) {
             sendJson(ctx, response);
         } else {
@@ -364,29 +357,25 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     private void handlePost(ChannelHandlerContext ctx, String uri, FullHttpRequest request) {
         var node = nodeSupplier.get();
-
         // Handle repository PUT requests (binary content, no /api prefix)
         if (uri.startsWith("/repository/")) {
             handleRepositoryPut(ctx, node, uri, request);
             return;
         }
-
         // Require /api/ prefix for API endpoints
         if (!uri.startsWith("/api/")) {
             sendError(ctx, HttpResponseStatus.NOT_FOUND);
             return;
         }
-
-        var apiUri = uri.substring(4); // Strip /api prefix
+        var apiUri = uri.substring(4);
+        // Strip /api prefix
         var body = request.content()
                           .toString(CharsetUtil.UTF_8);
-
         // Handle rolling update POST paths
         if (apiUri.startsWith("/rolling-update")) {
             handleRollingUpdatePost(ctx, node, apiUri, body);
             return;
         }
-
         switch (apiUri) {
             case "/deploy" -> handleDeploy(ctx, node, body);
             case "/scale" -> handleScale(ctx, node, body);
@@ -407,9 +396,8 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             sendError(ctx, HttpResponseStatus.NOT_FOUND);
             return;
         }
-
-        var apiUri = uri.substring(4); // Strip /api prefix
-
+        var apiUri = uri.substring(4);
+        // Strip /api prefix
         // DELETE /api/thresholds/{metric}
         if (apiUri.startsWith("/thresholds/")) {
             var metric = apiUri.substring("/thresholds/".length());
@@ -880,21 +868,19 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private String buildStatusResponse(AetherNode node) {
         var sb = new StringBuilder();
         sb.append("{");
-
         // Uptime
         var uptimeSeconds = node.uptimeSeconds();
         sb.append("\"uptimeSeconds\":")
           .append(uptimeSeconds)
           .append(",");
-
         // Cluster info
         sb.append("\"cluster\":{");
         var allMetrics = node.metricsCollector()
                              .allMetrics();
         var connectedNodes = allMetrics.keySet();
         var leaderId = node.leader()
-                           .fold(() -> "none", NodeId::id);
-
+                           .fold(() -> "none",
+                                 NodeId::id);
         sb.append("\"nodeCount\":")
           .append(connectedNodes.size())
           .append(",");
@@ -902,12 +888,12 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
           .append(leaderId)
           .append("\",");
         sb.append("\"nodes\":[");
-
         boolean first = true;
         for (NodeId nodeId : connectedNodes) {
             if (!first) sb.append(",");
             var isLeader = node.leader()
-                               .fold(() -> false, l -> l.equals(nodeId));
+                               .fold(() -> false,
+                                     l -> l.equals(nodeId));
             sb.append("{\"id\":\"")
               .append(nodeId.id())
               .append("\",\"isLeader\":")
@@ -916,7 +902,6 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             first = false;
         }
         sb.append("]},");
-
         // Slice count
         var sliceCount = node.sliceStore()
                              .loaded()
@@ -924,7 +909,6 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         sb.append("\"sliceCount\":")
           .append(sliceCount)
           .append(",");
-
         // Metrics summary
         var derived = node.snapshotCollector()
                           .derivedMetrics();
@@ -938,7 +922,6 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         sb.append("\"avgLatencyMs\":")
           .append(derived.latencyP50());
         sb.append("},");
-
         // Node info
         sb.append("\"nodeId\":\"")
           .append(node.self()
@@ -951,7 +934,6 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         sb.append("\"leader\":\"")
           .append(leaderId)
           .append("\"");
-
         sb.append("}");
         return sb.toString();
     }
@@ -1469,10 +1451,12 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
               .append(metrics.getOrDefault("cpuUsage", 0.0))
               .append(",");
             sb.append("\"heapUsedMb\":")
-              .append(metrics.getOrDefault("heapUsedMb", 0.0).longValue())
+              .append(metrics.getOrDefault("heapUsedMb", 0.0)
+                             .longValue())
               .append(",");
             sb.append("\"heapMaxMb\":")
-              .append(metrics.getOrDefault("heapMaxMb", 0.0).longValue());
+              .append(metrics.getOrDefault("heapMaxMb", 0.0)
+                             .longValue());
             sb.append("}");
             first = false;
         }

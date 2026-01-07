@@ -51,6 +51,7 @@ function switchPage(page) {
     if (page === 'config') loadConfigPage();
     if (page === 'alerts') loadAlertsPage();
     if (page === 'cluster') loadClusterPage();
+    if (page === 'load-testing') loadLoadTestingPage();
 }
 
 // ===============================
@@ -768,4 +769,160 @@ async function loadSlicesStatus() {
             <div class="slice-instances">${instances || '<span class="no-slices">No instances</span>'}</div>
         </div>`;
     }).join('');
+}
+
+// ===============================
+// Load Testing Page
+// ===============================
+
+let loadTestingPollInterval = null;
+
+function loadLoadTestingPage() {
+    initLoadTestingControls();
+    startLoadTestingPolling();
+    refreshLoadConfig();
+    refreshLoadStatus();
+}
+
+function initLoadTestingControls() {
+    // Upload config button
+    const uploadBtn = document.getElementById('btn-upload-config');
+    if (uploadBtn && !uploadBtn._initialized) {
+        uploadBtn.addEventListener('click', uploadLoadConfig);
+        uploadBtn._initialized = true;
+    }
+
+    // Control buttons
+    const startBtn = document.getElementById('btn-load-start');
+    const pauseBtn = document.getElementById('btn-load-pause');
+    const resumeBtn = document.getElementById('btn-load-resume');
+    const stopBtn = document.getElementById('btn-load-stop');
+
+    if (startBtn && !startBtn._initialized) {
+        startBtn.addEventListener('click', () => loadAction('start'));
+        startBtn._initialized = true;
+    }
+    if (pauseBtn && !pauseBtn._initialized) {
+        pauseBtn.addEventListener('click', () => loadAction('pause'));
+        pauseBtn._initialized = true;
+    }
+    if (resumeBtn && !resumeBtn._initialized) {
+        resumeBtn.addEventListener('click', () => loadAction('resume'));
+        resumeBtn._initialized = true;
+    }
+    if (stopBtn && !stopBtn._initialized) {
+        stopBtn.addEventListener('click', () => loadAction('stop'));
+        stopBtn._initialized = true;
+    }
+}
+
+function startLoadTestingPolling() {
+    if (loadTestingPollInterval) {
+        clearInterval(loadTestingPollInterval);
+    }
+    loadTestingPollInterval = setInterval(() => {
+        if (currentPage === 'load-testing') {
+            refreshLoadStatus();
+        }
+    }, 1000);
+}
+
+async function uploadLoadConfig() {
+    const textarea = document.getElementById('load-config-text');
+    const statusSpan = document.getElementById('load-config-status');
+    const configInfo = document.getElementById('load-config-info');
+
+    if (!textarea.value.trim()) {
+        statusSpan.innerHTML = '<span class="error">Please enter a configuration</span>';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/load/config', {
+            method: 'POST',
+            body: textarea.value
+        });
+        const data = await response.json();
+
+        if (data.error) {
+            statusSpan.innerHTML = `<span class="error">${escapeHtml(data.error)}</span>`;
+        } else {
+            statusSpan.innerHTML = `<span class="success">Loaded ${data.targetCount} targets (${data.totalRps} req/s)</span>`;
+            configInfo.innerHTML = `<span class="success">${data.targetCount} targets configured, ${data.totalRps} total req/s</span>`;
+        }
+    } catch (e) {
+        statusSpan.innerHTML = `<span class="error">Upload failed: ${e.message}</span>`;
+    }
+}
+
+async function loadAction(action) {
+    try {
+        const response = await fetch(`/api/load/${action}`, { method: 'POST' });
+        const data = await response.json();
+
+        const stateSpan = document.getElementById('load-runner-state');
+        if (data.state) {
+            stateSpan.textContent = data.state;
+            stateSpan.className = 'state-value ' + data.state.toLowerCase();
+        }
+        if (data.error) {
+            const statusSpan = document.getElementById('load-config-status');
+            statusSpan.innerHTML = `<span class="error">${escapeHtml(data.error)}</span>`;
+        }
+    } catch (e) {
+        console.error('Load action failed:', e);
+    }
+}
+
+async function refreshLoadConfig() {
+    try {
+        const response = await fetch('/api/load/config');
+        const data = await response.json();
+
+        const configInfo = document.getElementById('load-config-info');
+        if (data.targetCount > 0) {
+            configInfo.innerHTML = `<span class="success">${data.targetCount} targets configured, ${data.totalRps} total req/s</span>`;
+        } else {
+            configInfo.innerHTML = '<span>No configuration loaded</span>';
+        }
+    } catch (e) {
+        console.error('Failed to load config:', e);
+    }
+}
+
+async function refreshLoadStatus() {
+    try {
+        const response = await fetch('/api/load/status');
+        const data = await response.json();
+
+        // Update state
+        const stateSpan = document.getElementById('load-runner-state');
+        if (stateSpan) {
+            stateSpan.textContent = data.state;
+            stateSpan.className = 'state-value ' + data.state.toLowerCase();
+        }
+
+        // Update targets table
+        const tbody = document.getElementById('load-targets-body');
+        if (tbody) {
+            if (!data.targets || data.targets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="placeholder">No targets running</td></tr>';
+            } else {
+                tbody.innerHTML = data.targets.map(t => `
+                    <tr>
+                        <td>${escapeHtml(t.name)}</td>
+                        <td>${t.actualRate} / ${t.targetRate}</td>
+                        <td>${t.requests.toLocaleString()}</td>
+                        <td class="success">${t.success.toLocaleString()}</td>
+                        <td class="error">${t.failures.toLocaleString()}</td>
+                        <td>${t.successRate.toFixed(1)}%</td>
+                        <td>${t.avgLatencyMs.toFixed(1)}ms</td>
+                        <td>${t.remaining || '-'}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+    } catch (e) {
+        console.error('Failed to refresh load status:', e);
+    }
 }

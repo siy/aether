@@ -2,6 +2,8 @@ package org.pragmatica.aether.forge;
 
 import org.pragmatica.aether.forge.ForgeCluster.ClusterStatus;
 import org.pragmatica.aether.forge.ForgeMetrics.MetricsSnapshot;
+import org.pragmatica.aether.forge.load.ConfigurableLoadRunner;
+import org.pragmatica.aether.forge.load.LoadConfig;
 import org.pragmatica.aether.forge.simulator.BackendSimulation;
 import org.pragmatica.aether.forge.simulator.ChaosController;
 import org.pragmatica.aether.forge.simulator.ChaosEvent;
@@ -48,6 +50,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     private final LoadGenerator loadGenerator;
     private final ForgeMetrics metrics;
     private final ChaosController chaosController;
+    private final ConfigurableLoadRunner configurableLoadRunner;
     private static final int MAX_EVENTS = 100;
     private final Deque<ForgeEvent> events = new ConcurrentLinkedDeque<>();
     private final long startTime = System.currentTimeMillis();
@@ -63,17 +66,20 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
 
     private ForgeApiHandler(ForgeCluster cluster,
                             LoadGenerator loadGenerator,
-                            ForgeMetrics metrics) {
+                            ForgeMetrics metrics,
+                            ConfigurableLoadRunner configurableLoadRunner) {
         this.cluster = cluster;
         this.loadGenerator = loadGenerator;
         this.metrics = metrics;
         this.chaosController = ChaosController.chaosController(this::executeChaosEvent);
+        this.configurableLoadRunner = configurableLoadRunner;
     }
 
     public static ForgeApiHandler forgeApiHandler(ForgeCluster cluster,
                                                   LoadGenerator loadGenerator,
-                                                  ForgeMetrics metrics) {
-        return new ForgeApiHandler(cluster, loadGenerator, metrics);
+                                                  ForgeMetrics metrics,
+                                                  ConfigurableLoadRunner configurableLoadRunner) {
+        return new ForgeApiHandler(cluster, loadGenerator, metrics, configurableLoadRunner);
     }
 
     /**
@@ -112,8 +118,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
         var path = request.uri();
         log.debug("API request: {} {}", request.method(), path);
-        try {
-            switch (request.method().name()) {
+        try{
+            switch (request.method()
+                           .name()) {
                 case "GET" -> handleGet(ctx, path);
                 case "POST" -> handlePost(ctx, path, request);
                 case "PUT" -> handlePut(ctx, path, request);
@@ -129,11 +136,14 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     private void handleGet(ChannelHandlerContext ctx, String path) {
         switch (path) {
             case "/api/panel/chaos" -> handleChaosPanel(ctx);
+            case "/api/panel/load" -> handleLoadPanel(ctx);
             case "/api/status" -> handleStatus(ctx);
             case "/api/events" -> handleEvents(ctx);
             case "/api/node-metrics" -> handleNodeMetrics(ctx);
             case "/api/chaos/status" -> handleChaosStatus(ctx);
             case "/api/slices/status" -> handleSlicesStatus(ctx);
+            case "/api/load/config" -> handleGetLoadConfig(ctx);
+            case "/api/load/status" -> handleLoadStatus(ctx);
             default -> handleGetWithPrefix(ctx, path);
         }
     }
@@ -159,17 +169,25 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
             case "/api/load/ramp" -> handleRampLoad(ctx, request);
             case "/api/load/config/enabled" -> handleSetEnabled(ctx, request);
             case "/api/load/config/multiplier" -> handleSetMultiplier(ctx, request);
+            case "/api/load/config" -> handlePostLoadConfig(ctx, request);
+            case "/api/load/start" -> handleLoadStart(ctx);
+            case "/api/load/stop" -> handleLoadStop(ctx);
+            case "/api/load/pause" -> handleLoadPause(ctx);
+            case "/api/load/resume" -> handleLoadResume(ctx);
             default -> handlePostWithPrefix(ctx, path, request);
         }
     }
 
     private void handlePostWithPrefix(ChannelHandlerContext ctx, String path, FullHttpRequest request) {
         if (path.startsWith("/api/chaos/stop/")) {
-            handleChaosStop(ctx, path.substring("/api/chaos/stop/".length()));
+            handleChaosStop(ctx,
+                            path.substring("/api/chaos/stop/".length()));
         } else if (path.startsWith("/api/chaos/kill/")) {
-            handleKillNode(ctx, path.substring("/api/chaos/kill/".length()));
+            handleKillNode(ctx,
+                           path.substring("/api/chaos/kill/".length()));
         } else if (path.startsWith("/api/load/set/")) {
-            handleSetLoad(ctx, path.substring("/api/load/set/".length()));
+            handleSetLoad(ctx,
+                          path.substring("/api/load/set/".length()));
         } else if (path.startsWith("/repository/")) {
             handleRepositoryPut(ctx, path, request);
         } else if (path.startsWith("/api/")) {
@@ -252,9 +270,13 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     private void sendHtml(ChannelHandlerContext ctx, String html) {
         var buf = Unpooled.copiedBuffer(html, StandardCharsets.UTF_8);
         var response = new DefaultFullHttpResponse(HTTP_1_1, OK, buf);
-        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
-        response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, buf.readableBytes());
-        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+        response.headers()
+                .set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+        response.headers()
+                .setInt(HttpHeaderNames.CONTENT_LENGTH,
+                        buf.readableBytes());
+        ctx.writeAndFlush(response)
+           .addListener(ChannelFutureListener.CLOSE);
     }
 
     private void handleStatus(ChannelHandlerContext ctx) {
@@ -679,7 +701,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         sendResponse(ctx, OK, "{\"success\":true,\"enabled\":" + enabled + "}");
     }
 
-    private static final Fn1<Cause, String> UNKNOWN_CHAOS_TYPE = Causes.forOneValue("Unknown chaos type: {}");
+    private static final Fn1<Cause, String> UNKNOWN_CHAOS_TYPE = Causes.forOneValue("Unknown chaos type: %s");
 
     /**
      * Inject a chaos event.
@@ -1032,14 +1054,14 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         var node = leaderNode.get();
         var mgmtPort = node.managementPort();
         proxyHttpDelete("localhost", mgmtPort, endpoint)
-                    .onSuccess(response -> sendResponse(ctx, OK, response))
-                    .onFailure(cause -> {
-                                   log.error("Failed to proxy DELETE to leader: {}",
-                                             cause.message());
-                                   sendResponse(ctx,
-                                                INTERNAL_SERVER_ERROR,
-                                                "{\"error\": \"" + escapeJson(cause.message()) + "\"}");
-                               });
+                       .onSuccess(response -> sendResponse(ctx, OK, response))
+                       .onFailure(cause -> {
+                                      log.error("Failed to proxy DELETE to leader: {}",
+                                                cause.message());
+                                      sendResponse(ctx,
+                                                   INTERNAL_SERVER_ERROR,
+                                                   "{\"error\": \"" + escapeJson(cause.message()) + "\"}");
+                                  });
     }
 
     /**
@@ -1350,6 +1372,222 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
             return Double.parseDouble(matcher.group(1));
         }
         return defaultValue;
+    }
+
+    // ========== Load Config Endpoints ==========
+    /**
+     * GET /api/load/config - Get current load configuration
+     */
+    private void handleGetLoadConfig(ChannelHandlerContext ctx) {
+        var config = configurableLoadRunner.config();
+        var targets = config.targets()
+                            .stream()
+                            .map(t -> String.format("""
+                {"name":"%s","target":"%s","rate":"%d/s","duration":%s}""",
+                                                    t.name()
+                                                     .or(t.target()),
+                                                    t.target(),
+                                                    t.rate()
+                                                     .requestsPerSecond(),
+                                                    t.duration()
+                                                     .map(d -> "\"" + d + "\"")
+                                                     .or("null")))
+                            .toList();
+        var json = String.format("""
+            {"targetCount":%d,"totalRps":%d,"targets":[%s]}""",
+                                 config.targets()
+                                       .size(),
+                                 config.totalRequestsPerSecond(),
+                                 String.join(",", targets));
+        sendResponse(ctx, OK, json);
+    }
+
+    /**
+     * POST /api/load/config - Upload TOML configuration
+     */
+    private void handlePostLoadConfig(ChannelHandlerContext ctx, FullHttpRequest request) {
+        var body = request.content()
+                          .toString(StandardCharsets.UTF_8);
+        configurableLoadRunner.loadConfigFromString(body)
+                              .onSuccess(config -> {
+                                             addEvent("LOAD_CONFIG",
+                                                      "Loaded " + config.targets()
+                                                                       .size() + " targets");
+                                             sendResponse(ctx,
+                                                          OK,
+                                                          String.format("{\"success\":true,\"targetCount\":%d,\"totalRps\":%d}",
+                                                                        config.targets()
+                                                                              .size(),
+                                                                        config.totalRequestsPerSecond()));
+                                         })
+                              .onFailure(cause -> sendResponse(ctx,
+                                                               BAD_REQUEST,
+                                                               "{\"error\":\"" + escapeJson(cause.message()) + "\"}"));
+    }
+
+    /**
+     * POST /api/load/start - Start load generation
+     */
+    private void handleLoadStart(ChannelHandlerContext ctx) {
+        configurableLoadRunner.start()
+                              .onSuccess(state -> {
+                                             addEvent("LOAD_START", "Load generation started");
+                                             sendResponse(ctx, OK, "{\"success\":true,\"state\":\"" + state + "\"}");
+                                         })
+                              .onFailure(cause -> sendResponse(ctx,
+                                                               BAD_REQUEST,
+                                                               "{\"error\":\"" + escapeJson(cause.message()) + "\"}"));
+    }
+
+    /**
+     * POST /api/load/stop - Stop load generation
+     */
+    private void handleLoadStop(ChannelHandlerContext ctx) {
+        configurableLoadRunner.stop();
+        addEvent("LOAD_STOP", "Load generation stopped");
+        sendResponse(ctx, OK, "{\"success\":true,\"state\":\"IDLE\"}");
+    }
+
+    /**
+     * POST /api/load/pause - Pause load generation
+     */
+    private void handleLoadPause(ChannelHandlerContext ctx) {
+        configurableLoadRunner.pause();
+        addEvent("LOAD_PAUSE", "Load generation paused");
+        sendResponse(ctx, OK, "{\"success\":true,\"state\":\"" + configurableLoadRunner.state() + "\"}");
+    }
+
+    /**
+     * POST /api/load/resume - Resume load generation
+     */
+    private void handleLoadResume(ChannelHandlerContext ctx) {
+        configurableLoadRunner.resume();
+        addEvent("LOAD_RESUME", "Load generation resumed");
+        sendResponse(ctx, OK, "{\"success\":true,\"state\":\"" + configurableLoadRunner.state() + "\"}");
+    }
+
+    /**
+     * GET /api/load/status - Get load generation status with per-target metrics
+     */
+    private void handleLoadStatus(ChannelHandlerContext ctx) {
+        var state = configurableLoadRunner.state();
+        var metrics = configurableLoadRunner.allTargetMetrics();
+        var targets = metrics.entrySet()
+                             .stream()
+                             .map(e -> {
+                                      var m = e.getValue();
+                                      return String.format("""
+                    {"name":"%s","targetRate":%d,"actualRate":%d,"requests":%d,\
+"success":%d,"failures":%d,"avgLatencyMs":%.2f,"successRate":%.1f%s}""",
+                                                           m.name(),
+                                                           m.targetRate(),
+                                                           m.actualRate(),
+                                                           m.totalRequests(),
+                                                           m.successCount(),
+                                                           m.failureCount(),
+                                                           m.avgLatencyMs(),
+                                                           m.successRate(),
+                                                           m.remainingDuration()
+                                                            .map(d -> ",\"remaining\":\"" + d + "\"")
+                                                            .or(""));
+                                  })
+                             .toList();
+        var json = String.format("""
+            {"state":"%s","targetCount":%d,"targets":[%s]}""",
+                                 state,
+                                 metrics.size(),
+                                 String.join(",", targets));
+        sendResponse(ctx, OK, json);
+    }
+
+    /**
+     * GET /api/panel/load - Load Testing panel HTML
+     */
+    private void handleLoadPanel(ChannelHandlerContext ctx) {
+        var panelHtml = """
+            <!-- Load Testing Panel -->
+            <div class="panel-section">
+                <h3>Configuration</h3>
+                <div class="config-upload">
+                    <textarea id="loadConfigText" placeholder="Paste TOML config here..." rows="10"></textarea>
+                    <button onclick="uploadLoadConfig()">Upload Config</button>
+                </div>
+                <div id="loadConfigStatus"></div>
+            </div>
+            <div class="panel-section">
+                <h3>Controls</h3>
+                <div class="load-controls">
+                    <button onclick="loadAction('start')" class="btn-primary">Start</button>
+                    <button onclick="loadAction('pause')" class="btn-warning">Pause</button>
+                    <button onclick="loadAction('resume')" class="btn-success">Resume</button>
+                    <button onclick="loadAction('stop')" class="btn-danger">Stop</button>
+                </div>
+                <div class="load-state">
+                    State: <span id="loadState">IDLE</span>
+                </div>
+            </div>
+            <div class="panel-section">
+                <h3>Per-Target Metrics</h3>
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th>Target</th>
+                            <th>Rate (actual/target)</th>
+                            <th>Requests</th>
+                            <th>Success Rate</th>
+                            <th>Avg Latency</th>
+                        </tr>
+                    </thead>
+                    <tbody id="loadTargetMetrics">
+                    </tbody>
+                </table>
+            </div>
+            <script>
+            function uploadLoadConfig() {
+                const text = document.getElementById('loadConfigText').value;
+                fetch('/api/load/config', { method: 'POST', body: text })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.error) {
+                            document.getElementById('loadConfigStatus').innerHTML =
+                                '<span class="error">' + data.error + '</span>';
+                        } else {
+                            document.getElementById('loadConfigStatus').innerHTML =
+                                '<span class="success">Loaded ' + data.targetCount + ' targets</span>';
+                        }
+                    });
+            }
+            function loadAction(action) {
+                fetch('/api/load/' + action, { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.state) {
+                            document.getElementById('loadState').textContent = data.state;
+                        }
+                    });
+            }
+            function updateLoadMetrics() {
+                fetch('/api/load/status')
+                    .then(r => r.json())
+                    .then(data => {
+                        document.getElementById('loadState').textContent = data.state;
+                        const tbody = document.getElementById('loadTargetMetrics');
+                        tbody.innerHTML = data.targets.map(t =>
+                            '<tr>' +
+                            '<td>' + t.name + '</td>' +
+                            '<td>' + t.actualRate + '/' + t.targetRate + '</td>' +
+                            '<td>' + t.requests + '</td>' +
+                            '<td>' + t.successRate.toFixed(1) + '%</td>' +
+                            '<td>' + t.avgLatencyMs.toFixed(1) + 'ms</td>' +
+                            '</tr>'
+                        ).join('');
+                    });
+            }
+            setInterval(updateLoadMetrics, 1000);
+            updateLoadMetrics();
+            </script>
+            """;
+        sendHtml(ctx, panelHtml);
     }
 
     @Override

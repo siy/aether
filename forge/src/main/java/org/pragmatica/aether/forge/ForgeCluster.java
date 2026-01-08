@@ -280,6 +280,16 @@ public final class ForgeCluster {
         return nodes.size();
     }
 
+    /**
+     * Get the management port of the current leader node.
+     */
+    public Option<Integer> getLeaderManagementPort() {
+        return currentLeader()
+                            .flatMap(leaderId -> Option.option(nodeInfos.get(leaderId)))
+                            .map(info -> BASE_MGMT_PORT + (info.address()
+                                                               .port() - BASE_PORT));
+    }
+
     private AetherNode createNode(NodeId nodeId, int port, int mgmtPort, List<NodeInfo> coreNodes) {
         var topology = new TopologyConfig(nodeId, timeSpan(500)
                                                           .millis(), timeSpan(100)

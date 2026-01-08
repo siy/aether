@@ -1,11 +1,19 @@
 package org.pragmatica.aether.forge;
 
 import org.pragmatica.aether.forge.load.ConfigurableLoadRunner;
+import org.pragmatica.aether.forge.load.LoadConfigLoader;
 import org.pragmatica.aether.forge.simulator.EntryPointMetrics;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.io.TimeSpan;
 
 import java.awt.*;
+import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -24,19 +32,33 @@ import org.slf4j.LoggerFactory;
 /**
  * Main entry point for Aether Forge.
  * Starts a cluster, load generator, and web dashboard on a single JVM.
+ * <p>
+ * CLI arguments:
+ * <pre>
+ * --config &lt;forge.toml&gt;       Forge cluster configuration
+ * --blueprint &lt;file.toml&gt;     Blueprint to deploy on startup
+ * --load-config &lt;file.toml&gt;   Load test configuration
+ * --auto-start                Start load generation after config loaded
+ * </pre>
+ * <p>
+ * Environment variables (override CLI args):
+ * <pre>
+ * FORGE_CONFIG        - Path to forge.toml
+ * FORGE_BLUEPRINT     - Path to blueprint file
+ * FORGE_LOAD_CONFIG   - Path to load config file
+ * FORGE_AUTO_START    - Set to "true" to auto-start load
+ * FORGE_PORT          - Dashboard port (backwards compatible)
+ * CLUSTER_SIZE        - Number of nodes (backwards compatible)
+ * LOAD_RATE           - Initial load rate (backwards compatible)
+ * </pre>
  */
 public final class ForgeServer {
     private static final Logger log = LoggerFactory.getLogger(ForgeServer.class);
 
-    private static final int DEFAULT_PORT = 8888;
-    private static final int DEFAULT_CLUSTER_SIZE = 5;
-    private static final int DEFAULT_LOAD_RATE = 1000;
     private static final int MAX_CONTENT_LENGTH = 65536;
 
-    // 64KB
-    private final int port;
-    private final int clusterSize;
-    private final int loadRate;
+    private final StartupConfig startupConfig;
+    private final ForgeConfig forgeConfig;
 
     private ForgeCluster cluster;
     private LoadGenerator loadGenerator;
@@ -50,25 +72,31 @@ public final class ForgeServer {
     private Channel serverChannel;
     private ScheduledExecutorService metricsScheduler;
 
-    private ForgeServer(int port, int clusterSize, int loadRate) {
-        this.port = port;
-        this.clusterSize = clusterSize;
-        this.loadRate = loadRate;
+    private ForgeServer(StartupConfig startupConfig, ForgeConfig forgeConfig) {
+        this.startupConfig = startupConfig;
+        this.forgeConfig = forgeConfig;
     }
 
     public static void main(String[] args) {
-        var port = getEnvInt("FORGE_PORT", DEFAULT_PORT);
-        var clusterSize = getEnvInt("CLUSTER_SIZE", DEFAULT_CLUSTER_SIZE);
-        var loadRate = getEnvInt("LOAD_RATE", DEFAULT_LOAD_RATE);
-        log.info("=".repeat(60));
-        log.info("    AETHER FORGE");
-        log.info("=".repeat(60));
-        log.info("  Dashboard: http://localhost:{}", port);
-        log.info("  Cluster size: {} nodes", clusterSize);
-        log.info("  Initial load: {} req/sec", loadRate);
-        log.info("=".repeat(60));
-        var server = new ForgeServer(port, clusterSize, loadRate);
-        // Handle shutdown gracefully
+        // Parse CLI args with env var overrides
+        var startupConfigResult = StartupConfig.parse(args);
+        startupConfigResult.onFailure(cause -> {
+            log.error("Configuration error: {}", cause.message());
+            System.exit(1);
+        });
+        if (startupConfigResult.isFailure()) {
+            return;
+        }
+        var startupConfig = startupConfigResult.unwrap();
+        // Load forge config if specified
+        var forgeConfig = startupConfig.forgeConfig()
+                                       .map(ForgeConfig::load)
+                                       .map(r -> r.onFailure(c -> log.error("Failed to load forge config: {}",
+                                                                            c.message()))
+                                                  .or(ForgeConfig.defaultConfig()))
+                                       .or(createDefaultForgeConfig(startupConfig));
+        printBanner(forgeConfig, startupConfig);
+        var server = new ForgeServer(startupConfig, forgeConfig);
         Runtime.getRuntime()
                .addShutdownHook(new Thread(() -> {
                    log.info("Shutting down...");
@@ -82,18 +110,40 @@ public final class ForgeServer {
         }
     }
 
+    private static ForgeConfig createDefaultForgeConfig(StartupConfig startupConfig) {
+        return ForgeConfig.forgeConfig(startupConfig.clusterSize(),
+                                       ForgeConfig.DEFAULT_MANAGEMENT_PORT,
+                                       startupConfig.port());
+    }
+
+    private static void printBanner(ForgeConfig forgeConfig, StartupConfig startupConfig) {
+        log.info("=".repeat(60));
+        log.info("    AETHER FORGE");
+        log.info("=".repeat(60));
+        log.info("  Dashboard: http://localhost:{}", forgeConfig.dashboardPort());
+        log.info("  Cluster size: {} nodes", forgeConfig.nodes());
+        startupConfig.blueprint()
+                     .onPresent(p -> log.info("  Blueprint: {}", p));
+        startupConfig.loadConfig()
+                     .onPresent(p -> log.info("  Load config: {}", p));
+        if (startupConfig.autoStart()) {
+            log.info("  Auto-start: enabled");
+        }
+        log.info("=".repeat(60));
+    }
+
     public void start() throws Exception {
         log.info("Starting Forge server...");
         // Initialize components
         metrics = ForgeMetrics.forgeMetrics();
-        cluster = ForgeCluster.forgeCluster(clusterSize);
+        cluster = ForgeCluster.forgeCluster(forgeConfig.nodes());
         var entryPointMetrics = EntryPointMetrics.entryPointMetrics();
-        loadGenerator = LoadGenerator.loadGenerator(port, metrics, entryPointMetrics);
-        configurableLoadRunner = ConfigurableLoadRunner.create(port, metrics, entryPointMetrics);
+        loadGenerator = LoadGenerator.loadGenerator(forgeConfig.dashboardPort(), metrics, entryPointMetrics);
+        configurableLoadRunner = ConfigurableLoadRunner.create(forgeConfig.dashboardPort(), metrics, entryPointMetrics);
         apiHandler = ForgeApiHandler.forgeApiHandler(cluster, loadGenerator, metrics, configurableLoadRunner);
         staticHandler = StaticFileHandler.staticFileHandler();
         // Start the cluster
-        log.info("Starting {} node cluster...", clusterSize);
+        log.info("Starting {} node cluster...", forgeConfig.nodes());
         cluster.start()
                .await(TimeSpan.timeSpan(60)
                               .seconds())
@@ -107,19 +157,75 @@ public final class ForgeServer {
         // Start metrics collection
         metricsScheduler = Executors.newSingleThreadScheduledExecutor();
         metricsScheduler.scheduleAtFixedRate(metrics::snapshot, 500, 500, TimeUnit.MILLISECONDS);
-        // Start load generator
-        log.info("Starting load generator at {} req/sec", loadRate);
-        loadGenerator.start(loadRate);
+        // Deploy blueprint if specified
+        startupConfig.blueprint()
+                     .onPresent(this::deployBlueprint);
+        // Load config if specified
+        startupConfig.loadConfig()
+                     .onPresent(this::loadLoadConfig);
+        // Start load generator (legacy or auto-start)
+        if (startupConfig.autoStart() && startupConfig.loadConfig()
+                                                      .isPresent()) {
+            log.info("Auto-starting load generation...");
+            configurableLoadRunner.start();
+            apiHandler.addEvent("LOAD_STARTED", "Load generation auto-started");
+        } else if (startupConfig.loadRate() > 0 && startupConfig.loadConfig()
+                                                                .isEmpty()) {
+            log.info("Starting load generator at {} req/sec", startupConfig.loadRate());
+            loadGenerator.start(startupConfig.loadRate());
+        }
         // Add initial event
-        apiHandler.addEvent("CLUSTER_STARTED", "Forge cluster started with " + clusterSize + " nodes");
+        apiHandler.addEvent("CLUSTER_STARTED", "Forge cluster started with " + forgeConfig.nodes() + " nodes");
         // Start HTTP server
         startHttpServer();
         // Open browser
-        openBrowser("http://localhost:" + port);
+        openBrowser("http://localhost:" + forgeConfig.dashboardPort());
         log.info("Forge server running. Press Ctrl+C to stop.");
         // Keep main thread alive
         Thread.currentThread()
               .join();
+    }
+
+    private void deployBlueprint(Path blueprintPath) {
+        log.info("Deploying blueprint from {}...", blueprintPath);
+        try{
+            var content = Files.readString(blueprintPath);
+            var leaderPort = cluster.getLeaderManagementPort()
+                                    .or(forgeConfig.managementPort());
+            var client = HttpClient.newHttpClient();
+            var request = HttpRequest.newBuilder()
+                                     .uri(URI.create("http://localhost:" + leaderPort + "/api/blueprint"))
+                                     .header("Content-Type", "application/toml")
+                                     .POST(HttpRequest.BodyPublishers.ofString(content))
+                                     .build();
+            var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                log.info("Blueprint deployed successfully");
+                apiHandler.addEvent("BLUEPRINT_DEPLOYED", "Blueprint deployed from " + blueprintPath.getFileName());
+                // Wait for deployment to propagate
+                Thread.sleep(1000);
+            } else {
+                log.error("Failed to deploy blueprint: {} - {}", response.statusCode(), response.body());
+            }
+        } catch (IOException | InterruptedException e) {
+            log.error("Failed to deploy blueprint: {}", e.getMessage());
+        }
+    }
+
+    private void loadLoadConfig(Path loadConfigPath) {
+        log.info("Loading load configuration from {}...", loadConfigPath);
+        LoadConfigLoader.load(loadConfigPath)
+                        .onSuccess(config -> {
+                                       configurableLoadRunner.setConfig(config);
+                                       log.info("Load configuration loaded: {} targets",
+                                                config.targets()
+                                                      .size());
+                                       apiHandler.addEvent("LOAD_CONFIG_LOADED",
+                                                           "Loaded " + config.targets()
+                                                                             .size() + " targets from " + loadConfigPath.getFileName());
+                                   })
+                        .onFailure(cause -> log.error("Failed to load configuration: {}",
+                                                      cause.message()));
     }
 
     public void stop() {
@@ -168,10 +274,10 @@ public final class ForgeServer {
         })
                  .option(ChannelOption.SO_BACKLOG, 128)
                  .childOption(ChannelOption.SO_KEEPALIVE, true);
-        serverChannel = bootstrap.bind(port)
+        serverChannel = bootstrap.bind(forgeConfig.dashboardPort())
                                  .sync()
                                  .channel();
-        log.info("HTTP server started on port {}", port);
+        log.info("HTTP server started on port {}", forgeConfig.dashboardPort());
     }
 
     private void openBrowser(String url) {
@@ -187,18 +293,6 @@ public final class ForgeServer {
         } catch (Exception e) {
             log.info("Could not open browser automatically. Please navigate to: {}", url);
         }
-    }
-
-    private static int getEnvInt(String name, int defaultValue) {
-        var value = System.getenv(name);
-        if (value != null) {
-            try{
-                return Integer.parseInt(value);
-            } catch (NumberFormatException e) {
-                log.warn("Invalid {} value: {}, using default: {}", name, value, defaultValue);
-            }
-        }
-        return defaultValue;
     }
 
     /**

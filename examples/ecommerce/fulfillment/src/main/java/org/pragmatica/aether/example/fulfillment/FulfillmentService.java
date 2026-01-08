@@ -81,7 +81,7 @@ public interface FulfillmentService {
             EXCEPTION
         }
 
-        public static Shipment create(OrderId orderId, Address destination, ShippingOption option) {
+        public static Shipment shipment(OrderId orderId, Address destination, ShippingOption option) {
             return new Shipment(IdGenerator.generate("SHP"),
                                 orderId,
                                 IdGenerator.generate("TRK"),
@@ -119,7 +119,7 @@ public interface FulfillmentService {
                                     String description,
                                     Shipment.ShipmentStatus status) {}
 
-        public static TrackingInfo fromShipment(Shipment shipment) {
+        public static TrackingInfo trackingInfo(Shipment shipment) {
             var events = List.of(new TrackingEvent(shipment.createdAt(),
                                                    "Origin",
                                                    "Shipment created",
@@ -214,7 +214,7 @@ class FulfillmentServiceImpl implements FulfillmentService {
             return new FulfillmentError.SameDayNotAvailable(request.shippingAddress()
                                                                    .state()).promise();
         }
-        var shipment = Shipment.create(request.orderId(), request.shippingAddress(), request.shippingOption());
+        var shipment = Shipment.shipment(request.orderId(), request.shippingAddress(), request.shippingOption());
         shipments.put(shipment.trackingNumber(), shipment);
         return Promise.success(shipment);
     }
@@ -223,7 +223,7 @@ class FulfillmentServiceImpl implements FulfillmentService {
     public Promise<TrackingInfo> trackShipment(TrackShipmentRequest request) {
         return Option.option(shipments.get(request.trackingNumber()))
                      .toResult(new FulfillmentError.ShipmentNotFound(request.trackingNumber()))
-                     .map(TrackingInfo::fromShipment)
+                     .map(TrackingInfo::trackingInfo)
                      .async();
     }
 

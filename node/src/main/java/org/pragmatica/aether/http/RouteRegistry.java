@@ -161,16 +161,14 @@ class RouteRegistryImpl implements RouteRegistry {
                                   List<Binding> bindings) {
         var routeKey = RouteKey.routeKey(httpMethod, pathPattern);
         var routeValue = new RouteValue(artifact, methodName, httpMethod, pathPattern, bindings);
-        // Check if route already exists in local cache
-        var existing = routes.get(routeKey);
-        if (existing != null) {
-            return validateExisting(existing.value(), routeValue);
-        }
-        // Check KV-Store directly (in case we missed a notification)
-        return kvStore.get(routeKey)
-                      .map(value -> (RouteValue) value)
-                      .fold(() -> submitRoute(routeKey, routeValue),
-                            stored -> validateExisting(stored, routeValue));
+        // Check if route already exists in local cache, then fall back to KV-Store
+        return Option.option(routes.get(routeKey))
+                     .fold(() -> kvStore.get(routeKey)
+                                        .map(value -> (RouteValue) value)
+                                        .fold(() -> submitRoute(routeKey, routeValue),
+                                              stored -> validateExisting(stored, routeValue)),
+                           existing -> validateExisting(existing.value(),
+                                                        routeValue));
     }
 
     private Promise<Unit> validateExisting(RouteValue existing, RouteValue attempted) {

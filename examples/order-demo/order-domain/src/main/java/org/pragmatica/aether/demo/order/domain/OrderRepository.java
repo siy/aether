@@ -1,6 +1,7 @@
 package org.pragmatica.aether.demo.order.domain;
 
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Unit;
 
 import java.time.Instant;
 import java.util.List;
@@ -15,7 +16,7 @@ public interface OrderRepository {
     /**
      * Store a new order.
      */
-    void save(StoredOrder order);
+    Unit save(StoredOrder order);
 
     /**
      * Find order by ID.
@@ -25,7 +26,7 @@ public interface OrderRepository {
     /**
      * Update order status.
      */
-    void updateStatus(String orderId, OrderStatus newStatus);
+    Unit updateStatus(String orderId, OrderStatus newStatus);
 
     /**
      * Get a random order ID (for testing).
@@ -115,10 +116,11 @@ final class InMemoryOrderRepository implements OrderRepository {
     }
 
     @Override
-    public void save(StoredOrder order) {
+    public Unit save(StoredOrder order) {
         orders.put(order.orderId()
                         .value(),
                    order);
+        return Unit.unit();
     }
 
     @Override
@@ -127,11 +129,12 @@ final class InMemoryOrderRepository implements OrderRepository {
     }
 
     @Override
-    public void updateStatus(String orderId, OrderStatus newStatus) {
+    public Unit updateStatus(String orderId, OrderStatus newStatus) {
         var order = orders.get(orderId);
         if (order != null) {
             orders.put(orderId, order.withStatus(newStatus));
         }
+        return Unit.unit();
     }
 
     @Override

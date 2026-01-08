@@ -15,7 +15,7 @@ class DeploymentMetricsTest {
 
     @Test
     void started_creates_in_progress_metrics() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L);
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L);
 
         assertThat(metrics.artifact()).isEqualTo(artifact);
         assertThat(metrics.nodeId()).isEqualTo(nodeId);
@@ -29,7 +29,7 @@ class DeploymentMetricsTest {
 
     @Test
     void withLoadTime_updates_load_timestamp() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L);
 
         assertThat(metrics.startTime()).isEqualTo(1000L);
@@ -39,7 +39,7 @@ class DeploymentMetricsTest {
 
     @Test
     void withLoadedTime_updates_loaded_timestamp() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L);
 
@@ -50,7 +50,7 @@ class DeploymentMetricsTest {
 
     @Test
     void withActivateTime_updates_activate_timestamp() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L)
             .withActivateTime(1600L);
@@ -62,7 +62,7 @@ class DeploymentMetricsTest {
 
     @Test
     void completed_sets_active_time_and_success_status() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L)
             .withActivateTime(1600L)
@@ -74,7 +74,7 @@ class DeploymentMetricsTest {
 
     @Test
     void failedLoading_sets_failed_loading_status() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .failedLoading(1200L);
 
@@ -86,7 +86,7 @@ class DeploymentMetricsTest {
 
     @Test
     void failedActivating_sets_failed_activating_status() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L)
             .withActivateTime(1600L)
@@ -98,7 +98,7 @@ class DeploymentMetricsTest {
 
     @Test
     void fullDeploymentTime_returns_total_time_for_completed() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L)
             .withActivateTime(1600L)
@@ -109,7 +109,7 @@ class DeploymentMetricsTest {
 
     @Test
     void fullDeploymentTime_returns_negative_for_incomplete() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L);
 
         assertThat(metrics.fullDeploymentTime()).isEqualTo(-1L);
@@ -117,7 +117,7 @@ class DeploymentMetricsTest {
 
     @Test
     void netDeploymentTime_returns_loaded_to_active_time() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L)
             .withActivateTime(1600L)
@@ -128,7 +128,7 @@ class DeploymentMetricsTest {
 
     @Test
     void netDeploymentTime_returns_negative_for_incomplete() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L);
 
@@ -137,7 +137,7 @@ class DeploymentMetricsTest {
 
     @Test
     void transitionLatencies_calculates_all_transitions() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L)
             .withActivateTime(1600L)
@@ -153,7 +153,7 @@ class DeploymentMetricsTest {
 
     @Test
     void transitionLatencies_omits_incomplete_transitions() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L);
 
         var latencies = metrics.transitionLatencies();
@@ -166,7 +166,7 @@ class DeploymentMetricsTest {
 
     @Test
     void toEntry_converts_to_protocol_format() {
-        var metrics = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var metrics = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L)
             .completed(2000L);
@@ -183,7 +183,7 @@ class DeploymentMetricsTest {
 
     @Test
     void fromEntry_roundtrip_preserves_data() {
-        var original = DeploymentMetrics.started(artifact, nodeId, 1000L)
+        var original = DeploymentMetrics.deploymentMetrics(artifact, nodeId, 1000L)
             .withLoadTime(1100L)
             .withLoadedTime(1500L)
             .withActivateTime(1600L)

@@ -237,35 +237,39 @@ public interface NodeDeploymentManager {
             private void registerRoutes(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                               .onPresent(ls -> {
-                                              var slice = ls.slice();
-                                              var routes = slice.routes();
-                                              if (routes.isEmpty()) {
-                                                  return;
-                                              }
-                                              routes.forEach(route -> {
-                                                                 var bindings = route.bindings()
-                                                                                     .stream()
-                                                                                     .map(this::toBinding)
-                                                                                     .toList();
-                                                                 routeRegistry.register(artifact,
-                                                                                        route.methodName(),
-                                                                                        route.httpMethod(),
-                                                                                        route.pathPattern(),
-                                                                                        bindings)
-                                                                              .onSuccess(_ -> log.info("Registered route {} {} -> {}:{}",
-                                                                                                       route.httpMethod(),
-                                                                                                       route.pathPattern(),
-                                                                                                       artifact.asString(),
-                                                                                                       route.methodName()))
-                                                                              .onFailure(cause -> log.error("Failed to register route {} {} -> {}:{}: {}",
-                                                                                                            route.httpMethod(),
-                                                                                                            route.pathPattern(),
-                                                                                                            artifact.asString(),
-                                                                                                            route.methodName(),
-                                                                                                            cause.message()));
-                                                             });
-                                          });
+                               .onPresent(ls -> registerRoutesForSlice(artifact,
+                                                                       ls.slice()));
+            }
+
+            private void registerRoutesForSlice(Artifact artifact, org.pragmatica.aether.slice.Slice slice) {
+                var routes = slice.routes();
+                if (routes.isEmpty()) {
+                    return;
+                }
+                routes.forEach(route -> registerSingleRoute(artifact, route));
+            }
+
+            private void registerSingleRoute(Artifact artifact, SliceRoute route) {
+                var bindings = route.bindings()
+                                    .stream()
+                                    .map(this::toBinding)
+                                    .toList();
+                routeRegistry.register(artifact,
+                                       route.methodName(),
+                                       route.httpMethod(),
+                                       route.pathPattern(),
+                                       bindings)
+                             .onSuccess(_ -> log.info("Registered route {} {} -> {}:{}",
+                                                      route.httpMethod(),
+                                                      route.pathPattern(),
+                                                      artifact.asString(),
+                                                      route.methodName()))
+                             .onFailure(cause -> log.error("Failed to register route {} {} -> {}:{}: {}",
+                                                           route.httpMethod(),
+                                                           route.pathPattern(),
+                                                           artifact.asString(),
+                                                           route.methodName(),
+                                                           cause.message()));
             }
 
             private Binding toBinding(SliceRoute.RouteBinding binding) {
@@ -281,25 +285,28 @@ public interface NodeDeploymentManager {
             private void registerSliceForInvocation(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                               .onPresent(ls -> {
-                                              var slice = ls.slice();
-                                              // Use configured provider or default to Fury (thread-safe, no pooling needed)
-                SerializerFactoryProvider serializerProvider = configuration.serializerProvider();
-                                              if (serializerProvider == null) {
-                                                  serializerProvider = FurySerializerFactoryProvider.furySerializerFactoryProvider();
-                                              }
-                                              // Create SerializerFactory from provider using all type tokens
+                               .onPresent(ls -> registerSliceBridge(artifact,
+                                                                    ls.slice()));
+            }
+
+            private void registerSliceBridge(Artifact artifact, org.pragmatica.aether.slice.Slice slice) {
+                var serializerProvider = resolveSerializerProvider();
                 var typeTokens = slice.methods()
                                       .stream()
                                       .flatMap(m -> java.util.stream.Stream.of(m.parameterType(),
                                                                                m.returnType()))
                                       .collect(Collectors.toList());
-                                              var serializerFactory = serializerProvider.createFactory(typeTokens);
-                                              // Create and register SliceBridge
+                var serializerFactory = serializerProvider.createFactory(typeTokens);
                 var sliceBridge = SliceBridgeImpl.sliceBridge(artifact, slice, serializerFactory);
-                                              invocationHandler.registerSlice(artifact, sliceBridge);
-                                              log.info("Registered slice {} for invocation", artifact);
-                                          });
+                invocationHandler.registerSlice(artifact, sliceBridge);
+                log.info("Registered slice {} for invocation", artifact);
+            }
+
+            private SerializerFactoryProvider resolveSerializerProvider() {
+                var provider = configuration.serializerProvider();
+                return provider != null
+                       ? provider
+                       : FurySerializerFactoryProvider.furySerializerFactoryProvider();
             }
 
             private void unregisterSliceFromInvocation(SliceNodeKey sliceKey) {
@@ -311,27 +318,29 @@ public interface NodeDeploymentManager {
             private void publishEndpoints(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                               .onPresent(ls -> {
-                                              var slice = ls.slice();
-                                              var methods = slice.methods();
-                                              // Use nodeId hash as instance number to ensure uniqueness across cluster
+                               .onPresent(ls -> publishEndpointsForSlice(artifact,
+                                                                         ls.slice()));
+            }
+
+            private void publishEndpointsForSlice(Artifact artifact, org.pragmatica.aether.slice.Slice slice) {
+                var methods = slice.methods();
                 int instanceNumber = Math.abs(self.id()
                                                   .hashCode());
-                                              var commands = methods.stream()
-                                                                    .map(method -> createEndpointPutCommand(artifact,
-                                                                                                            method.name(),
-                                                                                                            instanceNumber))
-                                                                    .toList();
-                                              if (!commands.isEmpty()) {
-                                                  cluster.apply(commands)
-                                                         .onSuccess(_ -> log.info("Published {} endpoints for slice {}",
-                                                                                  methods.size(),
-                                                                                  artifact))
-                                                         .onFailure(cause -> log.error("Failed to publish endpoints for {}: {}",
-                                                                                       artifact,
-                                                                                       cause.message()));
-                                              }
-                                          });
+                var commands = methods.stream()
+                                      .map(method -> createEndpointPutCommand(artifact,
+                                                                              method.name(),
+                                                                              instanceNumber))
+                                      .toList();
+                if (commands.isEmpty()) {
+                    return;
+                }
+                cluster.apply(commands)
+                       .onSuccess(_ -> log.info("Published {} endpoints for slice {}",
+                                                methods.size(),
+                                                artifact))
+                       .onFailure(cause -> log.error("Failed to publish endpoints for {}: {}",
+                                                     artifact,
+                                                     cause.message()));
             }
 
             private KVCommand<AetherKey> createEndpointPutCommand(org.pragmatica.aether.artifact.Artifact artifact,
@@ -389,34 +398,32 @@ public interface NodeDeploymentManager {
             private Promise<Unit> unpublishEndpoints(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 return findLoadedSlice(artifact)
-                                      .map(ls -> {
-                                               var slice = ls.slice();
-                                               var methods = slice.methods();
-                                               int instanceNumber = Math.abs(self.id()
-                                                                                 .hashCode());
-                                               var commands = methods.stream()
-                                                                     .map(method -> createEndpointRemoveCommand(artifact,
-                                                                                                                method.name(),
-                                                                                                                instanceNumber))
-                                                                     .toList();
-                                               if (commands.isEmpty()) {
-                                                   return Promise.success(Unit.unit());
-                                               }
-                                               return cluster.apply(commands)
-                                                             .map(_ -> {
-                                                                      log.info("Unpublished {} endpoints for slice {}",
-                                                                               methods.size(),
-                                                                               artifact);
-                                                                      return Unit.unit();
-                                                                  })
-                                                             .mapError(cause -> {
-                                                                           log.error("Failed to unpublish endpoints for {}: {}",
-                                                                                     artifact,
-                                                                                     cause.message());
-                                                                           return cause;
-                                                                       });
-                                           })
+                                      .map(ls -> unpublishEndpointsForSlice(artifact,
+                                                                            ls.slice()))
                                       .or(Promise.success(Unit.unit()));
+            }
+
+            private Promise<Unit> unpublishEndpointsForSlice(Artifact artifact,
+                                                             org.pragmatica.aether.slice.Slice slice) {
+                var methods = slice.methods();
+                int instanceNumber = Math.abs(self.id()
+                                                  .hashCode());
+                var commands = methods.stream()
+                                      .map(method -> createEndpointRemoveCommand(artifact,
+                                                                                 method.name(),
+                                                                                 instanceNumber))
+                                      .toList();
+                if (commands.isEmpty()) {
+                    return Promise.success(Unit.unit());
+                }
+                return cluster.apply(commands)
+                              .mapToUnit()
+                              .onSuccess(_ -> log.info("Unpublished {} endpoints for slice {}",
+                                                       methods.size(),
+                                                       artifact))
+                              .onFailure(cause -> log.error("Failed to unpublish endpoints for {}: {}",
+                                                            artifact,
+                                                            cause.message()));
             }
 
             private KVCommand<AetherKey> createEndpointRemoveCommand(org.pragmatica.aether.artifact.Artifact artifact,

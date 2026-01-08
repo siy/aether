@@ -1,7 +1,9 @@
 package org.pragmatica.aether.forge;
 
 import org.pragmatica.aether.forge.ForgeCluster.ClusterStatus;
+import org.pragmatica.aether.forge.ForgeCluster.NodeMetrics;
 import org.pragmatica.aether.forge.ForgeMetrics.MetricsSnapshot;
+import org.pragmatica.aether.forge.ForgeResponses.*;
 import org.pragmatica.aether.forge.load.ConfigurableLoadRunner;
 import org.pragmatica.aether.forge.load.LoadConfig;
 import org.pragmatica.aether.forge.simulator.BackendSimulation;
@@ -9,6 +11,9 @@ import org.pragmatica.aether.forge.simulator.ChaosController;
 import org.pragmatica.aether.forge.simulator.ChaosEvent;
 import org.pragmatica.aether.forge.simulator.SimulatorConfig;
 import org.pragmatica.aether.forge.simulator.SimulatorMode;
+import org.pragmatica.http.HttpOperations;
+import org.pragmatica.http.JdkHttpOperations;
+import org.pragmatica.json.JsonMapper;
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Promise;
@@ -23,8 +28,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -45,13 +54,26 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 @Sharable
 public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private static final Logger log = LoggerFactory.getLogger(ForgeApiHandler.class);
+    private static final int MAX_EVENTS = 100;
+
+    // Cached patterns for JSON extraction (avoids Pattern.compile() in hot paths)
+    private static final Pattern MULTIPLIER_PATTERN = Pattern.compile("\"multiplier\"\\s*:\\s*([\\d.]+)");
+    private static final Pattern ENABLED_PATTERN = Pattern.compile("\"enabled\"\\s*:\\s*(true|false)");
+    private static final Pattern MODE_PATTERN = Pattern.compile("\"mode\"\\s*:\\s*\"(\\w+)\"");
+
+    // Pattern cache for dynamic key extraction
+    private static final Map<String, Pattern> INT_PATTERN_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Pattern> STRING_PATTERN_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Pattern> BOOLEAN_PATTERN_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Pattern> DOUBLE_PATTERN_CACHE = new ConcurrentHashMap<>();
 
     private final ForgeCluster cluster;
     private final LoadGenerator loadGenerator;
     private final ForgeMetrics metrics;
     private final ChaosController chaosController;
     private final ConfigurableLoadRunner configurableLoadRunner;
-    private static final int MAX_EVENTS = 100;
+    private final JsonMapper json = JsonMapper.defaultJsonMapper();
+    private final HttpOperations http = JdkHttpOperations.jdkHttpOperations();
     private final Deque<ForgeEvent> events = new ConcurrentLinkedDeque<>();
     private final long startTime = System.currentTimeMillis();
     private final Object modeLock = new Object();
@@ -60,9 +82,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
 
     // Simulated inventory state (for standalone mode without real slices)
     private volatile boolean infiniteInventoryMode = true;
-    private volatile long simulatedReservations = 0;
-    private volatile long simulatedReleases = 0;
-    private volatile long simulatedStockOuts = 0;
+    private final AtomicLong simulatedReservations = new AtomicLong(0);
+    private final AtomicLong simulatedReleases = new AtomicLong(0);
+    private final AtomicLong simulatedStockOuts = new AtomicLong(0);
 
     private ForgeApiHandler(ForgeCluster cluster,
                             LoadGenerator loadGenerator,
@@ -282,11 +304,26 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     private void handleStatus(ChannelHandlerContext ctx) {
         var clusterStatus = cluster.status();
         var metricsSnapshot = metrics.currentMetrics();
-        var loadStatus = new LoadStatus(loadGenerator.currentRate(),
-                                        loadGenerator.targetRate(),
-                                        loadGenerator.isRunning());
-        var response = new StatusResponse(clusterStatus, metricsSnapshot, loadStatus, uptimeSeconds(), sliceCount());
-        sendResponse(ctx, OK, toJson(response));
+        var nodeInfos = clusterStatus.nodes()
+                                     .stream()
+                                     .map(n -> new NodeInfo(n.id(),
+                                                            n.port(),
+                                                            n.state(),
+                                                            n.isLeader()))
+                                     .toList();
+        var clusterInfo = new ClusterInfo(nodeInfos, clusterStatus.leaderId(), nodeInfos.size());
+        var metricsInfo = new MetricsInfo(metricsSnapshot.requestsPerSecond(),
+                                          metricsSnapshot.successRate(),
+                                          metricsSnapshot.avgLatencyMs(),
+                                          metricsSnapshot.totalSuccess(),
+                                          metricsSnapshot.totalFailures());
+        var loadInfo = new LoadInfo(loadGenerator.currentRate(), loadGenerator.targetRate(), loadGenerator.isRunning());
+        var response = new FullStatusResponse(clusterInfo, metricsInfo, loadInfo, uptimeSeconds(), sliceCount());
+        json.writeAsString(response)
+            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
+            .onFailure(cause -> sendResponse(ctx,
+                                             INTERNAL_SERVER_ERROR,
+                                             errorJson(cause.message())));
     }
 
     private void handleAddNode(ChannelHandlerContext ctx) {
@@ -410,25 +447,16 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     }
 
     private void handleEvents(ChannelHandlerContext ctx) {
-        var eventsJson = new StringBuilder("[");
-        var first = true;
-        for (var event : events) {
-            if (!first) eventsJson.append(",");
-            first = false;
-            eventsJson.append("{")
-                      .append("\"timestamp\":\"")
-                      .append(event.timestamp)
-                      .append("\",")
-                      .append("\"type\":\"")
-                      .append(event.type)
-                      .append("\",")
-                      .append("\"message\":\"")
-                      .append(escapeJson(event.message))
-                      .append("\"")
-                      .append("}");
-        }
-        eventsJson.append("]");
-        sendResponse(ctx, OK, eventsJson.toString());
+        var eventsList = events.stream()
+                               .map(e -> new ForgeEvent(e.timestamp(),
+                                                        e.type(),
+                                                        e.message()))
+                               .toList();
+        json.writeAsString(eventsList)
+            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
+            .onFailure(cause -> sendResponse(ctx,
+                                             INTERNAL_SERVER_ERROR,
+                                             errorJson(cause.message())));
     }
 
     private void handleResetMetrics(ChannelHandlerContext ctx) {
@@ -440,31 +468,18 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
 
     private void handleNodeMetrics(ChannelHandlerContext ctx) {
         var nodeMetrics = cluster.nodeMetrics();
-        var json = new StringBuilder("[");
-        var first = true;
-        for (var m : nodeMetrics) {
-            if (!first) json.append(",");
-            first = false;
-            json.append("{")
-                .append("\"nodeId\":\"")
-                .append(m.nodeId())
-                .append("\",")
-                .append("\"isLeader\":")
-                .append(m.isLeader())
-                .append(",")
-                .append("\"cpuUsage\":")
-                .append(String.format("%.3f",
-                                      m.cpuUsage()))
-                .append(",")
-                .append("\"heapUsedMb\":")
-                .append(m.heapUsedMb())
-                .append(",")
-                .append("\"heapMaxMb\":")
-                .append(m.heapMaxMb())
-                .append("}");
-        }
-        json.append("]");
-        sendResponse(ctx, OK, json.toString());
+        var responses = nodeMetrics.stream()
+                                   .map(m -> new NodeMetricsResponse(m.nodeId(),
+                                                                     m.isLeader(),
+                                                                     m.cpuUsage(),
+                                                                     m.heapUsedMb(),
+                                                                     m.heapMaxMb()))
+                                   .toList();
+        json.writeAsString(responses)
+            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
+            .onFailure(cause -> sendResponse(ctx,
+                                             INTERNAL_SERVER_ERROR,
+                                             errorJson(cause.message())));
     }
 
     /**
@@ -510,21 +525,17 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      * Handle listing all available entry points.
      */
     private void handleSimulatorEntryPoints(ChannelHandlerContext ctx) {
-        var entryPoints = loadGenerator.entryPoints();
-        var json = new StringBuilder("{\"entryPoints\":[");
-        var first = true;
-        for (var ep : entryPoints) {
-            if (!first) json.append(",");
-            first = false;
-            var rate = loadGenerator.currentRate(ep);
-            json.append("{\"name\":\"")
-                .append(ep)
-                .append("\",\"rate\":")
-                .append(rate)
-                .append("}");
-        }
-        json.append("]}");
-        sendResponse(ctx, OK, json.toString());
+        var entryPointInfos = loadGenerator.entryPoints()
+                                           .stream()
+                                           .map(ep -> new EntryPointInfo(ep,
+                                                                         loadGenerator.currentRate(ep)))
+                                           .toList();
+        var response = new EntryPointsResponse(entryPointInfos);
+        json.writeAsString(response)
+            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
+            .onFailure(cause -> sendResponse(ctx,
+                                             INTERNAL_SERVER_ERROR,
+                                             errorJson(cause.message())));
     }
 
     /**
@@ -558,8 +569,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         try{
             var body = request.content()
                               .toString(StandardCharsets.UTF_8);
-            var pattern = java.util.regex.Pattern.compile("\"multiplier\"\\s*:\\s*([\\d.]+)");
-            var matcher = pattern.matcher(body);
+            var matcher = MULTIPLIER_PATTERN.matcher(body);
             if (matcher.find()) {
                 var multiplier = Double.parseDouble(matcher.group(1));
                 var newConfig = config.withGlobalMultiplier(multiplier);
@@ -582,8 +592,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         try{
             var body = request.content()
                               .toString(StandardCharsets.UTF_8);
-            var pattern = java.util.regex.Pattern.compile("\"enabled\"\\s*:\\s*(true|false)");
-            var matcher = pattern.matcher(body);
+            var matcher = ENABLED_PATTERN.matcher(body);
             if (matcher.find()) {
                 var enabled = Boolean.parseBoolean(matcher.group(1));
                 var newConfig = config.withLoadGeneratorEnabled(enabled);
@@ -618,8 +627,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         try{
             var body = request.content()
                               .toString(StandardCharsets.UTF_8);
-            var pattern = java.util.regex.Pattern.compile("\"mode\"\\s*:\\s*\"(\\w+)\"");
-            var matcher = pattern.matcher(body);
+            var matcher = MODE_PATTERN.matcher(body);
             if (matcher.find()) {
                 var mode = matcher.group(1);
                 infiniteInventoryMode = "infinite".equalsIgnoreCase(mode);
@@ -644,9 +652,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handleInventoryMetrics(ChannelHandlerContext ctx) {
         var json = String.format("{\"totalReservations\":%d,\"totalReleases\":%d,\"stockOuts\":%d,\"infiniteMode\":%b,\"refillRate\":%d}",
-                                 simulatedReservations,
-                                 simulatedReleases,
-                                 simulatedStockOuts,
+                                 simulatedReservations.get(),
+                                 simulatedReleases.get(),
+                                 simulatedStockOuts.get(),
                                  infiniteInventoryMode,
                                  100);
         sendResponse(ctx, OK, json);
@@ -665,9 +673,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      * Handle inventory reset - simulated.
      */
     private void handleInventoryReset(ChannelHandlerContext ctx) {
-        simulatedReservations = 0;
-        simulatedReleases = 0;
-        simulatedStockOuts = 0;
+        simulatedReservations.set(0);
+        simulatedReleases.set(0);
+        simulatedStockOuts.set(0);
         addEvent("INVENTORY_RESET", "Inventory stock reset to initial levels");
         sendResponse(ctx, OK, "{\"success\":true}");
     }
@@ -1076,103 +1084,43 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      * Execute HTTP POST to a node's ManagementServer.
      */
     private Promise<String> proxyHttpPost(String host, int port, String path, String body) {
-        return Promise.promise(promise -> {
-                                   try{
-                                       var client = java.net.http.HttpClient.newBuilder()
-                                                        .connectTimeout(Duration.ofSeconds(5))
-                                                        .build();
-                                       var request = java.net.http.HttpRequest.newBuilder()
-                                                         .uri(java.net.URI.create("http://" + host + ":" + port + path))
-                                                         .header("Content-Type", "application/json")
-                                                         .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
-                                                         .timeout(Duration.ofSeconds(30))
-                                                         .build();
-                                       client.sendAsync(request,
-                                                        java.net.http.HttpResponse.BodyHandlers.ofString())
-                                             .thenAccept(response -> {
-                                                             if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                                                                 promise.succeed(response.body());
-                                                             } else {
-                                                                 promise.fail(Causes.cause("HTTP " + response.statusCode()
-                                                                                           + ": " + response.body()));
-                                                             }
-                                                         })
-                                             .exceptionally(e -> {
-                                           promise.fail(Causes.fromThrowable(e));
-                                           return null;
-                                       });
-                                   } catch (Exception e) {
-                                       promise.fail(Causes.fromThrowable(e));
-                                   }
-                               });
+        var request = java.net.http.HttpRequest.newBuilder()
+                          .uri(java.net.URI.create("http://" + host + ":" + port + path))
+                          .header("Content-Type", "application/json")
+                          .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+                          .timeout(Duration.ofSeconds(30))
+                          .build();
+        return http.sendString(request)
+                   .flatMap(result -> result.toResult()
+                                            .async());
     }
 
     /**
      * Execute HTTP GET to a node's ManagementServer.
      */
     private Promise<String> proxyHttpGet(String host, int port, String path) {
-        return Promise.promise(promise -> {
-                                   try{
-                                       var client = java.net.http.HttpClient.newBuilder()
-                                                        .connectTimeout(Duration.ofSeconds(5))
-                                                        .build();
-                                       var request = java.net.http.HttpRequest.newBuilder()
-                                                         .uri(java.net.URI.create("http://" + host + ":" + port + path))
-                                                         .GET()
-                                                         .timeout(Duration.ofSeconds(30))
-                                                         .build();
-                                       client.sendAsync(request,
-                                                        java.net.http.HttpResponse.BodyHandlers.ofString())
-                                             .thenAccept(response -> {
-                                                             if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                                                                 promise.succeed(response.body());
-                                                             } else {
-                                                                 promise.fail(Causes.cause("HTTP " + response.statusCode()
-                                                                                           + ": " + response.body()));
-                                                             }
-                                                         })
-                                             .exceptionally(e -> {
-                                           promise.fail(Causes.fromThrowable(e));
-                                           return null;
-                                       });
-                                   } catch (Exception e) {
-                                       promise.fail(Causes.fromThrowable(e));
-                                   }
-                               });
+        var request = java.net.http.HttpRequest.newBuilder()
+                          .uri(java.net.URI.create("http://" + host + ":" + port + path))
+                          .GET()
+                          .timeout(Duration.ofSeconds(30))
+                          .build();
+        return http.sendString(request)
+                   .flatMap(result -> result.toResult()
+                                            .async());
     }
 
     /**
      * Execute HTTP DELETE to a node's ManagementServer.
      */
     private Promise<String> proxyHttpDelete(String host, int port, String path) {
-        return Promise.promise(promise -> {
-                                   try{
-                                       var client = java.net.http.HttpClient.newBuilder()
-                                                        .connectTimeout(Duration.ofSeconds(5))
-                                                        .build();
-                                       var request = java.net.http.HttpRequest.newBuilder()
-                                                         .uri(java.net.URI.create("http://" + host + ":" + port + path))
-                                                         .DELETE()
-                                                         .timeout(Duration.ofSeconds(30))
-                                                         .build();
-                                       client.sendAsync(request,
-                                                        java.net.http.HttpResponse.BodyHandlers.ofString())
-                                             .thenAccept(response -> {
-                                                             if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                                                                 promise.succeed(response.body());
-                                                             } else {
-                                                                 promise.fail(Causes.cause("HTTP " + response.statusCode()
-                                                                                           + ": " + response.body()));
-                                                             }
-                                                         })
-                                             .exceptionally(e -> {
-                                           promise.fail(Causes.fromThrowable(e));
-                                           return null;
-                                       });
-                                   } catch (Exception e) {
-                                       promise.fail(Causes.fromThrowable(e));
-                                   }
-                               });
+        var request = java.net.http.HttpRequest.newBuilder()
+                          .uri(java.net.URI.create("http://" + host + ":" + port + path))
+                          .DELETE()
+                          .timeout(Duration.ofSeconds(30))
+                          .build();
+        return http.sendString(request)
+                   .flatMap(result -> result.toResult()
+                                            .async());
     }
 
     // ==================== Repository API Handlers ====================
@@ -1280,39 +1228,6 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
            .addListener(ChannelFutureListener.CLOSE);
     }
 
-    private String toJson(StatusResponse response) {
-        var nodes = new StringBuilder("[");
-        var first = true;
-        for (var node : response.cluster.nodes()) {
-            if (!first) nodes.append(",");
-            first = false;
-            nodes.append("{")
-                 .append("\"id\":\"")
-                 .append(node.id())
-                 .append("\",")
-                 .append("\"port\":")
-                 .append(node.port())
-                 .append(",")
-                 .append("\"state\":\"")
-                 .append(node.state())
-                 .append("\",")
-                 .append("\"isLeader\":")
-                 .append(node.isLeader())
-                 .append("}");
-        }
-        nodes.append("]");
-        return "{" + "\"cluster\":{" + "\"nodes\":" + nodes + "," + "\"leaderId\":\"" + response.cluster.leaderId()
-               + "\"," + "\"nodeCount\":" + response.cluster.nodes()
-                                                    .size() + "}," + "\"metrics\":{" + "\"requestsPerSecond\":" + String.format("%.1f",
-                                                                                                                                response.metrics.requestsPerSecond())
-               + "," + "\"successRate\":" + String.format("%.2f", response.metrics.successRate()) + ","
-               + "\"avgLatencyMs\":" + String.format("%.2f", response.metrics.avgLatencyMs()) + ","
-               + "\"totalSuccess\":" + response.metrics.totalSuccess() + "," + "\"totalFailures\":" + response.metrics.totalFailures()
-               + "}," + "\"load\":{" + "\"currentRate\":" + response.load.currentRate + "," + "\"targetRate\":" + response.load.targetRate
-               + "," + "\"running\":" + response.load.running + "}," + "\"uptimeSeconds\":" + response.uptimeSeconds
-               + "," + "\"sliceCount\":" + response.sliceCount + "}";
-    }
-
     private String escapeJson(String str) {
         if (str == null) return "";
         return str.replace("\\", "\\\\")
@@ -1323,9 +1238,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     }
 
     private int extractInt(String json, String key, int defaultValue) {
-        var pattern = "\"" + key + "\"\\s*:\\s*(\\d+)";
-        var matcher = java.util.regex.Pattern.compile(pattern)
-                          .matcher(json);
+        var pattern = INT_PATTERN_CACHE.computeIfAbsent(key, k -> Pattern.compile("\"" + k + "\"\\s*:\\s*(\\d+)"));
+        var matcher = pattern.matcher(json);
         if (matcher.find()) {
             return Integer.parseInt(matcher.group(1));
         }
@@ -1333,9 +1247,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     }
 
     private long extractLong(String json, String key, long defaultValue) {
-        var pattern = "\"" + key + "\"\\s*:\\s*(\\d+)";
-        var matcher = java.util.regex.Pattern.compile(pattern)
-                          .matcher(json);
+        var pattern = INT_PATTERN_CACHE.computeIfAbsent(key, k -> Pattern.compile("\"" + k + "\"\\s*:\\s*(\\d+)"));
+        var matcher = pattern.matcher(json);
         if (matcher.find()) {
             return Long.parseLong(matcher.group(1));
         }
@@ -1343,9 +1256,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     }
 
     private String extractString(String json, String key, String defaultValue) {
-        var pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]*)\"";
-        var matcher = java.util.regex.Pattern.compile(pattern)
-                          .matcher(json);
+        var pattern = STRING_PATTERN_CACHE.computeIfAbsent(key,
+                                                           k -> Pattern.compile("\"" + k + "\"\\s*:\\s*\"([^\"]*)\""));
+        var matcher = pattern.matcher(json);
         if (matcher.find()) {
             return matcher.group(1);
         }
@@ -1353,9 +1266,9 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     }
 
     private boolean extractBoolean(String json, String key, boolean defaultValue) {
-        var pattern = "\"" + key + "\"\\s*:\\s*(true|false)";
-        var matcher = java.util.regex.Pattern.compile(pattern)
-                          .matcher(json);
+        var pattern = BOOLEAN_PATTERN_CACHE.computeIfAbsent(key,
+                                                            k -> Pattern.compile("\"" + k + "\"\\s*:\\s*(true|false)"));
+        var matcher = pattern.matcher(json);
         if (matcher.find()) {
             return Boolean.parseBoolean(matcher.group(1));
         }
@@ -1363,9 +1276,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
     }
 
     private double extractDouble(String json, String key, double defaultValue) {
-        var pattern = "\"" + key + "\"\\s*:\\s*([\\d.]+)";
-        var matcher = java.util.regex.Pattern.compile(pattern)
-                          .matcher(json);
+        var pattern = DOUBLE_PATTERN_CACHE.computeIfAbsent(key, k -> Pattern.compile("\"" + k + "\"\\s*:\\s*([\\d.]+)"));
+        var matcher = pattern.matcher(json);
         if (matcher.find()) {
             return Double.parseDouble(matcher.group(1));
         }
@@ -1377,27 +1289,27 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      * GET /api/load/config - Get current load configuration
      */
     private void handleGetLoadConfig(ChannelHandlerContext ctx) {
-        var config = configurableLoadRunner.config();
-        var targets = config.targets()
-                            .stream()
-                            .map(t -> String.format("""
-                {"name":"%s","target":"%s","rate":"%d/s","duration":%s}""",
-                                                    t.name()
-                                                     .or(t.target()),
-                                                    t.target(),
-                                                    t.rate()
-                                                     .requestsPerSecond(),
-                                                    t.duration()
-                                                     .map(d -> "\"" + d + "\"")
-                                                     .or("null")))
-                            .toList();
-        var json = String.format("""
-            {"targetCount":%d,"totalRps":%d,"targets":[%s]}""",
-                                 config.targets()
-                                       .size(),
-                                 config.totalRequestsPerSecond(),
-                                 String.join(",", targets));
-        sendResponse(ctx, OK, json);
+        var loadConfig = configurableLoadRunner.config();
+        var targetInfos = loadConfig.targets()
+                                    .stream()
+                                    .map(t -> new LoadTargetInfo(t.name()
+                                                                  .or(t.target()),
+                                                                 t.target(),
+                                                                 t.rate()
+                                                                  .requestsPerSecond() + "/s",
+                                                                 t.duration()
+                                                                  .map(Object::toString)
+                                                                  .or((String) null)))
+                                    .toList();
+        var response = new LoadConfigResponse(loadConfig.targets()
+                                                        .size(),
+                                              loadConfig.totalRequestsPerSecond(),
+                                              targetInfos);
+        json.writeAsString(response)
+            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
+            .onFailure(cause -> sendResponse(ctx,
+                                             INTERNAL_SERVER_ERROR,
+                                             errorJson(cause.message())));
     }
 
     /**
@@ -1469,33 +1381,26 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
      */
     private void handleLoadStatus(ChannelHandlerContext ctx) {
         var state = configurableLoadRunner.state();
-        var metrics = configurableLoadRunner.allTargetMetrics();
-        var targets = metrics.entrySet()
-                             .stream()
-                             .map(e -> {
-                                      var m = e.getValue();
-                                      return String.format("""
-                    {"name":"%s","targetRate":%d,"actualRate":%d,"requests":%d,\
-"success":%d,"failures":%d,"avgLatencyMs":%.2f,"successRate":%.1f%s}""",
-                                                           m.name(),
-                                                           m.targetRate(),
-                                                           m.actualRate(),
-                                                           m.totalRequests(),
-                                                           m.successCount(),
-                                                           m.failureCount(),
-                                                           m.avgLatencyMs(),
-                                                           m.successRate(),
-                                                           m.remainingDuration()
-                                                            .map(d -> ",\"remaining\":\"" + d + "\"")
-                                                            .or(""));
-                                  })
-                             .toList();
-        var json = String.format("""
-            {"state":"%s","targetCount":%d,"targets":[%s]}""",
-                                 state,
-                                 metrics.size(),
-                                 String.join(",", targets));
-        sendResponse(ctx, OK, json);
+        var targetMetrics = configurableLoadRunner.allTargetMetrics();
+        var targetInfos = targetMetrics.values()
+                                       .stream()
+                                       .map(m -> new LoadRunnerTargetInfo(m.name(),
+                                                                          m.targetRate(),
+                                                                          m.actualRate(),
+                                                                          m.totalRequests(),
+                                                                          m.successCount(),
+                                                                          m.failureCount(),
+                                                                          m.avgLatencyMs(),
+                                                                          m.successRate(),
+                                                                          m.remainingDuration()
+                                                                           .map(Object::toString)))
+                                       .toList();
+        var response = new LoadRunnerStatusResponse(state.name(), targetInfos.size(), targetInfos);
+        json.writeAsString(response)
+            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
+            .onFailure(cause -> sendResponse(ctx,
+                                             INTERNAL_SERVER_ERROR,
+                                             errorJson(cause.message())));
     }
 
     /**
@@ -1594,13 +1499,13 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
         ctx.close();
     }
 
-    private record StatusResponse(ClusterStatus cluster,
-                                  MetricsSnapshot metrics,
-                                  LoadStatus load,
-                                  long uptimeSeconds,
-                                  int sliceCount) {}
+    private String errorJson(String message) {
+        return json.writeAsString(ErrorResponse.error(message))
+                   .or("{}");
+    }
 
-    private record LoadStatus(int currentRate, int targetRate, boolean running) {}
-
-    private record ForgeEvent(String timestamp, String type, String message) {}
+    private String successJson() {
+        return json.writeAsString(SuccessResponse.OK)
+                   .or("{}");
+    }
 }

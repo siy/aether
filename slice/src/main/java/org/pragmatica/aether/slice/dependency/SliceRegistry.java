@@ -10,6 +10,7 @@ import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -93,22 +94,18 @@ public interface SliceRegistry {
     record SliceRegistryImpl(ConcurrentMap<Artifact, Slice> registry) implements SliceRegistry {
         @Override
         public Result<Unit> register(Artifact artifact, Slice slice) {
-            var existing = registry.putIfAbsent(artifact, slice);
-            if (existing != null) {
-                return ALREADY_REGISTERED.apply(artifact.asString())
-                                         .result();
-            }
-            return Result.unitResult();
+            // putIfAbsent returns null on success (nothing was there), returns existing value on failure
+            return Option.option(registry.putIfAbsent(artifact, slice))
+                         .fold(Result::unitResult,
+                               _ -> ALREADY_REGISTERED.apply(artifact.asString())
+                                                      .result());
         }
 
         @Override
         public Result<Unit> unregister(Artifact artifact) {
-            var removed = registry.remove(artifact);
-            if (removed == null) {
-                return NOT_FOUND.apply(artifact.asString())
-                                .result();
-            }
-            return Result.unitResult();
+            return Option.option(registry.remove(artifact))
+                         .toResult(NOT_FOUND.apply(artifact.asString()))
+                         .mapToUnit();
         }
 
         @Override
@@ -124,7 +121,7 @@ public interface SliceRegistry {
                                                              className))
                            .filter(entry -> versionPattern.matches(entry.getKey()
                                                                         .version()))
-                           .map(entry -> entry.getValue())
+                           .map(Map.Entry::getValue)
                            .findFirst()
                            .map(Option::option)
                            .orElse(Option.none());
@@ -149,7 +146,7 @@ public interface SliceRegistry {
                                                  .equals(artifactId))
                            .filter(entry -> versionPattern.matches(entry.getKey()
                                                                         .version()))
-                           .map(entry -> entry.getValue())
+                           .map(Map.Entry::getValue)
                            .findFirst()
                            .map(Option::option)
                            .orElse(Option.none());

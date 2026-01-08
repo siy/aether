@@ -7,6 +7,7 @@ import org.pragmatica.aether.slice.repository.Location;
 import org.pragmatica.aether.slice.repository.Repository;
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
@@ -68,14 +69,16 @@ public interface SliceStoreImpl {
 
         @Override
         public Promise<LoadedSlice> loadSlice(Artifact artifact) {
-            var existing = entries.get(artifact);
-            if (existing != null) {
-                log.debug("Slice {} already loaded", artifact);
-                return Promise.success(existing);
-            }
-            log.info("Loading slice {}", artifact);
-            return locateInRepositories(artifact)
-                                       .flatMap(location -> loadFromLocation(artifact));
+            return Option.option(entries.get(artifact))
+                         .fold(() -> {
+                                   log.info("Loading slice {}", artifact);
+                                   return locateInRepositories(artifact)
+                                                              .flatMap(_ -> loadFromLocation(artifact));
+                               },
+                               existing -> {
+                                   log.debug("Slice {} already loaded", artifact);
+                                   return Promise.success(existing);
+                               });
         }
 
         private Promise<LoadedSlice> loadFromLocation(Artifact artifact) {
@@ -113,11 +116,13 @@ public interface SliceStoreImpl {
 
         @Override
         public Promise<LoadedSlice> activateSlice(Artifact artifact) {
-            var entry = entries.get(artifact);
-            if (entry == null) {
-                return SLICE_NOT_LOADED.apply(artifact.asString())
-                                       .promise();
-            }
+            return Option.option(entries.get(artifact))
+                         .toResult(SLICE_NOT_LOADED.apply(artifact.asString()))
+                         .async()
+                         .flatMap(entry -> activateEntry(artifact, entry));
+        }
+
+        private Promise<LoadedSlice> activateEntry(Artifact artifact, LoadedSliceEntry entry) {
             if (entry.state() == EntryState.ACTIVE) {
                 log.debug("Slice {} already active", artifact);
                 return Promise.success(entry);
@@ -144,11 +149,13 @@ public interface SliceStoreImpl {
 
         @Override
         public Promise<LoadedSlice> deactivateSlice(Artifact artifact) {
-            var entry = entries.get(artifact);
-            if (entry == null) {
-                return SLICE_NOT_LOADED.apply(artifact.asString())
-                                       .promise();
-            }
+            return Option.option(entries.get(artifact))
+                         .toResult(SLICE_NOT_LOADED.apply(artifact.asString()))
+                         .async()
+                         .flatMap(entry -> deactivateEntry(artifact, entry));
+        }
+
+        private Promise<LoadedSlice> deactivateEntry(Artifact artifact, LoadedSliceEntry entry) {
             if (entry.state() == EntryState.LOADED) {
                 log.debug("Slice {} already deactivated", artifact);
                 return Promise.success(entry);
@@ -175,11 +182,15 @@ public interface SliceStoreImpl {
 
         @Override
         public Promise<Unit> unloadSlice(Artifact artifact) {
-            var entry = entries.get(artifact);
-            if (entry == null) {
-                log.debug("Slice {} not loaded, nothing to unload", artifact);
-                return Promise.success(Unit.unit());
-            }
+            return Option.option(entries.get(artifact))
+                         .fold(() -> {
+                                   log.debug("Slice {} not loaded, nothing to unload", artifact);
+                                   return Promise.success(Unit.unit());
+                               },
+                               entry -> unloadEntry(artifact, entry));
+        }
+
+        private Promise<Unit> unloadEntry(Artifact artifact, LoadedSliceEntry entry) {
             log.info("Unloading slice {}", artifact);
             Promise<Unit> deactivatePromise = entry.state() == EntryState.ACTIVE
                                               ? entry.sliceInstance()

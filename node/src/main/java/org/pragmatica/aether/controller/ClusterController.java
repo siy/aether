@@ -85,7 +85,7 @@ public interface ClusterController {
             return new ControlDecisions(List.of());
         }
 
-        public static ControlDecisions of(BlueprintChange... changes) {
+        public static ControlDecisions controlDecisions(BlueprintChange... changes) {
             return new ControlDecisions(List.of(changes));
         }
     }

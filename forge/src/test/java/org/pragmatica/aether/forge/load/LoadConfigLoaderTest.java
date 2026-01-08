@@ -216,14 +216,17 @@ class LoadConfigLoaderTest {
             """;
 
         LoadConfigLoader.loadFromString(toml1)
+            .onFailureRun(Assertions::fail)
             .onSuccess(c -> assertThat(c.targets().getFirst().duration().unwrap())
                 .isEqualTo(Duration.ofSeconds(30)));
 
         LoadConfigLoader.loadFromString(toml2)
+            .onFailureRun(Assertions::fail)
             .onSuccess(c -> assertThat(c.targets().getFirst().duration().unwrap())
                 .isEqualTo(Duration.ofHours(2)));
 
         LoadConfigLoader.loadFromString(toml3)
+            .onFailureRun(Assertions::fail)
             .onSuccess(c -> assertThat(c.targets().getFirst().duration().unwrap())
                 .isEqualTo(Duration.ofMillis(500)));
     }

@@ -28,22 +28,22 @@ public record SlowInvocation(MethodName methodName,
     /**
      * Create a successful slow invocation record.
      */
-    public static SlowInvocation success(MethodName method,
-                                         long timestampNs,
-                                         long durationNs,
-                                         int requestBytes,
-                                         int responseBytes) {
+    public static SlowInvocation slowInvocation(MethodName method,
+                                                long timestampNs,
+                                                long durationNs,
+                                                int requestBytes,
+                                                int responseBytes) {
         return new SlowInvocation(method, timestampNs, durationNs, requestBytes, responseBytes, true, Option.empty());
     }
 
     /**
      * Create a failed slow invocation record.
      */
-    public static SlowInvocation failure(MethodName method,
-                                         long timestampNs,
-                                         long durationNs,
-                                         int requestBytes,
-                                         String errorType) {
+    public static SlowInvocation slowInvocation(MethodName method,
+                                                long timestampNs,
+                                                long durationNs,
+                                                int requestBytes,
+                                                String errorType) {
         return new SlowInvocation(method, timestampNs, durationNs, requestBytes, 0, false, Option.option(errorType));
     }
 

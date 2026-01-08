@@ -22,6 +22,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -81,9 +83,9 @@ public final class ConfigurableLoadRunner {
                                     .build();
     }
 
-    public static ConfigurableLoadRunner create(int port,
-                                                ForgeMetrics metrics,
-                                                EntryPointMetrics entryPointMetrics) {
+    public static ConfigurableLoadRunner configurableLoadRunner(int port,
+                                                                ForgeMetrics metrics,
+                                                                EntryPointMetrics entryPointMetrics) {
         return new ConfigurableLoadRunner(port, metrics, entryPointMetrics);
     }
 
@@ -149,8 +151,10 @@ public final class ConfigurableLoadRunner {
                      .onSuccess(entries -> {
                                     entries.forEach(entry -> startRunner(entry.getValue(),
                                                                          entry.getKey()));
-                                    // Rate sync scheduler
-        scheduler.scheduleAtFixedRate(this::syncMetrics, 100, 100, TimeUnit.MILLISECONDS);
+                                    // Rate sync scheduler - delayed start to ensure runners are initialized
+        scheduler.schedule(() -> scheduler.scheduleAtFixedRate(this::syncMetrics, 0, 100, TimeUnit.MILLISECONDS),
+                           200,
+                           TimeUnit.MILLISECONDS);
                                 })
                      .map(_ -> State.RUNNING);
     }
@@ -340,12 +344,12 @@ public final class ConfigurableLoadRunner {
         private final AtomicBoolean paused = new AtomicBoolean(false);
 
         // Metrics
-        private volatile long totalRequests = 0;
-        private volatile long successCount = 0;
-        private volatile long failureCount = 0;
-        private volatile long totalLatencyNanos = 0;
+        private final AtomicLong totalRequests = new AtomicLong(0);
+        private final AtomicLong successCount = new AtomicLong(0);
+        private final AtomicLong failureCount = new AtomicLong(0);
+        private final AtomicLong totalLatencyNanos = new AtomicLong(0);
         private volatile Instant startTime;
-        private volatile int actualRate = 0;
+        private final AtomicInteger actualRate = new AtomicInteger(0);
 
         TargetRunner(LoadTarget target,
                      Map<String, TemplateProcessor> pathProcessors,
@@ -414,13 +418,13 @@ public final class ConfigurableLoadRunner {
                     }
                     var requestStart = System.nanoTime();
                     sendRequest();
-                    totalRequests++;
+                    var requests = totalRequests.incrementAndGet();
                     // Calculate actual rate
                     var elapsedMs = Duration.between(startTime,
                                                      Instant.now())
                                             .toMillis();
                     if (elapsedMs > 0) {
-                        actualRate = (int)(totalRequests * 1000 / elapsedMs);
+                        actualRate.set((int)(requests * 1000 / elapsedMs));
                     }
                     // Sleep for remaining interval
                     var elapsedMicros = (System.nanoTime() - requestStart) / 1000;
@@ -438,9 +442,9 @@ public final class ConfigurableLoadRunner {
             }
             log.info("Target '{}' stopped. Requests: {}, Success: {}, Failed: {}",
                      name,
-                     totalRequests,
-                     successCount,
-                     failureCount);
+                     totalRequests.get(),
+                     successCount.get(),
+                     failureCount.get());
         }
 
         private void sendRequest() {
@@ -477,7 +481,7 @@ public final class ConfigurableLoadRunner {
 
         private void recordResponse(HttpResponse<String> response, long requestStartTime) {
             var latencyNanos = System.nanoTime() - requestStartTime;
-            totalLatencyNanos += latencyNanos;
+            totalLatencyNanos.addAndGet(latencyNanos);
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 recordSuccess(latencyNanos);
             } else {
@@ -486,13 +490,13 @@ public final class ConfigurableLoadRunner {
         }
 
         private void recordSuccess(long latencyNanos) {
-            successCount++;
+            successCount.incrementAndGet();
             metrics.recordSuccess(latencyNanos);
             entryPointMetrics.recordSuccess(name, latencyNanos);
         }
 
         private void recordFailure(long latencyNanos) {
-            failureCount++;
+            failureCount.incrementAndGet();
             metrics.recordFailure(latencyNanos);
             entryPointMetrics.recordFailure(name, latencyNanos);
         }
@@ -550,15 +554,16 @@ public final class ConfigurableLoadRunner {
                     remaining = some(rem);
                 }
             }
+            var requests = totalRequests.get();
             return new TargetMetrics(name,
                                      target.rate()
                                            .requestsPerSecond(),
-                                     actualRate,
-                                     totalRequests,
-                                     successCount,
-                                     failureCount,
-                                     totalRequests > 0
-                                     ? (double) totalLatencyNanos / totalRequests / 1_000_000
+                                     actualRate.get(),
+                                     requests,
+                                     successCount.get(),
+                                     failureCount.get(),
+                                     requests > 0
+                                     ? (double) totalLatencyNanos.get() / requests / 1_000_000
                                      : 0,
                                      remaining);
         }

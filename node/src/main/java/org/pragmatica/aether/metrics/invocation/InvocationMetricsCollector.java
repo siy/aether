@@ -3,6 +3,8 @@ package org.pragmatica.aether.metrics.invocation;
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.Unit;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -87,12 +89,16 @@ public final class InvocationMetricsCollector {
         // Tier 2: Capture if slow
         if (thresholdStrategy.isSlow(method, durationNs)) {
             var slow = success
-                       ? SlowInvocation.success(method, System.nanoTime(), durationNs, requestBytes, responseBytes)
-                       : SlowInvocation.failure(method,
-                                                System.nanoTime(),
-                                                durationNs,
-                                                requestBytes,
-                                                errorType.or("Unknown"));
+                       ? SlowInvocation.slowInvocation(method,
+                                                       System.nanoTime(),
+                                                       durationNs,
+                                                       requestBytes,
+                                                       responseBytes)
+                       : SlowInvocation.slowInvocation(method,
+                                                       System.nanoTime(),
+                                                       durationNs,
+                                                       requestBytes,
+                                                       errorType.or("Unknown"));
             methodMetrics.addSlowInvocation(slow);
         }
     }
@@ -174,13 +180,17 @@ public final class InvocationMetricsCollector {
     }
 
     /**
-     * Set a new threshold strategy at runtime.
+     * Attempt to set a new threshold strategy at runtime.
+     * <p>
+     * Currently not supported - collector must be recreated with a new strategy.
+     *
+     * @return failure indicating strategy change is not supported
      */
-    public void setThresholdStrategy(ThresholdStrategy strategy) {
+    public Result<Unit> setThresholdStrategy(ThresholdStrategy strategy) {
         // Note: This class uses final field, so we need a different approach
         // For now, this is a no-op placeholder - actual implementation would need
         // to use AtomicReference or similar. The current strategy is effectively immutable.
-        throw new UnsupportedOperationException("Strategy change at runtime requires collector recreation");
+        return MetricsError.StrategyChangeNotSupported.INSTANCE.result();
     }
 
     private MethodMetricsWithSlowCalls getOrCreateMetrics(Artifact artifact, MethodName method) {

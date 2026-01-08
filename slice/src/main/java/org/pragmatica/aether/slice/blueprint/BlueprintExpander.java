@@ -5,6 +5,7 @@ import org.pragmatica.aether.slice.dependency.ArtifactMapper;
 import org.pragmatica.aether.slice.dependency.DependencyCycleDetector;
 import org.pragmatica.aether.slice.repository.Repository;
 import org.pragmatica.aether.slice.routing.SliceSpec;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
@@ -208,11 +209,10 @@ public interface BlueprintExpander {
      * Create ResolvedSlice from artifact and explicit slices map.
      */
     private static ResolvedSlice createResolvedSlice(Artifact artifact, Map<Artifact, SliceSpec> explicitSlices) {
-        var spec = explicitSlices.get(artifact);
-        if (spec != null) {
-            return ResolvedSlice.resolvedSlice(artifact, spec.instances(), false);
-        } else {
-            return ResolvedSlice.resolvedSlice(artifact, 1, true);
-        }
+        return Option.option(explicitSlices.get(artifact))
+                     .fold(() -> ResolvedSlice.resolvedSlice(artifact, 1, true),
+                           spec -> ResolvedSlice.resolvedSlice(artifact,
+                                                               spec.instances(),
+                                                               false));
     }
 }

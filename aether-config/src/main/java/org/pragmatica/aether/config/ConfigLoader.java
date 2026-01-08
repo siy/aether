@@ -67,7 +67,7 @@ public final class ConfigLoader {
         var envStr = overrides.getOrDefault("environment",
                                             doc.getString("cluster", "environment")
                                                .or("docker"));
-        return Environment.fromString(envStr)
+        return Environment.environment(envStr)
                           .flatMap(environment -> buildConfig(doc, overrides, environment));
     }
 

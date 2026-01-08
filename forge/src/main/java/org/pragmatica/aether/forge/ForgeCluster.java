@@ -201,21 +201,20 @@ public final class ForgeCluster {
                    .flatMap(_ -> Promise.promise(TimeSpan.timeSpan(300)
                                                          .millis(),
                                                  () -> Result.success(Unit.unit())))
-                   .flatMap(_ -> {
-                                var port = nodeInfo.address()
-                                                   .port();
-                                var mgmtPort = BASE_MGMT_PORT + (port - BASE_PORT);
-                                var newNode = createNode(nodeInfo.id(),
-                                                         port,
-                                                         mgmtPort,
-                                                         topology);
-                                nodes.put(nodeIdStr, newNode);
-                                return newNode.start();
-                            })
+                   .flatMap(_ -> recreateAndStartNode(nodeIdStr, nodeInfo, topology))
                    .flatMap(_ -> Promise.promise(TimeSpan.timeSpan(500)
                                                          .millis(),
                                                  () -> Result.success(Unit.unit())))
                    .onSuccess(_ -> log.info("Node {} restarted", nodeIdStr));
+    }
+
+    private Promise<Unit> recreateAndStartNode(String nodeIdStr, NodeInfo nodeInfo, List<NodeInfo> topology) {
+        var port = nodeInfo.address()
+                           .port();
+        var mgmtPort = BASE_MGMT_PORT + (port - BASE_PORT);
+        var newNode = createNode(nodeInfo.id(), port, mgmtPort, topology);
+        nodes.put(nodeIdStr, newNode);
+        return newNode.start();
     }
 
     /**

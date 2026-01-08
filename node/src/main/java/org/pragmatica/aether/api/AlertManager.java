@@ -10,10 +10,11 @@ import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +34,8 @@ public class AlertManager {
 
     private final Map<String, Threshold> thresholds = new ConcurrentHashMap<>();
     private final Map<String, ActiveAlert> activeAlerts = new ConcurrentHashMap<>();
-    private final List<AlertHistoryEntry> alertHistory = new ArrayList<>();
+    private final ConcurrentLinkedDeque<AlertHistoryEntry> alertHistory = new ConcurrentLinkedDeque<>();
+    private final AtomicInteger historySize = new AtomicInteger(0);
 
     private AlertManager(RabiaNode<KVCommand<AetherKey>> clusterNode,
                          KVStore<AetherKey, AetherValue> kvStore) {
@@ -242,15 +244,16 @@ public class AlertManager {
     }
 
     private void addToHistory(String metric, NodeId nodeId, double value, String severity, String status) {
-        synchronized (alertHistory) {
-            alertHistory.add(new AlertHistoryEntry(System.currentTimeMillis(),
+        alertHistory.addLast(new AlertHistoryEntry(System.currentTimeMillis(),
                                                    metric,
                                                    nodeId.id(),
                                                    value,
                                                    severity,
                                                    status));
-            while (alertHistory.size() > MAX_ALERT_HISTORY) {
-                alertHistory.removeFirst();
+        // Approximate size tracking - may briefly exceed MAX_ALERT_HISTORY under contention
+        if (historySize.incrementAndGet() > MAX_ALERT_HISTORY) {
+            if (alertHistory.pollFirst() != null) {
+                historySize.decrementAndGet();
             }
         }
     }
@@ -319,32 +322,30 @@ public class AlertManager {
     public String alertHistoryAsJson() {
         var sb = new StringBuilder();
         sb.append("[");
-        synchronized (alertHistory) {
-            boolean first = true;
-            for (var entry : alertHistory) {
-                if (!first) sb.append(",");
-                sb.append("{");
-                sb.append("\"timestamp\":")
-                  .append(entry.timestamp)
-                  .append(",");
-                sb.append("\"metric\":\"")
-                  .append(entry.metric)
-                  .append("\",");
-                sb.append("\"nodeId\":\"")
-                  .append(entry.nodeId)
-                  .append("\",");
-                sb.append("\"value\":")
-                  .append(entry.value)
-                  .append(",");
-                sb.append("\"severity\":\"")
-                  .append(entry.severity)
-                  .append("\",");
-                sb.append("\"status\":\"")
-                  .append(entry.status)
-                  .append("\"");
-                sb.append("}");
-                first = false;
-            }
+        boolean first = true;
+        for (var entry : alertHistory) {
+            if (!first) sb.append(",");
+            sb.append("{");
+            sb.append("\"timestamp\":")
+              .append(entry.timestamp)
+              .append(",");
+            sb.append("\"metric\":\"")
+              .append(entry.metric)
+              .append("\",");
+            sb.append("\"nodeId\":\"")
+              .append(entry.nodeId)
+              .append("\",");
+            sb.append("\"value\":")
+              .append(entry.value)
+              .append(",");
+            sb.append("\"severity\":\"")
+              .append(entry.severity)
+              .append("\",");
+            sb.append("\"status\":\"")
+              .append(entry.status)
+              .append("\"");
+            sb.append("}");
+            first = false;
         }
         sb.append("]");
         return sb.toString();

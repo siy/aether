@@ -56,13 +56,13 @@ public record RollingUpdate(String updateId,
      * @param cleanupPolicy cleanup policy
      * @return new rolling update
      */
-    public static RollingUpdate create(String updateId,
-                                       ArtifactBase artifactBase,
-                                       Version oldVersion,
-                                       Version newVersion,
-                                       int newInstances,
-                                       HealthThresholds thresholds,
-                                       CleanupPolicy cleanupPolicy) {
+    public static RollingUpdate rollingUpdate(String updateId,
+                                              ArtifactBase artifactBase,
+                                              Version oldVersion,
+                                              Version newVersion,
+                                              int newInstances,
+                                              HealthThresholds thresholds,
+                                              CleanupPolicy cleanupPolicy) {
         var now = System.currentTimeMillis();
         return new RollingUpdate(updateId,
                                  artifactBase,

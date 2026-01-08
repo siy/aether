@@ -4,6 +4,7 @@ import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.Slice;
 import org.pragmatica.aether.slice.SliceMethod;
 import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.type.TypeToken;
@@ -180,19 +181,25 @@ public record InventoryServiceSlice() implements Slice {
     }
 
     private Promise<StockAvailability> checkStock(CheckStockRequest request) {
-        var stock = STOCK.get(request.productId());
-        if (stock == null) {
-            return new InventoryError.ProductNotFound(request.productId()).promise();
-        }
-        var available = stock.get();
-        return Promise.success(new StockAvailability(request.productId(), available, available >= request.quantity()));
+        return Option.option(STOCK.get(request.productId()))
+                     .toResult(new InventoryError.ProductNotFound(request.productId()))
+                     .async()
+                     .map(stock -> {
+                              var available = stock.get();
+                              return new StockAvailability(request.productId(),
+                                                           available,
+                                                           available >= request.quantity());
+                          });
     }
 
     private Promise<StockReservation> reserveStock(ReserveStockRequest request) {
-        var stock = STOCK.get(request.productId());
-        if (stock == null) {
-            return new InventoryError.ProductNotFound(request.productId()).promise();
-        }
+        return Option.option(STOCK.get(request.productId()))
+                     .toResult(new InventoryError.ProductNotFound(request.productId()))
+                     .async()
+                     .flatMap(stock -> doReserveStock(request, stock));
+    }
+
+    private Promise<StockReservation> doReserveStock(ReserveStockRequest request, AtomicInteger stock) {
         var reservationId = IdGenerator.generate("RES");
         var quantity = request.quantity();
         if (INFINITE_MODE.get()) {
@@ -215,15 +222,12 @@ public record InventoryServiceSlice() implements Slice {
     }
 
     private Promise<StockReleased> releaseStock(ReleaseStockRequest request) {
-        var reservation = RESERVATIONS.remove(request.reservationId());
-        if (reservation == null) {
-            return Promise.success(new StockReleased(request.reservationId()));
-        }
-        var stock = STOCK.get(reservation.productId());
-        if (stock != null) {
-            stock.addAndGet(reservation.quantity());
-        }
-        TOTAL_RELEASES.incrementAndGet();
+        Option.option(RESERVATIONS.remove(request.reservationId()))
+              .onPresent(reservation -> {
+                             Option.option(STOCK.get(reservation.productId()))
+                                   .onPresent(stock -> stock.addAndGet(reservation.quantity()));
+                             TOTAL_RELEASES.incrementAndGet();
+                         });
         return Promise.success(new StockReleased(request.reservationId()));
     }
 }

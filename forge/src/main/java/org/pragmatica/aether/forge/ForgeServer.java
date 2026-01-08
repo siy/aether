@@ -139,7 +139,9 @@ public final class ForgeServer {
         cluster = ForgeCluster.forgeCluster(forgeConfig.nodes());
         var entryPointMetrics = EntryPointMetrics.entryPointMetrics();
         loadGenerator = LoadGenerator.loadGenerator(forgeConfig.dashboardPort(), metrics, entryPointMetrics);
-        configurableLoadRunner = ConfigurableLoadRunner.create(forgeConfig.dashboardPort(), metrics, entryPointMetrics);
+        configurableLoadRunner = ConfigurableLoadRunner.configurableLoadRunner(forgeConfig.dashboardPort(),
+                                                                               metrics,
+                                                                               entryPointMetrics);
         apiHandler = ForgeApiHandler.forgeApiHandler(cluster, loadGenerator, metrics, configurableLoadRunner);
         staticHandler = StaticFileHandler.staticFileHandler();
         // Start the cluster

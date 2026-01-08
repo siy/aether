@@ -115,7 +115,7 @@ DeploymentStatus status) {
     /**
      * Create a new in-progress deployment starting now.
      */
-    public static DeploymentMetrics started(Artifact artifact, NodeId nodeId, long timestamp) {
+    public static DeploymentMetrics deploymentMetrics(Artifact artifact, NodeId nodeId, long timestamp) {
         return new DeploymentMetrics(artifact, nodeId, timestamp, 0, 0, 0, 0, DeploymentStatus.IN_PROGRESS);
     }
 

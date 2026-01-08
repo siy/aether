@@ -42,14 +42,14 @@ public sealed interface DataGenerator {
                    : min + random.nextInt(max - min + 1);
         }
 
-        public static Result<IntRange> of(int min, int max) {
+        public static Result<IntRange> intRange(int min, int max) {
             if (min > max) {
                 return MIN_GREATER_THAN_MAX.result();
             }
             return Result.success(new IntRange(min, max));
         }
 
-        public static IntRange exactly(int value) {
+        public static IntRange intRangeExact(int value) {
             return new IntRange(value, value);
         }
     }
@@ -137,7 +137,7 @@ public sealed interface DataGenerator {
         public static OrderRequestGenerator withDefaults() {
             return new OrderRequestGenerator(ProductIdGenerator.withDefaults(),
                                              CustomerIdGenerator.withDefaults(),
-                                             IntRange.exactly(1));
+                                             IntRange.intRangeExact(1));
         }
 
         /**

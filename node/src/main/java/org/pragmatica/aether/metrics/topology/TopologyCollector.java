@@ -135,9 +135,9 @@ public final class TopologyCollector {
             boolean isLeader = leaderId.map(id -> id.equals(nodeIdStr))
                                        .or(false);
             if (nodeSuspectTimes.containsKey(nodeIdStr)) {
-                nodeInfos.add(ClusterTopology.NodeInfo.suspected(nodeIdStr, address));
+                nodeInfos.add(ClusterTopology.NodeInfo.suspectedNodeInfo(nodeIdStr, address));
             } else {
-                nodeInfos.add(ClusterTopology.NodeInfo.healthy(nodeIdStr, address, isLeader));
+                nodeInfos.add(ClusterTopology.NodeInfo.nodeInfo(nodeIdStr, address, isLeader));
                 healthyCount++;
             }
         }

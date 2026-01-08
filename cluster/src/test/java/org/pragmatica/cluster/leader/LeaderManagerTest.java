@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.pragmatica.consensus.NodeId.nodeId;
 import static org.pragmatica.consensus.leader.LeaderNotification.leaderChange;
 import static org.pragmatica.consensus.topology.TopologyChangeNotification.nodeAdded;
@@ -58,7 +58,7 @@ class LeaderManagerTest {
         expected.add(leaderChange(Option.none(), false));
         router.route(QuorumStateNotification.DISAPPEARED);
 
-        assertEquals(expected, watcher.collected());
+        assertThat(watcher.collected()).isEqualTo(expected);
     }
 
     @Test
@@ -73,7 +73,7 @@ class LeaderManagerTest {
         expected.add(leaderChange(Option.none(), false));
         router.route(QuorumStateNotification.DISAPPEARED);
 
-        assertEquals(expected, watcher.collected());
+        assertThat(watcher.collected()).isEqualTo(expected);
     }
 
     @Test
@@ -89,7 +89,7 @@ class LeaderManagerTest {
         expected.add(leaderChange(Option.none(), false));
         router.route(QuorumStateNotification.DISAPPEARED);
 
-        assertEquals(expected, watcher.collected());
+        assertThat(watcher.collected()).isEqualTo(expected);
     }
 
     private void sendNodeAdded(NodeId nodeId) {

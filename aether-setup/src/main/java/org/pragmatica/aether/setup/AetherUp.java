@@ -66,7 +66,7 @@ public final class AetherUp {
         } else {
             // No config file - use environment defaults
             var envStr = options.getOrDefault("env", "docker");
-            var envResult = Environment.fromString(envStr)
+            var envResult = Environment.environment(envStr)
                                        .onFailure(cause -> System.err.println("Error: " + cause.message()))
                                        .onFailure(_ -> System.exit(1));
             var env = envResult.unwrap();

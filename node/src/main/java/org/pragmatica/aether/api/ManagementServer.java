@@ -478,28 +478,29 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing 'artifact' field");
             return;
         }
-        int instances = 1;
-        if (instancesMatch.find()) {
-            instances = Integer.parseInt(instancesMatch.group(1));
-        }
+        int instances = instancesMatch.find()
+                        ? Integer.parseInt(instancesMatch.group(1))
+                        : 1;
         var artifactStr = artifactMatch.group(1);
-        int finalInstances = instances;
         Artifact.artifact(artifactStr)
-                .onSuccess(artifact -> {
-                               AetherKey key = new AetherKey.BlueprintKey(artifact);
-                               AetherValue value = new AetherValue.BlueprintValue(finalInstances);
-                               KVCommand<AetherKey> command = new KVCommand.Put<>(key, value);
-                               node.apply(List.of(command))
-                                   .onSuccess(_ -> sendJson(ctx,
-                                                            "{\"status\":\"deployed\",\"artifact\":\"" + artifactStr
-                                                            + "\",\"instances\":" + finalInstances + "}"))
-                                   .onFailure(cause -> sendJsonError(ctx,
-                                                                     HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                     cause.message()));
-                           })
+                .async()
+                .flatMap(artifact -> applyDeployCommand(node, artifact, instances))
+                .onSuccess(_ -> sendJson(ctx,
+                                         "{\"status\":\"deployed\",\"artifact\":\"" + artifactStr + "\",\"instances\":" + instances
+                                         + "}"))
                 .onFailure(cause -> sendJsonError(ctx,
-                                                  HttpResponseStatus.BAD_REQUEST,
+                                                  isBadRequest(cause)
+                                                  ? HttpResponseStatus.BAD_REQUEST
+                                                  : HttpResponseStatus.INTERNAL_SERVER_ERROR,
                                                   cause.message()));
+    }
+
+    private Promise<Unit> applyDeployCommand(AetherNode node, Artifact artifact, int instances) {
+        AetherKey key = new AetherKey.BlueprintKey(artifact);
+        AetherValue value = new AetherValue.BlueprintValue(instances);
+        KVCommand<AetherKey> command = new KVCommand.Put<>(key, value);
+        return node.apply(List.of(command))
+                   .mapToUnit();
     }
 
     private void handleScale(ChannelHandlerContext ctx, AetherNode node, String body) {
@@ -513,20 +514,15 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         var artifactStr = artifactMatch.group(1);
         var instances = Integer.parseInt(instancesMatch.group(1));
         Artifact.artifact(artifactStr)
-                .onSuccess(artifact -> {
-                               AetherKey key = new AetherKey.BlueprintKey(artifact);
-                               AetherValue value = new AetherValue.BlueprintValue(instances);
-                               KVCommand<AetherKey> command = new KVCommand.Put<>(key, value);
-                               node.apply(List.of(command))
-                                   .onSuccess(_ -> sendJson(ctx,
-                                                            "{\"status\":\"scaled\",\"artifact\":\"" + artifactStr
-                                                            + "\",\"instances\":" + instances + "}"))
-                                   .onFailure(cause -> sendJsonError(ctx,
-                                                                     HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                     cause.message()));
-                           })
+                .async()
+                .flatMap(artifact -> applyDeployCommand(node, artifact, instances))
+                .onSuccess(_ -> sendJson(ctx,
+                                         "{\"status\":\"scaled\",\"artifact\":\"" + artifactStr + "\",\"instances\":" + instances
+                                         + "}"))
                 .onFailure(cause -> sendJsonError(ctx,
-                                                  HttpResponseStatus.BAD_REQUEST,
+                                                  isBadRequest(cause)
+                                                  ? HttpResponseStatus.BAD_REQUEST
+                                                  : HttpResponseStatus.INTERNAL_SERVER_ERROR,
                                                   cause.message()));
     }
 
@@ -539,26 +535,37 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         }
         var artifactStr = artifactMatch.group(1);
         Artifact.artifact(artifactStr)
-                .onSuccess(artifact -> {
-                               AetherKey key = new AetherKey.BlueprintKey(artifact);
-                               KVCommand<AetherKey> command = new KVCommand.Remove<>(key);
-                               node.apply(List.of(command))
-                                   .onSuccess(_ -> sendJson(ctx,
-                                                            "{\"status\":\"undeployed\",\"artifact\":\"" + artifactStr
-                                                            + "\"}"))
-                                   .onFailure(cause -> sendJsonError(ctx,
-                                                                     HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                     cause.message()));
-                           })
+                .async()
+                .flatMap(artifact -> applyUndeployCommand(node, artifact))
+                .onSuccess(_ -> sendJson(ctx, "{\"status\":\"undeployed\",\"artifact\":\"" + artifactStr + "\"}"))
                 .onFailure(cause -> sendJsonError(ctx,
-                                                  HttpResponseStatus.BAD_REQUEST,
+                                                  isBadRequest(cause)
+                                                  ? HttpResponseStatus.BAD_REQUEST
+                                                  : HttpResponseStatus.INTERNAL_SERVER_ERROR,
                                                   cause.message()));
+    }
+
+    private Promise<Unit> applyUndeployCommand(AetherNode node, Artifact artifact) {
+        AetherKey key = new AetherKey.BlueprintKey(artifact);
+        KVCommand<AetherKey> command = new KVCommand.Remove<>(key);
+        return node.apply(List.of(command))
+                   .mapToUnit();
     }
 
     private void handleBlueprint(ChannelHandlerContext ctx, AetherNode node, String body) {
         BlueprintParser.parse(body)
-                       .onSuccess(blueprint -> {
-                                      // Build commands for all slices in blueprint
+                       .async()
+                       .flatMap(blueprint -> applyBlueprintCommands(ctx, node, blueprint))
+                       .onFailure(cause -> sendJsonError(ctx,
+                                                         isBadRequest(cause)
+                                                         ? HttpResponseStatus.BAD_REQUEST
+                                                         : HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                                                         cause.message()));
+    }
+
+    private Promise<Unit> applyBlueprintCommands(ChannelHandlerContext ctx,
+                                                 AetherNode node,
+                                                 org.pragmatica.aether.slice.blueprint.Blueprint blueprint) {
         var commands = blueprint.slices()
                                 .stream()
                                 .map(spec -> {
@@ -567,25 +574,25 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                                          return (KVCommand<AetherKey>) new KVCommand.Put<>(key, value);
                                      })
                                 .toList();
-                                      if (commands.isEmpty()) {
-                                          sendJson(ctx,
-                                                   "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
-                                                                                                         .asString()
-                                                   + "\",\"slices\":0}");
-                                          return;
-                                      }
-                                      node.apply(commands)
-                                          .onSuccess(_ -> sendJson(ctx,
-                                                                   "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
-                                                                                                                         .asString()
-                                                                   + "\",\"slices\":" + commands.size() + "}"))
-                                          .onFailure(cause -> sendJsonError(ctx,
-                                                                            HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                            cause.message()));
-                                  })
-                       .onFailure(cause -> sendJsonError(ctx,
-                                                         HttpResponseStatus.BAD_REQUEST,
-                                                         cause.message()));
+        if (commands.isEmpty()) {
+            sendJson(ctx,
+                     "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
+                                                                          .asString() + "\",\"slices\":0}");
+            return Promise.success(unit());
+        }
+        return node.apply(commands)
+                   .mapToUnit()
+                   .onSuccess(_ -> sendJson(ctx,
+                                            "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
+                                                                                                  .asString()
+                                            + "\",\"slices\":" + commands.size() + "}"));
+    }
+
+    private static boolean isBadRequest(org.pragmatica.lang.Cause cause) {
+        // Artifact parsing errors are bad requests, everything else is internal error
+        return cause.message()
+                    .contains("Invalid") || cause.message()
+                                                 .contains("Missing");
     }
 
     // ===== Rolling Update Handlers =====

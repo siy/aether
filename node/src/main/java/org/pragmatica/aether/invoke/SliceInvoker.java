@@ -456,11 +456,13 @@ class SliceInvokerImpl implements SliceInvoker {
     @Override
     @SuppressWarnings("unchecked")
     public void onInvokeResponse(InvokeResponse response) {
-        var pending = pendingInvocations.remove(response.correlationId());
-        if (pending == null) {
-            log.warn("Received response for unknown correlationId: {}", response.correlationId());
-            return;
-        }
+        Option.option(pendingInvocations.remove(response.correlationId()))
+              .onEmpty(() -> log.warn("Received response for unknown correlationId: {}",
+                                      response.correlationId()))
+              .onPresent(pending -> handlePendingResponse(pending, response));
+    }
+
+    private void handlePendingResponse(PendingInvocation pending, InvokeResponse response) {
         var promise = pending.promise();
         if (response.success()) {
             try{

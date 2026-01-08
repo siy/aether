@@ -1,6 +1,7 @@
 package org.pragmatica.aether.metrics.invocation;
 
 import org.pragmatica.aether.slice.MethodName;
+import org.pragmatica.lang.Option;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -247,11 +248,9 @@ public sealed interface ThresholdStrategy {
                      ThresholdStrategy fallback) implements ThresholdStrategy {
         @Override
         public boolean isSlow(MethodName method, long durationNs) {
-            var explicit = methodThresholdsNs.get(method);
-            if (explicit != null) {
-                return durationNs > explicit;
-            }
-            return fallback.isSlow(method, durationNs);
+            return Option.option(methodThresholdsNs.get(method))
+                         .fold(() -> fallback.isSlow(method, durationNs),
+                               explicit -> durationNs > explicit);
         }
 
         @Override
@@ -263,10 +262,8 @@ public sealed interface ThresholdStrategy {
 
         @Override
         public long thresholdNs(MethodName method) {
-            var explicit = methodThresholdsNs.get(method);
-            return explicit != null
-                   ? explicit
-                   : fallback.thresholdNs(method);
+            return Option.option(methodThresholdsNs.get(method))
+                         .or(() -> fallback.thresholdNs(method));
         }
     }
 }

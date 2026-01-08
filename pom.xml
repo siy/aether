@@ -124,6 +124,16 @@
                 <version>${pragmatica.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.pragmatica-lite</groupId>
+                <artifactId>http-client</artifactId>
+                <version>${pragmatica.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.pragmatica-lite</groupId>
+                <artifactId>jackson</artifactId>
+                <version>${pragmatica.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.micrometer</groupId>
                 <artifactId>micrometer-core</artifactId>
                 <version>${micrometer.version}</version>

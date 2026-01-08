@@ -182,26 +182,17 @@ class ArtifactStoreImpl implements ArtifactStore {
     }
 
     private Promise<byte[]> resolveChunks(Artifact artifact, ArtifactMetadata meta) {
-        var chunkPromises = new ArrayList<Promise<Option<byte[]>>>();
+        var corruptedError = new ArtifactStoreError.CorruptedArtifact(artifact);
+        var chunkPromises = new ArrayList<Promise<byte[]>>();
         for (int i = 0; i < meta.chunkCount(); i++) {
-            chunkPromises.add(dht.get(chunkKey(artifact, i)));
+            chunkPromises.add(dht.get(chunkKey(artifact, i))
+                                 .flatMap(opt -> opt.async(corruptedError)));
         }
         return Promise.allOf(chunkPromises)
-                      .flatMap(results -> {
-                                   var chunks = new ArrayList<byte[]>();
-                                   for (var result : results) {
-                                       if (result.isFailure()) {
-                                           return new ArtifactStoreError.ResolveFailed(artifact, "Failed to fetch chunk").promise();
-                                       }
-                                       var chunkOpt = result.unwrap();
-                                       if (chunkOpt.isEmpty()) {
-                                           return new ArtifactStoreError.CorruptedArtifact(artifact).promise();
-                                       }
-                                       chunkOpt.onPresent(chunks::add);
-                                   }
-                                   return Promise.success(reassembleChunks(chunks,
-                                                                           (int) meta.size()));
-                               });
+                      .map(results -> reassembleChunks(results.stream()
+                                                              .map(r -> r.unwrap())
+                                                              .toList(),
+                                                       (int) meta.size()));
     }
 
     @Override
@@ -239,15 +230,19 @@ class ArtifactStoreImpl implements ArtifactStore {
     private Promise<Unit> updateVersionsList(Artifact artifact) {
         var versionsKey = versionsKey(artifact.groupId(), artifact.artifactId());
         return dht.get(versionsKey)
-                  .flatMap(opt -> {
-                               var versions = new ArrayList<>(opt.map(this::parseVersionsList)
-                                                                 .or(List.of()));
-                               if (!versions.contains(artifact.version())) {
-                                   versions.add(artifact.version());
-                               }
-                               return dht.put(versionsKey,
-                                              serializeVersionsList(versions));
-                           });
+                  .map(opt -> addVersionIfAbsent(opt,
+                                                 artifact.version()))
+                  .flatMap(versions -> dht.put(versionsKey,
+                                               serializeVersionsList(versions)));
+    }
+
+    private List<Version> addVersionIfAbsent(Option<byte[]> existingData, Version version) {
+        var versions = new ArrayList<>(existingData.map(this::parseVersionsList)
+                                                   .or(List.of()));
+        if (!versions.contains(version)) {
+            versions.add(version);
+        }
+        return versions;
     }
 
     private List<Version> parseVersionsList(byte[] data) {

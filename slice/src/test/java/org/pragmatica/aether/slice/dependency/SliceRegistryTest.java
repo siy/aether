@@ -44,7 +44,7 @@ class SliceRegistryTest {
                 .onFailureRun(Assertions::fail);
 
         registry.register(artifact, slice2)
-                .onSuccessRun(() -> Assertions.fail("Should fail on duplicate registration"))
+                .onSuccessRun(Assertions::fail)
                 .onFailure(cause -> assertThat(cause.message()).contains("already registered"));
     }
 
@@ -54,7 +54,7 @@ class SliceRegistryTest {
         var artifact = Artifact.artifact("org.example:missing:1.0.0").unwrap();
 
         registry.lookup(artifact)
-                .onPresent(slice -> Assertions.fail("Should return none for missing artifact"))
+                .onPresent(_ -> Assertions.fail())
                 .onEmpty(() -> {
                 });
     }
@@ -72,7 +72,7 @@ class SliceRegistryTest {
                 .onFailureRun(Assertions::fail);
 
         registry.lookup(artifact)
-                .onPresent(found -> Assertions.fail("Slice should be unregistered"))
+                .onPresent(_ -> Assertions.fail())
                 .onEmpty(() -> {
                 });
     }
@@ -83,7 +83,7 @@ class SliceRegistryTest {
         var artifact = Artifact.artifact("org.example:missing:1.0.0").unwrap();
 
         registry.unregister(artifact)
-                .onSuccessRun(() -> Assertions.fail("Should fail for missing artifact"))
+                .onSuccessRun(Assertions::fail)
                 .onFailure(cause -> assertThat(cause.message()).contains("not found"));
     }
 
@@ -131,7 +131,7 @@ class SliceRegistryTest {
         var pattern = VersionPattern.parse("[1.0.0,2.0.0)").unwrap();
 
         registry.find("test-slice", pattern)
-                .onPresent(found -> Assertions.fail("Version 2.0.0 should not match [1.0.0,2.0.0)"))
+                .onPresent(_ -> Assertions.fail())
                 .onEmpty(() -> {
                 });
     }
@@ -148,7 +148,7 @@ class SliceRegistryTest {
         var pattern = VersionPattern.parse("1.0.0").unwrap();
 
         registry.find("other-slice", pattern)
-                .onPresent(found -> Assertions.fail("Class name should not match"))
+                .onPresent(_ -> Assertions.fail())
                 .onEmpty(() -> {
                 });
     }

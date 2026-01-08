@@ -149,6 +149,7 @@ public record LoadTarget(Option<String> name,
      * Returns true if this target should run continuously.
      */
     public boolean isContinuous() {
-        return duration.fold(() -> true, Duration::isZero);
+        return duration.map(Duration::isZero)
+                       .or(true);
     }
 }

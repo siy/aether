@@ -251,13 +251,12 @@ public final class ForgeCluster {
                                                                BASE_MGMT_PORT + (clusterPort - BASE_PORT),
                                                                "healthy",
                                                                currentLeader()
-                                                                            .fold(() -> false,
-                                                                                  leaderId -> leaderId.equals(entry.getKey())));
+                                                                            .map(leaderId -> leaderId.equals(entry.getKey()))
+                                                                            .or(false));
                                      })
                                 .toList();
         return new ClusterStatus(nodeStatuses, currentLeader()
-                                                            .fold(() -> "none",
-                                                                  leader -> leader));
+                                                            .or("none"));
     }
 
     /**
@@ -313,8 +312,8 @@ public final class ForgeCluster {
                              var heapMax = metrics.getOrDefault("heap.max", 1.0);
                              return new NodeMetrics(nodeId,
                                                     currentLeader()
-                                                                 .fold(() -> false,
-                                                                       l -> l.equals(nodeId)),
+                                                                 .map(l -> l.equals(nodeId))
+                                                                 .or(false),
                                                     cpuUsage,
                                                     (long)(heapUsed / 1024 / 1024),
                                                     (long)(heapMax / 1024 / 1024));

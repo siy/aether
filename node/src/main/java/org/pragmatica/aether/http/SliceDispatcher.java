@@ -4,6 +4,7 @@ import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.invoke.SliceInvoker;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.routing.Route;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 
 import java.util.Map;
@@ -33,7 +34,7 @@ public interface SliceDispatcher {
      */
     @FunctionalInterface
     interface ArtifactResolver {
-        Artifact resolve(String sliceId);
+        Option<Artifact> resolve(String sliceId);
     }
 }
 
@@ -51,10 +52,16 @@ class SliceDispatcherImpl implements SliceDispatcher {
         var target = route.target();
         var sliceId = target.sliceId();
         var methodName = target.methodName();
-        var artifact = artifactResolver.resolve(sliceId);
-        if (artifact == null) {
-            return new HttpRouterError.SliceNotFound(sliceId).promise();
-        }
+        return artifactResolver.resolve(sliceId)
+                               .toResult(new HttpRouterError.SliceNotFound(sliceId))
+                               .async()
+                               .flatMap(artifact -> dispatchToArtifact(artifact, sliceId, methodName, resolvedParams));
+    }
+
+    private Promise<Object> dispatchToArtifact(Artifact artifact,
+                                               String sliceId,
+                                               String methodName,
+                                               Map<String, Object> resolvedParams) {
         // Build request object from resolved params
         // For simplicity, if there's a single param (body), use it directly
         // Otherwise, we'd need to construct a request object
@@ -70,17 +77,18 @@ class SliceDispatcherImpl implements SliceDispatcher {
         var finalRequest = request;
         return MethodName.methodName(methodName)
                          .async()
-                         .flatMap(method -> {
-                                      Promise<Object> invokePromise = invoker.invokeLocal(artifact,
-                                                                                          method,
-                                                                                          finalRequest,
-                                                                                          Object.class);
-                                      return Promise.promise(promise -> {
-                                                                 invokePromise.onSuccess(promise::succeed)
-                                                                              .onFailure(cause -> promise.fail(new HttpRouterError.InvocationFailed(sliceId,
-                                                                                                                                                    methodName,
-                                                                                                                                                    cause)));
-                                                             });
-                                  });
+                         .flatMap(method -> invokeMethod(artifact, sliceId, methodName, method, finalRequest));
+    }
+
+    private Promise<Object> invokeMethod(Artifact artifact,
+                                         String sliceId,
+                                         String methodName,
+                                         MethodName method,
+                                         Object request) {
+        Promise<Object> invokePromise = invoker.invokeLocal(artifact, method, request, Object.class);
+        return Promise.promise(promise -> invokePromise.onSuccess(promise::succeed)
+                                                       .onFailure(cause -> promise.fail(new HttpRouterError.InvocationFailed(sliceId,
+                                                                                                                             methodName,
+                                                                                                                             cause))));
     }
 }

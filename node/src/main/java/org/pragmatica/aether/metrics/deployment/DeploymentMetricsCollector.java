@@ -10,6 +10,7 @@ import org.pragmatica.cluster.metrics.DeploymentMetricsMessage.DeploymentMetrics
 import org.pragmatica.consensus.net.ClusterNetwork;
 import org.pragmatica.consensus.NodeId;
 import org.pragmatica.consensus.topology.TopologyChangeNotification;
+import org.pragmatica.lang.Option;
 import org.pragmatica.messaging.MessageReceiver;
 
 import java.util.*;
@@ -315,7 +316,7 @@ class DeploymentMetricsCollectorImpl implements DeploymentMetricsCollector {
                                     .onSuccess(artifact -> {
                                                    var metricsList = entryList.stream()
                                                                               .map(DeploymentMetrics::fromEntry)
-                                                                              .filter(m -> m != null)
+                                                                              .flatMap(Option::stream)
                                                                               .toList();
                                                    // Only store if not from our node
         var filteredList = metricsList.stream()

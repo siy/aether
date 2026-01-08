@@ -248,7 +248,7 @@ class PaymentServiceImpl implements PaymentService {
 
     private Result<Money> validateRefundAmount(RefundRequest request, PaymentResult original) {
         var refundAmount = request.partialAmount()
-                                  .fold(original::amount, amount -> amount);
+                                  .or(original.amount());
         return original.amount()
                        .isGreaterThan(refundAmount)
                        .flatMap(isGreater -> isGreater || refundAmount.amount()

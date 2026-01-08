@@ -62,11 +62,11 @@ public interface SliceInvoker extends SliceInvokerFacade {
         return Artifact.artifact(sliceArtifact)
                        .flatMap(artifact -> MethodName.methodName(methodName)
                                                       .map(method -> new ArtifactMethod(artifact, method)))
-                       .fold(cause -> cause.promise(),
-                             am -> invokeAndWait(am.artifact(),
-                                                 am.method(),
-                                                 request,
-                                                 responseType));
+                       .async()
+                       .flatMap(am -> invokeAndWait(am.artifact(),
+                                                    am.method(),
+                                                    request,
+                                                    responseType));
     }
 
     record ArtifactMethod(Artifact artifact, MethodName method) {}
@@ -441,8 +441,8 @@ class SliceInvokerImpl implements SliceInvoker {
     @SuppressWarnings("unchecked")
     public <R> Promise<R> invokeLocal(Artifact slice, MethodName method, Object request, Class<R> responseType) {
         return invocationHandler.getLocalSlice(slice)
-                                .fold(() -> SLICE_NOT_FOUND.<R>promise(),
-                                      bridge -> invokeViaBridge(bridge, method, request));
+                                .async(SLICE_NOT_FOUND)
+                                .flatMap(bridge -> invokeViaBridge(bridge, method, request));
     }
 
     @SuppressWarnings("unchecked")
@@ -487,8 +487,7 @@ class SliceInvokerImpl implements SliceInvoker {
         var artifactBase = ArtifactBase.artifactBase(slice.groupId(), slice.artifactId());
         return rollingUpdateManager.getActiveUpdate(artifactBase)
                                    .fold(() -> endpointRegistry.selectEndpoint(slice, method)
-                                                               .fold(() -> NO_ENDPOINT_FOUND.promise(),
-                                                                     Promise::success),
+                                                               .async(NO_ENDPOINT_FOUND),
                                          update -> selectEndpointWithWeightedRouting(slice, artifactBase, method, update));
     }
 
@@ -502,8 +501,7 @@ class SliceInvokerImpl implements SliceInvoker {
                                                           update.routing(),
                                                           update.oldVersion(),
                                                           update.newVersion())
-                               .fold(() -> NO_ENDPOINT_FOUND.promise(),
-                                     Promise::success);
+                               .async(NO_ENDPOINT_FOUND);
     }
 
     private byte[] serializeRequest(Object request) {

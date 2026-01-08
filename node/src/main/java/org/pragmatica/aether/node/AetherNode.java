@@ -440,8 +440,7 @@ public interface AetherNode {
         var ttmManager = TTMManager.ttmManager(config.ttm(),
                                                minuteAggregator,
                                                controller::getConfiguration)
-                                   .fold(_ -> TTMManager.noOp(config.ttm()),
-                                         manager -> manager);
+                                   .or(TTMManager.noOp(config.ttm()));
         // Create control loop with adaptive controller when TTM is actually enabled and functional
         ClusterController effectiveController = ttmManager.isEnabled()
                                                 ? AdaptiveDecisionTree.adaptiveDecisionTree(controller, ttmManager)
@@ -570,7 +569,7 @@ public interface AetherNode {
                               : routerConfig;
         // Create artifact resolver that parses slice ID strings to Artifact
         SliceDispatcher.ArtifactResolver artifactResolver = sliceId -> Artifact.artifact(sliceId)
-                                                                               .fold(_ -> null, artifact -> artifact);
+                                                                               .option();
         return HttpRouter.httpRouter(effectiveConfig,
                                      routeRegistry,
                                      sliceInvoker,

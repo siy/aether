@@ -13,6 +13,7 @@ import org.pragmatica.consensus.NodeId;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.net.tcp.TlsConfig;
@@ -107,8 +108,7 @@ class ManagementServerImpl implements ManagementServer {
         this.metricsPublisher = new DashboardMetricsPublisher(nodeSupplier, alertManager);
         this.observability = ObservabilityRegistry.prometheus();
         this.sslContext = tls.map(TlsContextFactory::create)
-                             .flatMap(result -> result.fold(_ -> Option.empty(),
-                                                            Option::some));
+                             .flatMap(Result::option);
     }
 
     @Override
@@ -879,8 +879,8 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                              .allMetrics();
         var connectedNodes = allMetrics.keySet();
         var leaderId = node.leader()
-                           .fold(() -> "none",
-                                 NodeId::id);
+                           .map(NodeId::id)
+                           .or("none");
         sb.append("\"nodeCount\":")
           .append(connectedNodes.size())
           .append(",");
@@ -892,8 +892,8 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         for (NodeId nodeId : connectedNodes) {
             if (!first) sb.append(",");
             var isLeader = node.leader()
-                               .fold(() -> false,
-                                     l -> l.equals(nodeId));
+                               .map(l -> l.equals(nodeId))
+                               .or(false);
             sb.append("{\"id\":\"")
               .append(nodeId.id())
               .append("\",\"isLeader\":")
@@ -1161,18 +1161,18 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         boolean first = true;
         for (var snapshot : snapshots) {
             // Apply artifact filter (partial match) - skip if filter present and doesn't match
-            var skipByArtifact = artifactFilter.fold(() -> false,
-                                                     filter -> !snapshot.artifact()
-                                                                        .asString()
-                                                                        .contains(filter));
+            var skipByArtifact = artifactFilter.map(filter -> !snapshot.artifact()
+                                                                       .asString()
+                                                                       .contains(filter))
+                                               .or(false);
             if (skipByArtifact) {
                 continue;
             }
             // Apply method filter (exact match) - skip if filter present and doesn't match
-            var skipByMethod = methodFilter.fold(() -> false,
-                                                 filter -> !snapshot.methodName()
-                                                                    .name()
-                                                                    .equals(filter));
+            var skipByMethod = methodFilter.map(filter -> !snapshot.methodName()
+                                                                   .name()
+                                                                   .equals(filter))
+                                           .or(false);
             if (skipByMethod) {
                 continue;
             }
@@ -1259,8 +1259,8 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                   .append(",");
                 sb.append("\"error\":")
                   .append(slow.errorType()
-                              .fold(() -> "null",
-                                    err -> "\"" + err.replace("\"", "\\\"") + "\""));
+                              .map(err -> "\"" + err.replace("\"", "\\\"") + "\"")
+                              .or("null"));
                 sb.append("}");
                 first = false;
             }

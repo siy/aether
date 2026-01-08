@@ -62,7 +62,7 @@ public final class AetherUp {
                 System.exit(1);
                 return;
             }
-            config = result.fold(cause -> null, c -> c);
+            config = result.unwrap();
         } else {
             // No config file - use environment defaults
             var envStr = options.getOrDefault("env", "docker");
@@ -72,7 +72,7 @@ public final class AetherUp {
                 System.exit(1);
                 return;
             }
-            var env = envResult.fold(_ -> null, e -> e);
+            var env = envResult.unwrap();
             var builder = AetherConfig.builder()
                                       .environment(env);
             // Apply overrides

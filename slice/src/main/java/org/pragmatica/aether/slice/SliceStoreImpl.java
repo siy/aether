@@ -219,9 +219,7 @@ public interface SliceStoreImpl {
             var repo = remainingRepos.getFirst();
             var rest = remainingRepos.subList(1, remainingRepos.size());
             return repo.locate(artifact)
-                       .await()
-                       .fold(_ -> locateInRepositories(artifact, rest),
-                             location -> Promise.success(location));
+                       .orElse(() -> locateInRepositories(artifact, rest));
         }
 
         private Repository compositeRepository() {

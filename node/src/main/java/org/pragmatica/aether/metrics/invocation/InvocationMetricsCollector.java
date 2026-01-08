@@ -92,7 +92,7 @@ public final class InvocationMetricsCollector {
                                                 System.nanoTime(),
                                                 durationNs,
                                                 requestBytes,
-                                                errorType.fold(() -> "Unknown", e -> e));
+                                                errorType.or("Unknown"));
             methodMetrics.addSlowInvocation(slow);
         }
     }

@@ -324,12 +324,11 @@ public interface DependencyResolver {
     }
 
     private static Promise<Slice> registerSlice(Artifact artifact, Slice slice, SliceRegistry registry) {
+        // On success: return our slice; on failure (already registered): lookup or fallback to our slice
         return registry.register(artifact, slice)
-                       .fold(_ -> registry.lookup(artifact)
-                                          .fold(() -> Result.success(slice),
-                                                Result::success),
-                             // Successfully registered - return our slice
-        _ -> Result.success(slice))
+                       .map(_ -> slice)
+                       .recover(_ -> registry.lookup(artifact)
+                                             .or(slice))
                        .async();
     }
 

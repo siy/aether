@@ -310,8 +310,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
 
     private void handleKillNode(ChannelHandlerContext ctx, String nodeId) {
         var wasLeader = cluster.currentLeader()
-                               .fold(() -> false,
-                                     l -> l.equals(nodeId));
+                               .map(l -> l.equals(nodeId))
+                               .or(false);
         addEvent("KILL_NODE", "Killing node " + nodeId + (wasLeader
                                                           ? " (leader)"
                                                           : ""));
@@ -322,8 +322,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
 
     private void onNodeKilled(ChannelHandlerContext ctx, String nodeId, boolean wasLeader) {
         var newLeader = cluster.currentLeader()
-                               .fold(() -> "none",
-                                     l -> l);
+                               .or("none");
         addEvent("NODE_KILLED", "Node " + nodeId + " killed" + (wasLeader
                                                                 ? ", new leader: " + newLeader
                                                                 : ""));
@@ -339,8 +338,8 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
 
     private void handleCrashNode(ChannelHandlerContext ctx, String nodeId) {
         var wasLeader = cluster.currentLeader()
-                               .fold(() -> false,
-                                     l -> l.equals(nodeId));
+                               .map(l -> l.equals(nodeId))
+                               .or(false);
         addEvent("CRASH_NODE", "Crashing node " + nodeId + " abruptly" + (wasLeader
                                                                           ? " (leader)"
                                                                           : ""));
@@ -351,8 +350,7 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
 
     private void onNodeCrashed(ChannelHandlerContext ctx, String nodeId) {
         var newLeader = cluster.currentLeader()
-                               .fold(() -> "none",
-                                     l -> l);
+                               .or("none");
         addEvent("NODE_CRASHED", "Node " + nodeId + " crashed");
         sendResponse(ctx, OK, "{\"success\": true, \"newLeader\": \"" + newLeader + "\"}");
     }

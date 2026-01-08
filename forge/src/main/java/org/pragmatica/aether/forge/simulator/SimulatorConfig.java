@@ -343,8 +343,7 @@ public record SimulatorConfig(Map<String, EntryPointConfig> entryPoints,
         return loadFromFile(path)
                            .onFailure(cause -> log.warn("Failed to load config: {}, using defaults",
                                                         cause.message()))
-                           .fold(_ -> defaultConfig(),
-                                 config -> config);
+                           .or(defaultConfig());
     }
 
     /**

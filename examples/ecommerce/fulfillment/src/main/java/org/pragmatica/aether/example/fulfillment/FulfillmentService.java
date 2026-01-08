@@ -272,7 +272,7 @@ class FulfillmentServiceImpl implements FulfillmentService {
             var surchargeAmount = BigDecimal.valueOf(totalItems - 10)
                                             .multiply(BigDecimal.valueOf(0.5));
             return baseCost.add(new Money(surchargeAmount, Money.USD))
-                           .fold(_ -> baseCost, result -> result);
+                           .or(baseCost);
         }
         return baseCost;
     }

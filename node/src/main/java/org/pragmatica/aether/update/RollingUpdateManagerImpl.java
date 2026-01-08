@@ -172,12 +172,12 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
                                          var withRouting = update.withRouting(newRouting);
                                          if (update.state() == RollingUpdateState.DEPLOYED) {
                                              return withRouting.transitionTo(RollingUpdateState.ROUTING)
-                                                               .fold(Cause::promise,
-                                                                     transitioned -> {
-                                                                         updates.put(updateId, transitioned);
-                                                                         return persistRouting(transitioned)
-                                                                                              .map(_ -> transitioned);
-                                                                     });
+                                                               .async()
+                                                               .flatMap(transitioned -> {
+                                                                            updates.put(updateId, transitioned);
+                                                                            return persistRouting(transitioned)
+                                                                                                 .map(_ -> transitioned);
+                                                                        });
                                          }
                                          updates.put(updateId, withRouting);
                                          return persistRouting(withRouting)
@@ -326,46 +326,46 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
         }
         // Create a fallback version for artifacts not yet deployed (initial deployment)
         return Version.version("0.0.0")
-                      .fold(cause -> new RollingUpdateError.VersionNotFound(artifactBase, null).promise(),
-                            Promise::success);
+                      .mapError(_ -> new RollingUpdateError.VersionNotFound(artifactBase, null))
+                      .async();
     }
 
     @SuppressWarnings("unchecked")
     private Promise<RollingUpdate> persistAndTransition(RollingUpdate update,
                                                         RollingUpdateState newState) {
         return update.transitionTo(newState)
-                     .fold(Cause::promise,
-                           transitioned -> {
-                               updates.put(update.updateId(),
-                                           transitioned);
-                               // Store in KV-Store
+                     .async()
+                     .flatMap(transitioned -> {
+                                  updates.put(update.updateId(),
+                                              transitioned);
+                                  // Store in KV-Store
         var key = new AetherKey.RollingUpdateKey(update.updateId());
-                               var value = new AetherValue.RollingUpdateValue(transitioned.updateId(),
-                                                                              transitioned.artifactBase(),
-                                                                              transitioned.oldVersion(),
-                                                                              transitioned.newVersion(),
-                                                                              transitioned.state()
-                                                                                          .name(),
-                                                                              transitioned.routing()
-                                                                                          .newWeight(),
-                                                                              transitioned.routing()
-                                                                                          .oldWeight(),
-                                                                              transitioned.newInstances(),
-                                                                              transitioned.thresholds()
-                                                                                          .maxErrorRate(),
-                                                                              transitioned.thresholds()
-                                                                                          .maxLatencyMs(),
-                                                                              transitioned.thresholds()
-                                                                                          .requireManualApproval(),
-                                                                              transitioned.cleanupPolicy()
-                                                                                          .name(),
-                                                                              transitioned.createdAt(),
-                                                                              System.currentTimeMillis());
-                               var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Put<>(key, value);
-                               return clusterNode.<Unit> apply(List.of(command))
-                                                 .timeout(KV_OPERATION_TIMEOUT)
-                                                 .map(_ -> transitioned);
-                           });
+                                  var value = new AetherValue.RollingUpdateValue(transitioned.updateId(),
+                                                                                 transitioned.artifactBase(),
+                                                                                 transitioned.oldVersion(),
+                                                                                 transitioned.newVersion(),
+                                                                                 transitioned.state()
+                                                                                             .name(),
+                                                                                 transitioned.routing()
+                                                                                             .newWeight(),
+                                                                                 transitioned.routing()
+                                                                                             .oldWeight(),
+                                                                                 transitioned.newInstances(),
+                                                                                 transitioned.thresholds()
+                                                                                             .maxErrorRate(),
+                                                                                 transitioned.thresholds()
+                                                                                             .maxLatencyMs(),
+                                                                                 transitioned.thresholds()
+                                                                                             .requireManualApproval(),
+                                                                                 transitioned.cleanupPolicy()
+                                                                                             .name(),
+                                                                                 transitioned.createdAt(),
+                                                                                 System.currentTimeMillis());
+                                  var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Put<>(key, value);
+                                  return clusterNode.<Unit> apply(List.of(command))
+                                                    .timeout(KV_OPERATION_TIMEOUT)
+                                                    .map(_ -> transitioned);
+                              });
     }
 
     @SuppressWarnings("unchecked")

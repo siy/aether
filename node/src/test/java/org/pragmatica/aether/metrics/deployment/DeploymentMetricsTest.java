@@ -192,17 +192,20 @@ class DeploymentMetricsTest {
         var entry = original.toEntry();
         var restored = DeploymentMetrics.fromEntry(entry);
 
-        assertThat(restored.artifact()).isEqualTo(original.artifact());
-        assertThat(restored.startTime()).isEqualTo(original.startTime());
-        assertThat(restored.loadTime()).isEqualTo(original.loadTime());
-        assertThat(restored.loadedTime()).isEqualTo(original.loadedTime());
-        assertThat(restored.activateTime()).isEqualTo(original.activateTime());
-        assertThat(restored.activeTime()).isEqualTo(original.activeTime());
-        assertThat(restored.status()).isEqualTo(original.status());
+        assertThat(restored.isPresent()).isTrue();
+        restored.onPresent(r -> {
+            assertThat(r.artifact()).isEqualTo(original.artifact());
+            assertThat(r.startTime()).isEqualTo(original.startTime());
+            assertThat(r.loadTime()).isEqualTo(original.loadTime());
+            assertThat(r.loadedTime()).isEqualTo(original.loadedTime());
+            assertThat(r.activateTime()).isEqualTo(original.activateTime());
+            assertThat(r.activeTime()).isEqualTo(original.activeTime());
+            assertThat(r.status()).isEqualTo(original.status());
+        });
     }
 
     @Test
-    void fromEntry_returns_null_for_invalid_artifact() {
+    void fromEntry_returns_empty_for_invalid_artifact() {
         var entry = new DeploymentMetricsEntry(
             "invalid artifact string",
             nodeId.id(),
@@ -212,7 +215,7 @@ class DeploymentMetricsTest {
 
         var result = DeploymentMetrics.fromEntry(entry);
 
-        assertThat(result).isNull();
+        assertThat(result.isEmpty()).isTrue();
     }
 
     @Test

@@ -4,6 +4,7 @@ import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.slice.serialization.SerializerFactory;
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
@@ -112,11 +113,8 @@ public record SliceBridgeImpl(Artifact artifact,
     }
 
     private Result<InternalMethod> lookupMethod(String methodName) {
-        var method = methodMap.get(methodName);
-        return method != null
-               ? Result.success(method)
-               : METHOD_NOT_FOUND.apply(methodName)
-                                 .result();
+        return Option.option(methodMap.get(methodName))
+                     .toResult(METHOD_NOT_FOUND.apply(methodName));
     }
 
     private Promise<SerializationPair> acquireSerializationPair() {

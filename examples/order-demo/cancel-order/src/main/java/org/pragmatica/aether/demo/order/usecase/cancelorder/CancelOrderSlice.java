@@ -90,8 +90,9 @@ public record CancelOrderSlice() implements Slice {
         return OrderRepository.instance();
     }
 
-    private SliceInvokerFacade invoker() {
-        return SliceRuntime.sliceInvoker();
+    private Promise<SliceInvokerFacade> invoker() {
+        return SliceRuntime.getSliceInvoker()
+                           .async();
     }
 
     // === Slice Implementation ===
@@ -155,10 +156,10 @@ public record CancelOrderSlice() implements Slice {
 
     private Promise<StockReleased> releaseStock(String reservationId) {
         return invoker()
-                      .invokeAndWait(INVENTORY,
-                                     "releaseStock",
-                                     new ReleaseStockRequest(reservationId),
-                                     StockReleased.class);
+                      .flatMap(inv -> inv.invokeAndWait(INVENTORY,
+                                                        "releaseStock",
+                                                        new ReleaseStockRequest(reservationId),
+                                                        StockReleased.class));
     }
 
     private Promise<OrderWithReleases> validateReleases(List<Result<StockReleased>> results, OrderWithContext context) {

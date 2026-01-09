@@ -47,7 +47,7 @@ public enum Environment {
      *
      * @return parsed environment, or failure if unknown
      */
-    public static Result<Environment> fromString(String value) {
+    public static Result<Environment> environment(String value) {
         if (value == null || value.isBlank()) {
             return Result.success(DOCKER);
         }

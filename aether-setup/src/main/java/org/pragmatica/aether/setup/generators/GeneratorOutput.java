@@ -17,15 +17,15 @@ public record GeneratorOutput(Path outputDir,
                               Path startScript,
                               Path stopScript,
                               String instructions) {
-    public static GeneratorOutput of(Path outputDir, List<Path> files, String instructions) {
+    public static GeneratorOutput generatorOutput(Path outputDir, List<Path> files, String instructions) {
         return new GeneratorOutput(outputDir, files, null, null, instructions);
     }
 
-    public static GeneratorOutput withScripts(Path outputDir,
-                                              List<Path> files,
-                                              Path start,
-                                              Path stop,
-                                              String instructions) {
+    public static GeneratorOutput generatorOutput(Path outputDir,
+                                                  List<Path> files,
+                                                  Path start,
+                                                  Path stop,
+                                                  String instructions) {
         return new GeneratorOutput(outputDir, files, start, stop, instructions);
     }
 }

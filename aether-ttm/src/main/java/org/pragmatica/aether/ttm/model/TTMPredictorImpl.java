@@ -53,26 +53,29 @@ final class TTMPredictorImpl implements TTMPredictor {
 
     private static Result<TTMPredictor> loadModel(TTMConfig config) {
         return Result.lift(e -> new TTMError.ModelLoadFailed(config.modelPath(), e.getMessage()),
-                           () -> {
-                               var env = OrtEnvironment.getEnvironment();
-                               var sessionOptions = new OrtSession.SessionOptions();
-                               sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
-                               sessionOptions.setIntraOpNumThreads(2);
-                               var session = env.createSession(config.modelPath(), sessionOptions);
-                               log.info("Loaded TTM model from {}", config.modelPath());
-                               log.debug("Model inputs: {}", session.getInputNames());
-                               log.debug("Model outputs: {}", session.getOutputNames());
-                               return new TTMPredictorImpl(env, session, config);
-                           });
+                           () -> createOnnxPredictor(config));
+    }
+
+    private static TTMPredictorImpl createOnnxPredictor(TTMConfig config) throws OrtException {
+        var env = OrtEnvironment.getEnvironment();
+        var sessionOptions = new OrtSession.SessionOptions();
+        sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
+        sessionOptions.setIntraOpNumThreads(2);
+        var session = env.createSession(config.modelPath(), sessionOptions);
+        log.info("Loaded TTM model from {}", config.modelPath());
+        log.debug("Model inputs: {}", session.getInputNames());
+        log.debug("Model outputs: {}", session.getOutputNames());
+        return new TTMPredictorImpl(env, session, config);
     }
 
     @Override
     public Promise<float[]> predict(float[][] input) {
         return Promise.lift(cause -> new TTMError.InferenceFailed(cause.getMessage()),
-                            () -> runInference(input));
+                            () -> runInference(input))
+                      .flatMap(Result::async);
     }
 
-    private float[] runInference(float[][] input) throws OrtException {
+    private Result<float[]> runInference(float[][] input) throws OrtException {
         // Input shape: [windowMinutes][features]
         // ONNX expects: [batch_size, sequence_length, features]
         int seqLen = input.length;
@@ -87,22 +90,24 @@ final class TTMPredictorImpl implements TTMPredictor {
              var results = session.run(Map.of("input", tensor))) {
             // Get output tensor
             var outputTensor = (OnnxTensor) results.get(0);
-            float[] output = flattenOutput(outputTensor);
-            // Extract predictions for next time step (last features values)
-            float[] predictions = new float[FeatureIndex.FEATURE_COUNT];
-            int startIdx = Math.max(0, output.length - features);
-            System.arraycopy(output, startIdx, predictions, 0, Math.min(features, predictions.length));
-            // Calculate confidence from output variance
-            lastConfidence = calculateConfidence(output);
-            return predictions;
+            return flattenOutput(outputTensor)
+                                .map(output -> extractPredictions(output, features));
         }
     }
 
-    private float[] flattenOutput(OnnxTensor tensor) throws OrtException {
+    private float[] extractPredictions(float[] output, int features) {
+        float[] predictions = new float[FeatureIndex.FEATURE_COUNT];
+        int startIdx = Math.max(0, output.length - features);
+        System.arraycopy(output, startIdx, predictions, 0, Math.min(features, predictions.length));
+        lastConfidence = calculateConfidence(output);
+        return predictions;
+    }
+
+    private Result<float[]> flattenOutput(OnnxTensor tensor) throws OrtException {
         var value = tensor.getValue();
         // Handle different possible output shapes
         if (value instanceof float[] arr) {
-            return arr;
+            return Result.success(arr);
         } else if (value instanceof float[][] arr2d) {
             // Flatten 2D array
             int totalLen = 0;
@@ -115,7 +120,7 @@ final class TTMPredictorImpl implements TTMPredictor {
                 System.arraycopy(row, 0, flat, offset, row.length);
                 offset += row.length;
             }
-            return flat;
+            return Result.success(flat);
         } else if (value instanceof float[][][] arr3d) {
             // Flatten 3D array [batch, seq, features]
             int totalLen = 0;
@@ -132,9 +137,10 @@ final class TTMPredictorImpl implements TTMPredictor {
                     offset += row.length;
                 }
             }
-            return flat;
+            return Result.success(flat);
         }
-        throw new OrtException("Unexpected output type: " + value.getClass());
+        return new TTMError.UnexpectedOutputType(value.getClass()
+                                                      .getName()).result();
     }
 
     private double calculateConfidence(float[] output) {
@@ -171,10 +177,12 @@ final class TTMPredictorImpl implements TTMPredictor {
     public void close() {
         ready = false;
         Result.lift(e -> new TTMError.InferenceFailed("Error closing ONNX session: " + e.getMessage()),
-                    () -> {
-                        session.close();
-                        return Unit.unit();
-                    })
+                    this::closeSession)
               .onFailure(cause -> log.warn(cause.message()));
+    }
+
+    private Unit closeSession() throws OrtException {
+        session.close();
+        return Unit.unit();
     }
 }

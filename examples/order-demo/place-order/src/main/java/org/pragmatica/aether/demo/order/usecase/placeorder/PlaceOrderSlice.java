@@ -1,21 +1,25 @@
 package org.pragmatica.aether.demo.order.usecase.placeorder;
 
+import org.pragmatica.aether.demo.order.domain.CustomerId;
 import org.pragmatica.aether.demo.order.domain.Money;
 import org.pragmatica.aether.demo.order.domain.OrderId;
 import org.pragmatica.aether.demo.order.domain.OrderRepository;
 import org.pragmatica.aether.demo.order.domain.OrderStatus;
-import org.pragmatica.aether.demo.order.inventory.CheckStockRequest;
-import org.pragmatica.aether.demo.order.inventory.ReserveStockRequest;
-import org.pragmatica.aether.demo.order.inventory.StockAvailability;
-import org.pragmatica.aether.demo.order.inventory.StockReservation;
-import org.pragmatica.aether.demo.order.pricing.CalculateTotalRequest;
-import org.pragmatica.aether.demo.order.pricing.OrderTotal;
+import org.pragmatica.aether.demo.order.domain.ProductId;
+import org.pragmatica.aether.demo.order.domain.Quantity;
+import org.pragmatica.aether.demo.order.inventory.InventoryServiceSlice.CheckStockRequest;
+import org.pragmatica.aether.demo.order.inventory.InventoryServiceSlice.ReserveStockRequest;
+import org.pragmatica.aether.demo.order.inventory.InventoryServiceSlice.StockAvailability;
+import org.pragmatica.aether.demo.order.inventory.InventoryServiceSlice.StockReservation;
+import org.pragmatica.aether.demo.order.pricing.PricingServiceSlice.CalculateTotalRequest;
+import org.pragmatica.aether.demo.order.pricing.PricingServiceSlice.OrderTotal;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.Slice;
+import org.pragmatica.aether.slice.SliceInvokerFacade;
 import org.pragmatica.aether.slice.SliceMethod;
 import org.pragmatica.aether.slice.SliceRoute;
 import org.pragmatica.aether.slice.SliceRuntime;
-import org.pragmatica.aether.slice.SliceRuntime.SliceInvokerFacade;
+import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.type.TypeToken;
@@ -24,8 +28,8 @@ import org.pragmatica.lang.utils.Causes;
 import java.util.List;
 
 /**
- * PlaceOrder Use Case
- *
+ * PlaceOrder Use Case Slice.
+ * <p>
  * Flow:
  * 1. Validate request
  * 2. Check stock for all items (parallel, calls InventoryService)
@@ -34,9 +38,72 @@ import java.util.List;
  * 5. Return order confirmation
  */
 public record PlaceOrderSlice() implements Slice {
+    // === Request ===
+    public record PlaceOrderRequest(String customerId, List<OrderItemRequest> items, String discountCode) {
+        public record OrderItemRequest(String productId, int quantity) {}
+    }
+
+    // === Response ===
+    public record PlaceOrderResponse(OrderId orderId, OrderStatus status, Money total, List<String> reservationIds) {}
+
+    // === Validated Input ===
+    public record ValidPlaceOrderRequest(CustomerId customerId, List<ValidOrderItem> items, String discountCode) {
+        public record ValidOrderItem(String productId, int quantity) {}
+
+        public static Result<ValidPlaceOrderRequest> validPlaceOrderRequest(PlaceOrderRequest raw) {
+            return CustomerId.customerId(raw.customerId())
+                             .flatMap(customerId -> validateItems(raw.items())
+                                                                 .map(items -> new ValidPlaceOrderRequest(customerId,
+                                                                                                          items,
+                                                                                                          raw.discountCode())));
+        }
+
+        private static Result<List<ValidOrderItem>> validateItems(List<PlaceOrderRequest.OrderItemRequest> items) {
+            if (items == null || items.isEmpty()) {
+                return new PlaceOrderError.InvalidRequest("At least one item required").result();
+            }
+            var validated = items.stream()
+                                 .map(item -> Result.all(ProductId.productId(item.productId()),
+                                                         Quantity.quantity(item.quantity()))
+                                                    .map((pid, qty) -> new ValidOrderItem(pid.value(),
+                                                                                          qty.value())))
+                                 .toList();
+            return Result.allOf(validated);
+        }
+    }
+
+    // === Errors ===
+    public sealed interface PlaceOrderError extends Cause {
+        record InvalidRequest(String details) implements PlaceOrderError {
+            @Override public String message() {
+                return "Invalid order request: " + details;
+            }
+        }
+
+        record InventoryCheckFailed(Cause cause) implements PlaceOrderError {
+            @Override public String message() {
+                return "Inventory check failed: " + cause.message();
+            }
+        }
+
+        record PricingFailed(Cause cause) implements PlaceOrderError {
+            @Override public String message() {
+                return "Pricing calculation failed: " + cause.message();
+            }
+        }
+
+        record ReservationFailed(Cause cause) implements PlaceOrderError {
+            @Override public String message() {
+                return "Stock reservation failed: " + cause.message();
+            }
+        }
+    }
+
+    // === Static Config ===
     private static final String INVENTORY = "org.pragmatica-lite.aether.demo:inventory-service:0.1.0";
     private static final String PRICING = "org.pragmatica-lite.aether.demo:pricing-service:0.1.0";
 
+    // === Factory ===
     public static PlaceOrderSlice placeOrderSlice() {
         return new PlaceOrderSlice();
     }
@@ -45,6 +112,7 @@ public record PlaceOrderSlice() implements Slice {
         return SliceRuntime.sliceInvoker();
     }
 
+    // === Slice Implementation ===
     @Override
     public List<SliceMethod< ?, ? >> methods() {
         return List.of(new SliceMethod<>(MethodName.methodName("placeOrder")
@@ -73,7 +141,7 @@ public record PlaceOrderSlice() implements Slice {
     private Promise<ValidWithStockCheck> checkAllStock(ValidPlaceOrderRequest request) {
         var stockChecks = request.items()
                                  .stream()
-                                 .map(item -> checkStock(item))
+                                 .map(this::checkStock)
                                  .toList();
         return Promise.allOf(stockChecks)
                       .flatMap(results -> validateStockResults(results, request));
@@ -184,12 +252,12 @@ public record PlaceOrderSlice() implements Slice {
     }
 
     private OrderRepository.OrderItem toOrderItem(ValidPlaceOrderRequest.ValidOrderItem item) {
-        // Default price, in production would come from pricing
-        var unitPrice = Money.usd("29.99");
+        var unitPrice = Money.usd("29.99")
+                             .expect("Invalid unit price");
         return new OrderRepository.OrderItem(item.productId(), item.quantity(), unitPrice);
     }
 
-    // Pipeline context records
+    // === Pipeline Context Records ===
     private record ValidWithStockCheck(ValidPlaceOrderRequest request) {}
 
     private record ValidWithPrice(ValidPlaceOrderRequest request, OrderTotal total) {}

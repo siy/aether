@@ -64,7 +64,7 @@ class SharedLibraryClassLoaderTest {
 
     @Test
     void checkCompatibility_returns_empty_for_unknown_artifact() {
-        var dependency = ArtifactDependency.parse("org.example:unknown:1.0.0").unwrap();
+        var dependency = ArtifactDependency.artifactDependency("org.example:unknown:1.0.0").unwrap();
 
         var result = loader.checkCompatibility(dependency);
 
@@ -77,7 +77,7 @@ class SharedLibraryClassLoaderTest {
         var dummyUrl = new URL("file:///dummy.jar");
         loader.addArtifact("org.example", "my-lib", version, dummyUrl);
 
-        var dependency = ArtifactDependency.parse("org.example:my-lib:^1.0.0").unwrap();
+        var dependency = ArtifactDependency.artifactDependency("org.example:my-lib:^1.0.0").unwrap();
         var result = loader.checkCompatibility(dependency);
 
         assertThat(result).isNotEqualTo(Option.none());
@@ -90,7 +90,7 @@ class SharedLibraryClassLoaderTest {
         var dummyUrl = new URL("file:///dummy.jar");
         loader.addArtifact("org.example", "my-lib", version, dummyUrl);
 
-        var dependency = ArtifactDependency.parse("org.example:my-lib:^2.0.0").unwrap();
+        var dependency = ArtifactDependency.artifactDependency("org.example:my-lib:^2.0.0").unwrap();
         var result = loader.checkCompatibility(dependency);
 
         assertThat(result).isNotEqualTo(Option.none());

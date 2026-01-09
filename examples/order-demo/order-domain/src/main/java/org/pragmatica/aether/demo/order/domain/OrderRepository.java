@@ -1,6 +1,7 @@
 package org.pragmatica.aether.demo.order.domain;
 
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Unit;
 
 import java.time.Instant;
 import java.util.List;
@@ -15,7 +16,7 @@ public interface OrderRepository {
     /**
      * Store a new order.
      */
-    void save(StoredOrder order);
+    Unit save(StoredOrder order);
 
     /**
      * Find order by ID.
@@ -25,7 +26,7 @@ public interface OrderRepository {
     /**
      * Update order status.
      */
-    void updateStatus(String orderId, OrderStatus newStatus);
+    Unit updateStatus(String orderId, OrderStatus newStatus);
 
     /**
      * Get a random order ID (for testing).
@@ -90,9 +91,16 @@ final class InMemoryOrderRepository implements OrderRepository {
                                      CustomerId.customerId("CUST-00000001")
                                                .expect("Invalid customer ID: CUST-00000001"),
                                      OrderStatus.CONFIRMED,
-                                     Money.usd("129.97"),
-                                     List.of(new OrderItem("PROD-ABC123", 2, Money.usd("29.99")),
-                                             new OrderItem("PROD-DEF456", 1, Money.usd("49.99"))),
+                                     Money.usd("129.97")
+                                          .expect("Invalid mock order total"),
+                                     List.of(new OrderItem("PROD-ABC123",
+                                                           2,
+                                                           Money.usd("29.99")
+                                                                .expect("Invalid mock unit price")),
+                                             new OrderItem("PROD-DEF456",
+                                                           1,
+                                                           Money.usd("49.99")
+                                                                .expect("Invalid mock unit price"))),
                                      List.of("RES-11111111", "RES-22222222"),
                                      now.minusSeconds(3600),
                                      now);
@@ -104,8 +112,12 @@ final class InMemoryOrderRepository implements OrderRepository {
                                      CustomerId.customerId("CUST-00000002")
                                                .expect("Invalid customer ID: CUST-00000002"),
                                      OrderStatus.SHIPPED,
-                                     Money.usd("99.99"),
-                                     List.of(new OrderItem("PROD-GHI789", 1, Money.usd("99.99"))),
+                                     Money.usd("99.99")
+                                          .expect("Invalid mock order total"),
+                                     List.of(new OrderItem("PROD-GHI789",
+                                                           1,
+                                                           Money.usd("99.99")
+                                                                .expect("Invalid mock unit price"))),
                                      List.of("RES-33333333"),
                                      now.minusSeconds(86400),
                                      now.minusSeconds(3600));
@@ -115,10 +127,11 @@ final class InMemoryOrderRepository implements OrderRepository {
     }
 
     @Override
-    public void save(StoredOrder order) {
+    public Unit save(StoredOrder order) {
         orders.put(order.orderId()
                         .value(),
                    order);
+        return Unit.unit();
     }
 
     @Override
@@ -127,11 +140,12 @@ final class InMemoryOrderRepository implements OrderRepository {
     }
 
     @Override
-    public void updateStatus(String orderId, OrderStatus newStatus) {
+    public Unit updateStatus(String orderId, OrderStatus newStatus) {
         var order = orders.get(orderId);
         if (order != null) {
             orders.put(orderId, order.withStatus(newStatus));
         }
+        return Unit.unit();
     }
 
     @Override

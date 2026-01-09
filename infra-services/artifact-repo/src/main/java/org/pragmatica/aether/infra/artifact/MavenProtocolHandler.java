@@ -247,11 +247,21 @@ class MavenProtocolHandlerImpl implements MavenProtocolHandler {
         return Result.all(GroupId.groupId(groupPath.toString()),
                           ArtifactId.artifactId(artifactIdStr),
                           Version.version(versionStr))
-                     .map((groupId, artifactId, version) -> {
-                              var artifact = new Artifact(groupId, artifactId, version);
-                              return Option.<ParsedPath>some(new ParsedPath.ArtifactPath(artifact, classifier, extension));
-                          })
+                     .map((groupId, artifactId, version) -> toArtifactPath(groupId,
+                                                                           artifactId,
+                                                                           version,
+                                                                           classifier,
+                                                                           extension))
                      .or(Option.none());
+    }
+
+    private Option<ParsedPath> toArtifactPath(GroupId groupId,
+                                              ArtifactId artifactId,
+                                              Version version,
+                                              String classifier,
+                                              String extension) {
+        var artifact = new Artifact(groupId, artifactId, version);
+        return Option.some(new ParsedPath.ArtifactPath(artifact, classifier, extension));
     }
 
     private String extractExtension(String fileName) {

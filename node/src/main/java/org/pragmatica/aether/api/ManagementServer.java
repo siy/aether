@@ -13,6 +13,7 @@ import org.pragmatica.consensus.NodeId;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.net.tcp.TlsConfig;
@@ -107,8 +108,7 @@ class ManagementServerImpl implements ManagementServer {
         this.metricsPublisher = new DashboardMetricsPublisher(nodeSupplier, alertManager);
         this.observability = ObservabilityRegistry.prometheus();
         this.sslContext = tls.map(TlsContextFactory::create)
-                             .flatMap(result -> result.fold(_ -> Option.empty(),
-                                                            Option::some));
+                             .flatMap(Result::option);
     }
 
     @Override
@@ -230,37 +230,69 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             serveDashboardFile(ctx, "style.css", CONTENT_TYPE_CSS);
             return;
         }
-        // Handle repository requests
+        if (uri.equals("/dashboard/dashboard.js")) {
+            serveDashboardFile(ctx, "dashboard.js", CONTENT_TYPE_JS);
+            return;
+        }
+        // Handle /api/ prefixed endpoints
+        if (uri.startsWith("/api/")) {
+            handleApiGet(ctx, node, uri.substring(4));
+            // Strip /api prefix
+            return;
+        }
+        // Handle repository requests (no /api prefix)
         if (uri.startsWith("/repository/")) {
             handleRepositoryGet(ctx, node, uri);
             return;
         }
-        // Handle rolling update paths
+        sendError(ctx, HttpResponseStatus.NOT_FOUND);
+    }
+
+    private void handleApiGet(ChannelHandlerContext ctx, AetherNode node, String uri) {
+        if (handleSpecialEndpoints(ctx, node, uri)) {
+            return;
+        }
+        routeStandardEndpoint(ctx, node, uri);
+    }
+
+    private boolean handleSpecialEndpoints(ChannelHandlerContext ctx, AetherNode node, String uri) {
+        if (uri.equals("/panel/chaos")) {
+            sendText(ctx, "");
+            return true;
+        }
         if (uri.startsWith("/rolling-update/") || uri.equals("/rolling-updates")) {
             handleRollingUpdateGet(ctx, node, uri);
-            return;
+            return true;
         }
-        // Handle Prometheus metrics endpoint
         if (uri.equals("/metrics/prometheus")) {
             sendPrometheus(ctx, observability.scrape());
-            return;
+            return true;
         }
-        // Handle invocation metrics with optional query parameters
         if (uri.startsWith("/invocation-metrics")) {
-            var path = extractPath(uri);
-            if (path.equals("/invocation-metrics/slow")) {
-                sendJson(ctx, buildSlowInvocationsResponse(node));
-            } else if (path.equals("/invocation-metrics/strategy")) {
-                sendJson(ctx, buildStrategyResponse(node));
-            } else if (path.equals("/invocation-metrics")) {
-                var artifactFilter = extractQueryParam(uri, "artifact");
-                var methodFilter = extractQueryParam(uri, "method");
-                sendJson(ctx, buildInvocationMetricsResponse(node, artifactFilter, methodFilter));
-            } else {
-                sendError(ctx, HttpResponseStatus.NOT_FOUND);
-            }
-            return;
+            handleInvocationMetricsGet(ctx, node, uri);
+            return true;
         }
+        return false;
+    }
+
+    private void handleInvocationMetricsGet(ChannelHandlerContext ctx, AetherNode node, String uri) {
+        var path = extractPath(uri);
+        var response = switch (path) {
+            case "/invocation-metrics/slow" -> buildSlowInvocationsResponse(node);
+            case "/invocation-metrics/strategy" -> buildStrategyResponse(node);
+            case "/invocation-metrics" -> buildInvocationMetricsResponse(node,
+                                                                         extractQueryParam(uri, "artifact"),
+                                                                         extractQueryParam(uri, "method"));
+            default -> (String) null;
+        };
+        if (response != null) {
+            sendJson(ctx, response);
+        } else {
+            sendError(ctx, HttpResponseStatus.NOT_FOUND);
+        }
+    }
+
+    private void routeStandardEndpoint(ChannelHandlerContext ctx, AetherNode node, String uri) {
         var response = switch (uri) {
             case "/status" -> buildStatusResponse(node);
             case "/nodes" -> buildNodesResponse(node);
@@ -277,6 +309,8 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             case "/controller/config" -> buildControllerConfigResponse(node);
             case "/controller/status" -> buildControllerStatusResponse(node);
             case "/ttm/status" -> buildTtmStatusResponse(node);
+            case "/node-metrics" -> buildNodeMetricsResponse(node);
+            case "/events" -> "[]";
             default -> (String) null;
         };
         if (response != null) {
@@ -335,20 +369,26 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     private void handlePost(ChannelHandlerContext ctx, String uri, FullHttpRequest request) {
         var node = nodeSupplier.get();
-        // Handle repository PUT requests (binary content)
+        // Handle repository PUT requests (binary content, no /api prefix)
         if (uri.startsWith("/repository/")) {
             handleRepositoryPut(ctx, node, uri, request);
             return;
         }
-        // For other endpoints, read as string
+        // Require /api/ prefix for API endpoints
+        if (!uri.startsWith("/api/")) {
+            sendError(ctx, HttpResponseStatus.NOT_FOUND);
+            return;
+        }
+        var apiUri = uri.substring(4);
+        // Strip /api prefix
         var body = request.content()
                           .toString(CharsetUtil.UTF_8);
         // Handle rolling update POST paths
-        if (uri.startsWith("/rolling-update")) {
-            handleRollingUpdatePost(ctx, node, uri, body);
+        if (apiUri.startsWith("/rolling-update")) {
+            handleRollingUpdatePost(ctx, node, apiUri, body);
             return;
         }
-        switch (uri) {
+        switch (apiUri) {
             case "/deploy" -> handleDeploy(ctx, node, body);
             case "/scale" -> handleScale(ctx, node, body);
             case "/undeploy" -> handleUndeploy(ctx, node, body);
@@ -363,9 +403,16 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     private void handleDelete(ChannelHandlerContext ctx, String uri) {
-        // DELETE /thresholds/{metric}
-        if (uri.startsWith("/thresholds/")) {
-            var metric = uri.substring("/thresholds/".length());
+        // Require /api/ prefix
+        if (!uri.startsWith("/api/")) {
+            sendError(ctx, HttpResponseStatus.NOT_FOUND);
+            return;
+        }
+        var apiUri = uri.substring(4);
+        // Strip /api prefix
+        // DELETE /api/thresholds/{metric}
+        if (apiUri.startsWith("/thresholds/")) {
+            var metric = apiUri.substring("/thresholds/".length());
             handleDeleteThreshold(ctx, metric);
             return;
         }
@@ -443,28 +490,29 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing 'artifact' field");
             return;
         }
-        int instances = 1;
-        if (instancesMatch.find()) {
-            instances = Integer.parseInt(instancesMatch.group(1));
-        }
+        int instances = instancesMatch.find()
+                        ? Integer.parseInt(instancesMatch.group(1))
+                        : 1;
         var artifactStr = artifactMatch.group(1);
-        int finalInstances = instances;
         Artifact.artifact(artifactStr)
-                .onSuccess(artifact -> {
-                               AetherKey key = new AetherKey.BlueprintKey(artifact);
-                               AetherValue value = new AetherValue.BlueprintValue(finalInstances);
-                               KVCommand<AetherKey> command = new KVCommand.Put<>(key, value);
-                               node.apply(List.of(command))
-                                   .onSuccess(_ -> sendJson(ctx,
-                                                            "{\"status\":\"deployed\",\"artifact\":\"" + artifactStr
-                                                            + "\",\"instances\":" + finalInstances + "}"))
-                                   .onFailure(cause -> sendJsonError(ctx,
-                                                                     HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                     cause.message()));
-                           })
+                .async()
+                .flatMap(artifact -> applyDeployCommand(node, artifact, instances))
+                .onSuccess(_ -> sendJson(ctx,
+                                         "{\"status\":\"deployed\",\"artifact\":\"" + artifactStr + "\",\"instances\":" + instances
+                                         + "}"))
                 .onFailure(cause -> sendJsonError(ctx,
-                                                  HttpResponseStatus.BAD_REQUEST,
+                                                  isBadRequest(cause)
+                                                  ? HttpResponseStatus.BAD_REQUEST
+                                                  : HttpResponseStatus.INTERNAL_SERVER_ERROR,
                                                   cause.message()));
+    }
+
+    private Promise<Unit> applyDeployCommand(AetherNode node, Artifact artifact, int instances) {
+        AetherKey key = new AetherKey.BlueprintKey(artifact);
+        AetherValue value = new AetherValue.BlueprintValue(instances);
+        KVCommand<AetherKey> command = new KVCommand.Put<>(key, value);
+        return node.apply(List.of(command))
+                   .mapToUnit();
     }
 
     private void handleScale(ChannelHandlerContext ctx, AetherNode node, String body) {
@@ -478,20 +526,15 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         var artifactStr = artifactMatch.group(1);
         var instances = Integer.parseInt(instancesMatch.group(1));
         Artifact.artifact(artifactStr)
-                .onSuccess(artifact -> {
-                               AetherKey key = new AetherKey.BlueprintKey(artifact);
-                               AetherValue value = new AetherValue.BlueprintValue(instances);
-                               KVCommand<AetherKey> command = new KVCommand.Put<>(key, value);
-                               node.apply(List.of(command))
-                                   .onSuccess(_ -> sendJson(ctx,
-                                                            "{\"status\":\"scaled\",\"artifact\":\"" + artifactStr
-                                                            + "\",\"instances\":" + instances + "}"))
-                                   .onFailure(cause -> sendJsonError(ctx,
-                                                                     HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                     cause.message()));
-                           })
+                .async()
+                .flatMap(artifact -> applyDeployCommand(node, artifact, instances))
+                .onSuccess(_ -> sendJson(ctx,
+                                         "{\"status\":\"scaled\",\"artifact\":\"" + artifactStr + "\",\"instances\":" + instances
+                                         + "}"))
                 .onFailure(cause -> sendJsonError(ctx,
-                                                  HttpResponseStatus.BAD_REQUEST,
+                                                  isBadRequest(cause)
+                                                  ? HttpResponseStatus.BAD_REQUEST
+                                                  : HttpResponseStatus.INTERNAL_SERVER_ERROR,
                                                   cause.message()));
     }
 
@@ -504,26 +547,37 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         }
         var artifactStr = artifactMatch.group(1);
         Artifact.artifact(artifactStr)
-                .onSuccess(artifact -> {
-                               AetherKey key = new AetherKey.BlueprintKey(artifact);
-                               KVCommand<AetherKey> command = new KVCommand.Remove<>(key);
-                               node.apply(List.of(command))
-                                   .onSuccess(_ -> sendJson(ctx,
-                                                            "{\"status\":\"undeployed\",\"artifact\":\"" + artifactStr
-                                                            + "\"}"))
-                                   .onFailure(cause -> sendJsonError(ctx,
-                                                                     HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                     cause.message()));
-                           })
+                .async()
+                .flatMap(artifact -> applyUndeployCommand(node, artifact))
+                .onSuccess(_ -> sendJson(ctx, "{\"status\":\"undeployed\",\"artifact\":\"" + artifactStr + "\"}"))
                 .onFailure(cause -> sendJsonError(ctx,
-                                                  HttpResponseStatus.BAD_REQUEST,
+                                                  isBadRequest(cause)
+                                                  ? HttpResponseStatus.BAD_REQUEST
+                                                  : HttpResponseStatus.INTERNAL_SERVER_ERROR,
                                                   cause.message()));
+    }
+
+    private Promise<Unit> applyUndeployCommand(AetherNode node, Artifact artifact) {
+        AetherKey key = new AetherKey.BlueprintKey(artifact);
+        KVCommand<AetherKey> command = new KVCommand.Remove<>(key);
+        return node.apply(List.of(command))
+                   .mapToUnit();
     }
 
     private void handleBlueprint(ChannelHandlerContext ctx, AetherNode node, String body) {
         BlueprintParser.parse(body)
-                       .onSuccess(blueprint -> {
-                                      // Build commands for all slices in blueprint
+                       .async()
+                       .flatMap(blueprint -> applyBlueprintCommands(ctx, node, blueprint))
+                       .onFailure(cause -> sendJsonError(ctx,
+                                                         isBadRequest(cause)
+                                                         ? HttpResponseStatus.BAD_REQUEST
+                                                         : HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                                                         cause.message()));
+    }
+
+    private Promise<Unit> applyBlueprintCommands(ChannelHandlerContext ctx,
+                                                 AetherNode node,
+                                                 org.pragmatica.aether.slice.blueprint.Blueprint blueprint) {
         var commands = blueprint.slices()
                                 .stream()
                                 .map(spec -> {
@@ -532,25 +586,25 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                                          return (KVCommand<AetherKey>) new KVCommand.Put<>(key, value);
                                      })
                                 .toList();
-                                      if (commands.isEmpty()) {
-                                          sendJson(ctx,
-                                                   "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
-                                                                                                         .asString()
-                                                   + "\",\"slices\":0}");
-                                          return;
-                                      }
-                                      node.apply(commands)
-                                          .onSuccess(_ -> sendJson(ctx,
-                                                                   "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
-                                                                                                                         .asString()
-                                                                   + "\",\"slices\":" + commands.size() + "}"))
-                                          .onFailure(cause -> sendJsonError(ctx,
-                                                                            HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                            cause.message()));
-                                  })
-                       .onFailure(cause -> sendJsonError(ctx,
-                                                         HttpResponseStatus.BAD_REQUEST,
-                                                         cause.message()));
+        if (commands.isEmpty()) {
+            sendJson(ctx,
+                     "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
+                                                                          .asString() + "\",\"slices\":0}");
+            return Promise.success(unit());
+        }
+        return node.apply(commands)
+                   .mapToUnit()
+                   .onSuccess(_ -> sendJson(ctx,
+                                            "{\"status\":\"applied\",\"blueprint\":\"" + blueprint.id()
+                                                                                                  .asString()
+                                            + "\",\"slices\":" + commands.size() + "}"));
+    }
+
+    private static boolean isBadRequest(org.pragmatica.lang.Cause cause) {
+        // Artifact parsing errors are bad requests, everything else is internal error
+        return cause.message()
+                    .contains("Invalid") || cause.message()
+                                                 .contains("Missing");
     }
 
     // ===== Rolling Update Handlers =====
@@ -665,7 +719,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing routing field");
             return;
         }
-        org.pragmatica.aether.update.VersionRouting.parse(routingMatch.group(1))
+        org.pragmatica.aether.update.VersionRouting.versionRouting(routingMatch.group(1))
            .onSuccess(routing -> node.rollingUpdateManager()
                                      .adjustRouting(updateId, routing)
                                      .onSuccess(update -> sendJson(ctx,
@@ -722,8 +776,12 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private String buildRollingUpdateResponse(AetherNode node, String updateId) {
         return node.rollingUpdateManager()
                    .getUpdate(updateId)
-                   .fold(() -> "{\"error\":\"Update not found\",\"updateId\":\"" + updateId + "\"}",
-                         this::buildRollingUpdateJson);
+                   .map(this::buildRollingUpdateJson)
+                   .or(updateNotFoundJson(updateId));
+    }
+
+    private String updateNotFoundJson(String updateId) {
+        return "{\"error\":\"Update not found\",\"updateId\":\"" + updateId + "\"}";
     }
 
     private String buildRollingUpdateHealthResponse(AetherNode node, String updateId) {
@@ -833,6 +891,61 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private String buildStatusResponse(AetherNode node) {
         var sb = new StringBuilder();
         sb.append("{");
+        // Uptime
+        var uptimeSeconds = node.uptimeSeconds();
+        sb.append("\"uptimeSeconds\":")
+          .append(uptimeSeconds)
+          .append(",");
+        // Cluster info
+        sb.append("\"cluster\":{");
+        var allMetrics = node.metricsCollector()
+                             .allMetrics();
+        var connectedNodes = allMetrics.keySet();
+        var leaderId = node.leader()
+                           .map(NodeId::id)
+                           .or("none");
+        sb.append("\"nodeCount\":")
+          .append(connectedNodes.size())
+          .append(",");
+        sb.append("\"leaderId\":\"")
+          .append(leaderId)
+          .append("\",");
+        sb.append("\"nodes\":[");
+        boolean first = true;
+        for (NodeId nodeId : connectedNodes) {
+            if (!first) sb.append(",");
+            var isLeader = node.leader()
+                               .map(l -> l.equals(nodeId))
+                               .or(false);
+            sb.append("{\"id\":\"")
+              .append(nodeId.id())
+              .append("\",\"isLeader\":")
+              .append(isLeader)
+              .append("}");
+            first = false;
+        }
+        sb.append("]},");
+        // Slice count
+        var sliceCount = node.sliceStore()
+                             .loaded()
+                             .size();
+        sb.append("\"sliceCount\":")
+          .append(sliceCount)
+          .append(",");
+        // Metrics summary
+        var derived = node.snapshotCollector()
+                          .derivedMetrics();
+        sb.append("\"metrics\":{");
+        sb.append("\"requestsPerSecond\":")
+          .append(derived.requestRate())
+          .append(",");
+        sb.append("\"successRate\":")
+          .append(100.0 - derived.errorRate() * 100.0)
+          .append(",");
+        sb.append("\"avgLatencyMs\":")
+          .append(derived.latencyP50());
+        sb.append("},");
+        // Node info
         sb.append("\"nodeId\":\"")
           .append(node.self()
                       .id())
@@ -842,9 +955,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
           .append(node.isLeader())
           .append(",");
         sb.append("\"leader\":\"")
-          .append(node.leader()
-                      .fold(() -> "",
-                            nodeId -> nodeId.id()))
+          .append(leaderId)
           .append("\"");
         sb.append("}");
         return sb.toString();
@@ -1073,18 +1184,18 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         boolean first = true;
         for (var snapshot : snapshots) {
             // Apply artifact filter (partial match) - skip if filter present and doesn't match
-            var skipByArtifact = artifactFilter.fold(() -> false,
-                                                     filter -> !snapshot.artifact()
-                                                                        .asString()
-                                                                        .contains(filter));
+            var skipByArtifact = artifactFilter.map(filter -> !snapshot.artifact()
+                                                                       .asString()
+                                                                       .contains(filter))
+                                               .or(false);
             if (skipByArtifact) {
                 continue;
             }
             // Apply method filter (exact match) - skip if filter present and doesn't match
-            var skipByMethod = methodFilter.fold(() -> false,
-                                                 filter -> !snapshot.methodName()
-                                                                    .name()
-                                                                    .equals(filter));
+            var skipByMethod = methodFilter.map(filter -> !snapshot.methodName()
+                                                                   .name()
+                                                                   .equals(filter))
+                                           .or(false);
             if (skipByMethod) {
                 continue;
             }
@@ -1171,8 +1282,8 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                   .append(",");
                 sb.append("\"error\":")
                   .append(slow.errorType()
-                              .fold(() -> "null",
-                                    err -> "\"" + err.replace("\"", "\\\"") + "\""));
+                              .map(err -> "\"" + err.replace("\"", "\\\"") + "\"")
+                              .or("null"));
                 sb.append("}");
                 first = false;
             }
@@ -1215,8 +1326,11 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         var config = ttm.config();
         var sb = new StringBuilder();
         sb.append("{");
-        sb.append("\"enabled\":")
+        sb.append("\"configEnabled\":")
           .append(config.enabled())
+          .append(",");
+        sb.append("\"active\":")
+          .append(ttm.isEnabled())
           .append(",");
         sb.append("\"state\":\"")
           .append(ttm.state()
@@ -1343,6 +1457,36 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                       "Runtime strategy change not supported. Strategy must be set at node startup.");
     }
 
+    private String buildNodeMetricsResponse(AetherNode node) {
+        var allMetrics = node.metricsCollector()
+                             .allMetrics();
+        var sb = new StringBuilder();
+        sb.append("[");
+        boolean first = true;
+        for (var entry : allMetrics.entrySet()) {
+            if (!first) sb.append(",");
+            var nodeId = entry.getKey();
+            var metrics = entry.getValue();
+            sb.append("{\"nodeId\":\"")
+              .append(nodeId.id())
+              .append("\",");
+            sb.append("\"cpuUsage\":")
+              .append(metrics.getOrDefault("cpuUsage", 0.0))
+              .append(",");
+            sb.append("\"heapUsedMb\":")
+              .append(metrics.getOrDefault("heapUsedMb", 0.0)
+                             .longValue())
+              .append(",");
+            sb.append("\"heapMaxMb\":")
+              .append(metrics.getOrDefault("heapMaxMb", 0.0)
+                             .longValue());
+            sb.append("}");
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
     private String buildAlertsResponse() {
         return "{\"active\":" + alertManager.activeAlertsAsJson() + ",\"history\":" + alertManager.alertHistoryAsJson()
                + "}";
@@ -1365,6 +1509,18 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, buf);
         response.headers()
                 .set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_PROMETHEUS);
+        response.headers()
+                .setInt(HttpHeaderNames.CONTENT_LENGTH,
+                        buf.readableBytes());
+        ctx.writeAndFlush(response)
+           .addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void sendText(ChannelHandlerContext ctx, String content) {
+        var buf = Unpooled.copiedBuffer(content, CharsetUtil.UTF_8);
+        var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, buf);
+        response.headers()
+                .set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_HTML);
         response.headers()
                 .setInt(HttpHeaderNames.CONTENT_LENGTH,
                         buf.readableBytes());

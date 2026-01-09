@@ -61,12 +61,12 @@ public interface DependencyResolver {
                                   SliceRegistry registry,
                                   SharedLibraryClassLoader sharedLibraryLoader) {
         return registry.lookup(artifact)
-                       .fold(() -> resolveWithSharedLoader(artifact,
-                                                           repository,
-                                                           registry,
-                                                           sharedLibraryLoader,
-                                                           new HashSet<>()),
-                             Promise::success);
+                       .map(Promise::success)
+                       .or(() -> resolveWithSharedLoader(artifact,
+                                                         repository,
+                                                         registry,
+                                                         sharedLibraryLoader,
+                                                         new HashSet<>()));
     }
 
     /**
@@ -199,8 +199,22 @@ public interface DependencyResolver {
                                                                                                     sharedLibraryLoader,
                                                                                                     repository,
                                                                                                     location.url()))
-                                     .flatMap(sharedResult -> {
-                                                  // Now load the slice class and resolve slice dependencies
+                                     .flatMap(sharedResult -> loadSliceClassAndResolveDeps(manifest,
+                                                                                           depFile,
+                                                                                           sharedResult,
+                                                                                           repository,
+                                                                                           registry,
+                                                                                           sharedLibraryLoader,
+                                                                                           resolutionPath));
+    }
+
+    private static Promise<Slice> loadSliceClassAndResolveDeps(SliceManifestInfo manifest,
+                                                               DependencyFile depFile,
+                                                               SharedDependencyLoader.SharedDependencyResult sharedResult,
+                                                               Repository repository,
+                                                               SliceRegistry registry,
+                                                               SharedLibraryClassLoader sharedLibraryLoader,
+                                                               Set<String> resolutionPath) {
         return loadClass(manifest.sliceClassName(),
                          sharedResult.sliceClassLoader())
                         .flatMap(sliceClass -> resolveSliceDependencies(manifest.artifact(),
@@ -211,7 +225,6 @@ public interface DependencyResolver {
                                                                         registry,
                                                                         sharedLibraryLoader,
                                                                         resolutionPath));
-                                              });
     }
 
     private static Promise<Slice> resolveSliceDependencies(Artifact artifact,
@@ -235,11 +248,21 @@ public interface DependencyResolver {
                                                        sharedLibraryLoader,
                                                        resolutionPath,
                                                        List.of())
-                                                      .flatMap(resolvedSlices -> createSliceFromClass(sliceClass,
-                                                                                                      resolvedSlices,
-                                                                                                      sliceDeps)
-                                                                                                     .async())
-                                                      .flatMap(slice -> registerSlice(artifact, slice, registry));
+                                                      .flatMap(resolvedSlices -> createAndRegisterSlice(artifact,
+                                                                                                        sliceClass,
+                                                                                                        resolvedSlices,
+                                                                                                        sliceDeps,
+                                                                                                        registry));
+    }
+
+    private static Promise<Slice> createAndRegisterSlice(Artifact artifact,
+                                                         Class< ? > sliceClass,
+                                                         List<Slice> resolvedSlices,
+                                                         List<ArtifactDependency> sliceDeps,
+                                                         SliceRegistry registry) {
+        return createSliceFromClass(sliceClass, resolvedSlices, sliceDeps)
+                                   .async()
+                                   .flatMap(slice -> registerSlice(artifact, slice, registry));
     }
 
     private static Promise<List<Slice>> resolveArtifactDependenciesSequentially(List<ArtifactDependency> dependencies,
@@ -272,12 +295,12 @@ public interface DependencyResolver {
         return registry.findByArtifactKey(dependency.groupId(),
                                           dependency.artifactId(),
                                           dependency.versionPattern())
-                       .fold(() -> resolveArtifactFromRepository(dependency,
-                                                                 repository,
-                                                                 registry,
-                                                                 sharedLibraryLoader,
-                                                                 resolutionPath),
-                             Promise::success);
+                       .map(Promise::success)
+                       .or(() -> resolveArtifactFromRepository(dependency,
+                                                               repository,
+                                                               registry,
+                                                               sharedLibraryLoader,
+                                                               resolutionPath));
     }
 
     private static Promise<Slice> resolveArtifactFromRepository(ArtifactDependency dependency,
@@ -324,8 +347,11 @@ public interface DependencyResolver {
     }
 
     private static Promise<Slice> registerSlice(Artifact artifact, Slice slice, SliceRegistry registry) {
+        // On success: return our slice; on failure (already registered): lookup or fallback to our slice
         return registry.register(artifact, slice)
                        .map(_ -> slice)
+                       .recover(_ -> registry.lookup(artifact)
+                                             .or(slice))
                        .async();
     }
 

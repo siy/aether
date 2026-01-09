@@ -128,11 +128,11 @@ public sealed interface BackendSimulation {
             return Result.success(new LatencySimulation(baseMs, jitterMs, spikeChance, spikeMs));
         }
 
-        public static LatencySimulation fixed(long latencyMs) {
+        public static LatencySimulation latencySimulation(long latencyMs) {
             return new LatencySimulation(latencyMs, 0, 0, 0);
         }
 
-        public static LatencySimulation withJitter(long baseMs, long jitterMs) {
+        public static LatencySimulation latencySimulation(long baseMs, long jitterMs) {
             return new LatencySimulation(baseMs, jitterMs, 0, 0);
         }
 
@@ -211,7 +211,7 @@ public sealed interface BackendSimulation {
             return Result.success(new Composite(simulations));
         }
 
-        public static Result<Composite> of(BackendSimulation... simulations) {
+        public static Result<Composite> composite(BackendSimulation... simulations) {
             return composite(List.of(simulations));
         }
     }

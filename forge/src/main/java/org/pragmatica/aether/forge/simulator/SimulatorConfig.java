@@ -69,8 +69,8 @@ public record SimulatorConfig(Map<String, EntryPointConfig> entryPoints,
             return switch (entryPointName) {
                 case "placeOrder" -> new DataGenerator.OrderRequestGenerator(productGen,
                                                                              DataGenerator.CustomerIdGenerator.withDefaults(),
-                                                                             DataGenerator.IntRange.of(minQuantity,
-                                                                                                       maxQuantity)
+                                                                             DataGenerator.IntRange.intRange(minQuantity,
+                                                                                                             maxQuantity)
                                                                                           .unwrap());
                 case "getOrderStatus", "cancelOrder" -> DataGenerator.OrderIdGenerator.withSharedPool();
                 case "checkStock" -> new DataGenerator.StockCheckGenerator(productGen);
@@ -178,7 +178,7 @@ public record SimulatorConfig(Map<String, EntryPointConfig> entryPoints,
         private BackendSimulation buildCompositeSimulation() {
             var latency = new BackendSimulation.LatencySimulation(baseLatencyMs, jitterMs, spikeChance, spikeLatencyMs);
             var failure = buildFailureSimulation();
-            return BackendSimulation.Composite.of(latency, failure)
+            return BackendSimulation.Composite.composite(latency, failure)
                                     .unwrap();
         }
 
@@ -343,8 +343,7 @@ public record SimulatorConfig(Map<String, EntryPointConfig> entryPoints,
         return loadFromFile(path)
                            .onFailure(cause -> log.warn("Failed to load config: {}, using defaults",
                                                         cause.message()))
-                           .fold(_ -> defaultConfig(),
-                                 config -> config);
+                           .or(defaultConfig());
     }
 
     /**

@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.pragmatica-lite.aether</groupId>
         <artifactId>aether</artifactId>
-        <version>0.7.1</version>
+        <version>0.7.2</version>
     </parent>
 
     <artifactId>forge</artifactId>
@@ -24,11 +24,23 @@
             <groupId>org.pragmatica-lite.aether</groupId>
             <artifactId>cluster</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.pragmatica-lite.aether</groupId>
+            <artifactId>http-routing</artifactId>
+        </dependency>
 
         <!-- Pragmatica -->
         <dependency>
             <groupId>org.pragmatica-lite</groupId>
             <artifactId>core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.pragmatica-lite</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.pragmatica-lite</groupId>
+            <artifactId>jackson</artifactId>
         </dependency>
 
         <!-- Netty for HTTP server -->

@@ -1,10 +1,12 @@
 package org.pragmatica.aether.metrics.invocation;
 
 import org.pragmatica.aether.slice.MethodName;
+import org.pragmatica.lang.Option;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Strategy for determining when an invocation is considered "slow".
@@ -170,27 +172,32 @@ public sealed interface ThresholdStrategy {
 
         /**
          * Per-method statistics using exponential moving average.
+         * Thread-safe using CAS loop for atomic EMA updates.
          */
         private static final class MethodStats {
             private static final double ALPHA = 0.1;
 
-            // Smoothing factor
             private final AtomicLong count = new AtomicLong();
-            private volatile double ema = 0;
+            private final AtomicReference<Double> ema = new AtomicReference<>(0.0);
 
-            // Exponential moving average
             void update(long durationNs) {
                 var c = count.incrementAndGet();
                 if (c == 1) {
-                    ema = durationNs;
+                    ema.set((double) durationNs);
                 } else {
-                    // Thread-safe EMA update (approximate, but good enough for thresholds)
-                    ema = ALPHA * durationNs + (1 - ALPHA) * ema;
+                    // Thread-safe EMA update using CAS loop
+                    double currentEma;
+                    double newEma;
+                    do{
+                        currentEma = ema.get();
+                        newEma = ALPHA * durationNs + (1 - ALPHA) * currentEma;
+                    } while (!ema.compareAndSet(currentEma, newEma));
                 }
             }
 
             long averageNs() {
-                return (long) ema;
+                return ema.get()
+                          .longValue();
             }
         }
     }
@@ -247,11 +254,9 @@ public sealed interface ThresholdStrategy {
                      ThresholdStrategy fallback) implements ThresholdStrategy {
         @Override
         public boolean isSlow(MethodName method, long durationNs) {
-            var explicit = methodThresholdsNs.get(method);
-            if (explicit != null) {
-                return durationNs > explicit;
-            }
-            return fallback.isSlow(method, durationNs);
+            return Option.option(methodThresholdsNs.get(method))
+                         .fold(() -> fallback.isSlow(method, durationNs),
+                               explicit -> durationNs > explicit);
         }
 
         @Override
@@ -263,10 +268,8 @@ public sealed interface ThresholdStrategy {
 
         @Override
         public long thresholdNs(MethodName method) {
-            var explicit = methodThresholdsNs.get(method);
-            return explicit != null
-                   ? explicit
-                   : fallback.thresholdNs(method);
+            return Option.option(methodThresholdsNs.get(method))
+                         .or(() -> fallback.thresholdNs(method));
         }
     }
 }

@@ -121,16 +121,16 @@ class InvocationHandlerImpl implements InvocationHandler {
                   request.correlationId(),
                   request.targetSlice(),
                   request.method());
-        var bridge = localSlices.get(request.targetSlice());
-        if (bridge == null) {
-            log.warn("Slice not found for invocation: {}", request.targetSlice());
-            if (request.expectResponse()) {
-                sendErrorResponse(request, "Slice not found: " + request.targetSlice());
-            }
-            return;
-        }
-        // Invoke the slice method
-        invokeSliceMethod(request, bridge);
+        Option.option(localSlices.get(request.targetSlice()))
+              .onEmpty(() -> {
+                           log.warn("Slice not found for invocation: {}",
+                                    request.targetSlice());
+                           if (request.expectResponse()) {
+                               sendErrorResponse(request,
+                                                 "Slice not found: " + request.targetSlice());
+                           }
+                       })
+              .onPresent(bridge -> invokeSliceMethod(request, bridge));
     }
 
     private void invokeSliceMethod(InvokeRequest request, SliceBridge bridge) {

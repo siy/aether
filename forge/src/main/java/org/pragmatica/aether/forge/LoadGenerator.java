@@ -3,6 +3,7 @@ package org.pragmatica.aether.forge;
 import org.pragmatica.aether.forge.simulator.DataGenerator;
 import org.pragmatica.aether.forge.simulator.EntryPointMetrics;
 import org.pragmatica.aether.forge.simulator.SimulatorConfig;
+import org.pragmatica.lang.Option;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -162,29 +163,29 @@ public final class LoadGenerator {
     public void stop() {
         log.info("Stopping load generator");
         running.set(false);
-        if (scheduler != null) {
-            scheduler.shutdownNow();
-            try{
-                scheduler.awaitTermination(2, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread()
-                      .interrupt();
-            }
-        }
+        Option.option(scheduler)
+              .onPresent(s -> {
+                             s.shutdownNow();
+                             try{
+                                 s.awaitTermination(2, TimeUnit.SECONDS);
+                             } catch (InterruptedException e) {
+                                 Thread.currentThread()
+                                       .interrupt();
+                             }
+                         });
     }
 
     /**
      * Set the rate for a specific entry point.
      */
     public void setRate(String entryPoint, int requestsPerSecond) {
-        var generator = generators.get(entryPoint);
-        if (generator != null) {
-            log.info("Setting {} rate to {} req/sec", entryPoint, requestsPerSecond);
-            generator.setRate(requestsPerSecond);
-            entryPointMetrics.setRate(entryPoint, requestsPerSecond);
-        } else {
-            log.warn("Unknown entry point: {}", entryPoint);
-        }
+        Option.option(generators.get(entryPoint))
+              .onPresent(generator -> {
+                             log.info("Setting {} rate to {} req/sec", entryPoint, requestsPerSecond);
+                             generator.setRate(requestsPerSecond);
+                             entryPointMetrics.setRate(entryPoint, requestsPerSecond);
+                         })
+              .onEmpty(() -> log.warn("Unknown entry point: {}", entryPoint));
     }
 
     /**
@@ -199,40 +200,35 @@ public final class LoadGenerator {
      */
     public void rampUp(int targetRateValue, long durationMillis) {
         log.info("Ramping placeOrder load to {} req/sec over {}ms", targetRateValue, durationMillis);
-        var generator = generators.get("placeOrder");
-        if (generator != null) {
-            generator.rampUp(targetRateValue, durationMillis);
-        }
+        Option.option(generators.get("placeOrder"))
+              .onPresent(generator -> generator.rampUp(targetRateValue, durationMillis));
     }
 
     /**
      * Get current request rate (for placeOrder - backward compatibility).
      */
     public int currentRate() {
-        var generator = generators.get("placeOrder");
-        return generator != null
-               ? generator.currentRate()
-               : 0;
+        return Option.option(generators.get("placeOrder"))
+                     .map(EntryPointGenerator::currentRate)
+                     .or(0);
     }
 
     /**
      * Get current rate for a specific entry point.
      */
     public int currentRate(String entryPoint) {
-        var generator = generators.get(entryPoint);
-        return generator != null
-               ? generator.currentRate()
-               : 0;
+        return Option.option(generators.get(entryPoint))
+                     .map(EntryPointGenerator::currentRate)
+                     .or(0);
     }
 
     /**
      * Get target request rate (for placeOrder - backward compatibility).
      */
     public int targetRate() {
-        var generator = generators.get("placeOrder");
-        return generator != null
-               ? generator.targetRate()
-               : 0;
+        return Option.option(generators.get("placeOrder"))
+                     .map(EntryPointGenerator::targetRate)
+                     .or(0);
     }
 
     /**

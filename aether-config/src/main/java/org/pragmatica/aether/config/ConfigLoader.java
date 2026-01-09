@@ -53,7 +53,7 @@ public final class ConfigLoader {
     /**
      * Create configuration from environment defaults only.
      */
-    public static AetherConfig fromEnvironment(Environment env) {
+    public static AetherConfig aetherConfig(Environment env) {
         return AetherConfig.forEnvironment(env);
     }
 
@@ -67,7 +67,7 @@ public final class ConfigLoader {
         var envStr = overrides.getOrDefault("environment",
                                             doc.getString("cluster", "environment")
                                                .or("docker"));
-        return Environment.fromString(envStr)
+        return Environment.environment(envStr)
                           .flatMap(environment -> buildConfig(doc, overrides, environment));
     }
 

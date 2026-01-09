@@ -61,7 +61,7 @@ class DependencyCycleDetectorTest {
                                  );
 
         DependencyCycleDetector.checkForCycles(dependencies)
-                               .onSuccessRun(() -> Assertions.fail("Should detect self-cycle"))
+                               .onSuccessRun(Assertions::fail)
                                .onFailure(cause -> {
                                    assertThat(cause.message()).contains("Circular dependency");
                                    assertThat(cause.message()).contains("A -> A");
@@ -77,7 +77,7 @@ class DependencyCycleDetectorTest {
                                  );
 
         DependencyCycleDetector.checkForCycles(dependencies)
-                               .onSuccessRun(() -> Assertions.fail("Should detect cycle"))
+                               .onSuccessRun(Assertions::fail)
                                .onFailure(cause -> {
                                    assertThat(cause.message()).contains("Circular dependency");
                                    // Cycle can be reported as A -> B -> A or B -> A -> B
@@ -96,7 +96,7 @@ class DependencyCycleDetectorTest {
                                  );
 
         DependencyCycleDetector.checkForCycles(dependencies)
-                               .onSuccessRun(() -> Assertions.fail("Should detect cycle"))
+                               .onSuccessRun(Assertions::fail)
                                .onFailure(cause -> {
                                    assertThat(cause.message()).contains("Circular dependency");
                                    assertThat(cause.message()).contains(" -> ");
@@ -119,7 +119,7 @@ class DependencyCycleDetectorTest {
                                  );
 
         DependencyCycleDetector.checkForCycles(dependencies)
-                               .onSuccessRun(() -> Assertions.fail("Should detect cycle"))
+                               .onSuccessRun(Assertions::fail)
                                .onFailure(cause -> {
                                    assertThat(cause.message()).contains("Circular dependency");
                                });
@@ -154,7 +154,7 @@ class DependencyCycleDetectorTest {
                                  );
 
         DependencyCycleDetector.checkForCycles(dependencies)
-                               .onSuccessRun(() -> Assertions.fail("Should detect cycle"))
+                               .onSuccessRun(Assertions::fail)
                                .onFailure(cause -> {
                                    assertThat(cause.message()).contains("Circular dependency");
                                    assertThat(cause.message()).contains("C");

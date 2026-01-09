@@ -25,13 +25,13 @@ import static org.awaitility.Awaitility.await;
  */
 class SliceDeploymentE2ETest {
     private static final Path PROJECT_ROOT = Path.of(System.getProperty("project.basedir", ".."));
-    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.7.1";
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.7.2";
     private static final Duration DEPLOY_TIMEOUT = Duration.ofSeconds(60);
     private AetherCluster cluster;
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(3, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(3, PROJECT_ROOT);
         cluster.start();
         cluster.awaitQuorum();
     }
@@ -135,7 +135,7 @@ class SliceDeploymentE2ETest {
     void blueprintApply_deploysMultipleSlices() {
         var blueprint = """
             [[slices]]
-            artifact = "org.pragmatica-lite.aether:example-slice:0.7.1"
+            artifact = "org.pragmatica-lite.aether:example-slice:0.7.2"
             instances = 2
             """;
 

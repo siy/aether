@@ -87,8 +87,8 @@ class SliceFactoryTest {
         var userService = new UserService();
         var emailService = new EmailService();
 
-        var userDescriptor = DependencyDescriptor.parse("org.example.UserService:1.0.0:userService").unwrap();
-        var emailDescriptor = DependencyDescriptor.parse("org.example.EmailService:1.0.0:emailService").unwrap();
+        var userDescriptor = DependencyDescriptor.dependencyDescriptor("org.example.UserService:1.0.0:userService").unwrap();
+        var emailDescriptor = DependencyDescriptor.dependencyDescriptor("org.example.EmailService:1.0.0:emailService").unwrap();
 
         SliceFactory.createSlice(
                             OrderService.class,
@@ -115,7 +115,7 @@ class SliceFactoryTest {
         }
 
         SliceFactory.createSlice(NoFactory.class, List.of(), List.of())
-                    .onSuccessRun(() -> Assertions.fail("Should fail when factory method not found"))
+                    .onSuccessRun(Assertions::fail)
                     .onFailure(cause -> {
                         assertThat(cause.message()).contains("Factory method not found");
                         assertThat(cause.message()).contains("noFactory");
@@ -126,7 +126,7 @@ class SliceFactoryTest {
     void fails_when_parameter_count_mismatch() {
         var userService = new UserService();
 
-        var userDescriptor = DependencyDescriptor.parse("org.example.UserService:1.0.0").unwrap();
+        var userDescriptor = DependencyDescriptor.dependencyDescriptor("org.example.UserService:1.0.0").unwrap();
 
         // OrderService expects 2 parameters, but we provide only 1
         SliceFactory.createSlice(
@@ -134,7 +134,7 @@ class SliceFactoryTest {
                             List.of(userService),
                             List.of(userDescriptor)
                                 )
-                    .onSuccessRun(() -> Assertions.fail("Should fail on parameter count mismatch"))
+                    .onSuccessRun(Assertions::fail)
                     .onFailure(cause -> {
                         assertThat(cause.message()).contains("Parameter count mismatch");
                         assertThat(cause.message()).contains("expected 2");
@@ -146,8 +146,8 @@ class SliceFactoryTest {
     void fails_when_parameter_type_mismatch() {
         var emailService = new EmailService();  // Wrong type for first parameter
 
-        var emailDescriptor = DependencyDescriptor.parse("org.example.EmailService:1.0.0").unwrap();
-        var userDescriptor = DependencyDescriptor.parse("org.example.UserService:1.0.0").unwrap();
+        var emailDescriptor = DependencyDescriptor.dependencyDescriptor("org.example.EmailService:1.0.0").unwrap();
+        var userDescriptor = DependencyDescriptor.dependencyDescriptor("org.example.UserService:1.0.0").unwrap();
 
         // OrderService expects (UserService, EmailService), but we provide (EmailService, EmailService)
         SliceFactory.createSlice(
@@ -155,7 +155,7 @@ class SliceFactoryTest {
                             List.of(emailService, emailService),
                             List.of(emailDescriptor, userDescriptor)
                                 )
-                    .onSuccessRun(() -> Assertions.fail("Should fail on parameter type mismatch"))
+                    .onSuccessRun(Assertions::fail)
                     .onFailure(cause -> {
                         assertThat(cause.message()).contains("Parameter type mismatch");
                         assertThat(cause.message()).contains("index 0");

@@ -59,15 +59,15 @@ public record HealthThresholds(double maxErrorRate,
     /**
      * Creates thresholds with default values and custom error rate.
      */
-    public static HealthThresholds withErrorRate(double maxErrorRate) {
-        return new HealthThresholds(maxErrorRate, DEFAULT.maxLatencyMs, false);
+    public static Result<HealthThresholds> withErrorRate(double maxErrorRate) {
+        return healthThresholds(maxErrorRate, DEFAULT.maxLatencyMs, false);
     }
 
     /**
      * Creates thresholds with default values and custom latency.
      */
-    public static HealthThresholds withLatency(long maxLatencyMs) {
-        return new HealthThresholds(DEFAULT.maxErrorRate, maxLatencyMs, false);
+    public static Result<HealthThresholds> withLatency(long maxLatencyMs) {
+        return healthThresholds(DEFAULT.maxErrorRate, maxLatencyMs, false);
     }
 
     /**

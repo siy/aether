@@ -47,7 +47,7 @@ public interface SliceDependencies {
                                    var dependencies = new ArrayList<DependencyDescriptor>();
                                    String line;
                                    while ((line = reader.readLine()) != null) {
-                                       DependencyDescriptor.parse(line)
+                                       DependencyDescriptor.dependencyDescriptor(line)
                                                            .onSuccess(dependencies::add);
                                    }
                                    return dependencies;

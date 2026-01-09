@@ -33,7 +33,7 @@ import java.util.Map;
  * </pre>
  */
 public final class AetherUp {
-    private static final String VERSION = "0.7.1";
+    private static final String VERSION = "0.7.2";
     private static final List<Generator> GENERATORS = List.of(new LocalGenerator(),
                                                               new DockerGenerator(),
                                                               new KubernetesGenerator());
@@ -62,17 +62,14 @@ public final class AetherUp {
                 System.exit(1);
                 return;
             }
-            config = result.fold(cause -> null, c -> c);
+            config = result.unwrap();
         } else {
             // No config file - use environment defaults
             var envStr = options.getOrDefault("env", "docker");
-            var envResult = Environment.fromString(envStr);
-            if (envResult.isFailure()) {
-                System.err.println("Error: " + envResult.fold(cause -> cause.message(), _ -> ""));
-                System.exit(1);
-                return;
-            }
-            var env = envResult.fold(_ -> null, e -> e);
+            var envResult = Environment.environment(envStr)
+                                       .onFailure(cause -> System.err.println("Error: " + cause.message()))
+                                       .onFailure(_ -> System.exit(1));
+            var env = envResult.unwrap();
             var builder = AetherConfig.builder()
                                       .environment(env);
             // Apply overrides

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Configurable Load Runner** - TOML-driven load testing for Forge
+  - Pattern generators: `${uuid}`, `${random:PATTERN}`, `${range:MIN-MAX}`, `${choice:A,B,C}`, `${seq:START}`
+  - Per-target rate limiting, optional duration, path/body templates
+  - Dashboard "Load Testing" tab with config upload, controls, live metrics
+  - API endpoints: `/api/load/config`, `/api/load/start|stop|pause|resume`, `/api/load/status`
+
+### Changed
+- **JBCT compliance refactoring** - Load generator code now fully JBCT-compliant
+  - Factory methods on all pattern generators (`uuidGenerator()`, `randomGenerator()`, etc.)
+  - Sealed interfaces for utility classes (`LoadConfigLoader`, `PatternParser`)
+  - Error types renamed to past-tense (`ParseFailed`, `ValidationFailed`, `FileReadFailed`)
+  - Manual null checks replaced with `Option.option().filter().toResult()` pattern
+  - Imperative loops replaced with `Result.allOf()` + streams
+  - `.isFailure()` checks replaced with monadic `flatMap`/`map` chains
+  - Complex lambdas extracted to named methods
+  - `Void` return replaced with `whenComplete()` pattern
+
+## [0.7.2] - 2026-01-06
+
+### Added
+- **Introduction article** - Comprehensive article presenting Aether to developers (`docs/articles/aether-introduction.md`)
+
 ### Fixed
 - **Rolling Update Manager** - Multiple critical fixes
   - State restoration race condition - no longer restores state in constructor before KVStore is ready

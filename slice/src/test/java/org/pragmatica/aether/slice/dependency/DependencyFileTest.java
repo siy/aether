@@ -24,7 +24,7 @@ class DependencyFileTest {
                 org.example:notification-service:^1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.api()).hasSize(2);
@@ -48,7 +48,7 @@ class DependencyFileTest {
                 org.example:pricing-service-api:^1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.api()).hasSize(2);
@@ -74,7 +74,7 @@ class DependencyFileTest {
                 org.example:pricing-service:^1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.api()).isEmpty();
@@ -97,7 +97,7 @@ class DependencyFileTest {
                 org.example:order-domain:1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.api()).isEmpty();
@@ -116,7 +116,7 @@ class DependencyFileTest {
                 org.example:inventory-service:^1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.api()).isEmpty();
@@ -136,7 +136,7 @@ class DependencyFileTest {
                 org.example:pricing-service:1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           // Lines without section are treated as slice dependencies
@@ -150,7 +150,7 @@ class DependencyFileTest {
     void parse_empty_file() {
         var content = "";
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.isEmpty()).isTrue();
@@ -167,7 +167,7 @@ class DependencyFileTest {
                 # Another comment
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> assertThat(file.isEmpty()).isTrue());
     }
@@ -179,7 +179,7 @@ class DependencyFileTest {
                 org.example:something:1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onSuccessRun(Assertions::fail)
                       .onFailure(cause -> assertThat(cause.message()).contains("Unknown section"));
     }
@@ -191,7 +191,7 @@ class DependencyFileTest {
                 invalid-format-no-version
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onSuccessRun(Assertions::fail)
                       .onFailure(cause -> assertThat(cause.message()).contains("Invalid"));
     }
@@ -211,7 +211,7 @@ class DependencyFileTest {
                 org.example:slice1:1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.shared()).hasSize(2);
@@ -229,7 +229,7 @@ class DependencyFileTest {
                 org.example:lib1:1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.shared()).hasSize(1);
@@ -248,7 +248,7 @@ class DependencyFileTest {
                 org.example:comparison:>=1.0.0
                 """;
 
-        DependencyFile.parse(content)
+        DependencyFile.dependencyFile(content)
                       .onFailureRun(Assertions::fail)
                       .onSuccess(file -> {
                           assertThat(file.shared()).hasSize(5);

@@ -302,11 +302,7 @@ public sealed interface AetherKey extends StructuredKey {
             return asString();
         }
 
-        public static RollingUpdateKey rollingUpdateKey(String updateId) {
-            return new RollingUpdateKey(updateId);
-        }
-
-        public static Result<RollingUpdateKey> parse(String key) {
+        public static Result<RollingUpdateKey> rollingUpdateKey(String key) {
             if (!key.startsWith("rolling-update/")) {
                 return ROLLING_UPDATE_KEY_FORMAT_ERROR.apply(key)
                                                       .result();
@@ -345,11 +341,7 @@ public sealed interface AetherKey extends StructuredKey {
             return asString();
         }
 
-        public static AlertThresholdKey alertThresholdKey(String metricName) {
-            return new AlertThresholdKey(metricName);
-        }
-
-        public static Result<AlertThresholdKey> parse(String key) {
+        public static Result<AlertThresholdKey> alertThresholdKey(String key) {
             if (!key.startsWith("alert-threshold/")) {
                 return ALERT_THRESHOLD_KEY_FORMAT_ERROR.apply(key)
                                                        .result();

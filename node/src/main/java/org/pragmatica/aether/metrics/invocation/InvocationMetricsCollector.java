@@ -3,12 +3,14 @@ package org.pragmatica.aether.metrics.invocation;
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Result;
+import org.pragmatica.lang.Unit;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Collects per-method invocation metrics with threshold-based slow call capture.
@@ -87,12 +89,16 @@ public final class InvocationMetricsCollector {
         // Tier 2: Capture if slow
         if (thresholdStrategy.isSlow(method, durationNs)) {
             var slow = success
-                       ? SlowInvocation.success(method, System.nanoTime(), durationNs, requestBytes, responseBytes)
-                       : SlowInvocation.failure(method,
-                                                System.nanoTime(),
-                                                durationNs,
-                                                requestBytes,
-                                                errorType.fold(() -> "Unknown", e -> e));
+                       ? SlowInvocation.slowInvocation(method,
+                                                       System.nanoTime(),
+                                                       durationNs,
+                                                       requestBytes,
+                                                       responseBytes)
+                       : SlowInvocation.slowInvocation(method,
+                                                       System.nanoTime(),
+                                                       durationNs,
+                                                       requestBytes,
+                                                       errorType.or("Unknown"));
             methodMetrics.addSlowInvocation(slow);
         }
     }
@@ -174,13 +180,17 @@ public final class InvocationMetricsCollector {
     }
 
     /**
-     * Set a new threshold strategy at runtime.
+     * Attempt to set a new threshold strategy at runtime.
+     * <p>
+     * Currently not supported - collector must be recreated with a new strategy.
+     *
+     * @return failure indicating strategy change is not supported
      */
-    public void setThresholdStrategy(ThresholdStrategy strategy) {
+    public Result<Unit> setThresholdStrategy(ThresholdStrategy strategy) {
         // Note: This class uses final field, so we need a different approach
         // For now, this is a no-op placeholder - actual implementation would need
         // to use AtomicReference or similar. The current strategy is effectively immutable.
-        throw new UnsupportedOperationException("Strategy change at runtime requires collector recreation");
+        return MetricsError.StrategyChangeNotSupported.INSTANCE.result();
     }
 
     private MethodMetricsWithSlowCalls getOrCreateMetrics(Artifact artifact, MethodName method) {
@@ -191,41 +201,62 @@ public final class InvocationMetricsCollector {
 
     /**
      * Combines MethodMetrics with a ring buffer for slow invocations.
+     * Uses explicit locking for thread-safe ring buffer operations.
      */
     private static final class MethodMetricsWithSlowCalls {
         final MethodMetrics metrics;
         final SlowInvocation[] slowBuffer = new SlowInvocation[MAX_SLOW_INVOCATIONS_PER_METHOD];
-        final AtomicInteger writeIndex = new AtomicInteger(0);
-        volatile int count = 0;
+        final ReentrantLock lock = new ReentrantLock();
+        int writeIndex = 0;
+        int count = 0;
 
         MethodMetricsWithSlowCalls(MethodName methodName) {
             this.metrics = new MethodMetrics(methodName);
         }
 
         void addSlowInvocation(SlowInvocation slow) {
-            var idx = writeIndex.getAndIncrement() % MAX_SLOW_INVOCATIONS_PER_METHOD;
-            slowBuffer[idx] = slow;
-            if (count < MAX_SLOW_INVOCATIONS_PER_METHOD) {
-                count++;
+            lock.lock();
+            try{
+                slowBuffer[writeIndex % MAX_SLOW_INVOCATIONS_PER_METHOD] = slow;
+                writeIndex++;
+                if (count < MAX_SLOW_INVOCATIONS_PER_METHOD) {
+                    count++;
+                }
+            } finally{
+                lock.unlock();
             }
         }
 
         List<SlowInvocation> drainSlowInvocations() {
-            var result = copySlowInvocations();
-            // Reset
-            writeIndex.set(0);
-            count = 0;
-            for (int i = 0; i < MAX_SLOW_INVOCATIONS_PER_METHOD; i++) {
-                slowBuffer[i] = null;
+            lock.lock();
+            try{
+                var result = copySlowInvocationsUnlocked();
+                // Reset
+                writeIndex = 0;
+                count = 0;
+                for (int i = 0; i < MAX_SLOW_INVOCATIONS_PER_METHOD; i++) {
+                    slowBuffer[i] = null;
+                }
+                return result;
+            } finally{
+                lock.unlock();
             }
-            return result;
         }
 
         List<SlowInvocation> copySlowInvocations() {
+            lock.lock();
+            try{
+                return copySlowInvocationsUnlocked();
+            } finally{
+                lock.unlock();
+            }
+        }
+
+        private List<SlowInvocation> copySlowInvocationsUnlocked() {
             var result = new ArrayList<SlowInvocation>(count);
             var currentCount = Math.min(count, MAX_SLOW_INVOCATIONS_PER_METHOD);
-            var startIdx = writeIndex.get() >= MAX_SLOW_INVOCATIONS_PER_METHOD
-                           ? writeIndex.get() % MAX_SLOW_INVOCATIONS_PER_METHOD
+            var startIdx = writeIndex >= MAX_SLOW_INVOCATIONS_PER_METHOD
+                           ? writeIndex % MAX_SLOW_INVOCATIONS_PER_METHOD
                            : 0;
             for (int i = 0; i < currentCount; i++) {
                 var idx = (startIdx + i) % MAX_SLOW_INVOCATIONS_PER_METHOD;

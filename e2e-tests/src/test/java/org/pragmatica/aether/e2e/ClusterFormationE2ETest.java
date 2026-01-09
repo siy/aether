@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.pragmatica.aether.e2e.containers.AetherCluster;
+import org.pragmatica.aether.e2e.containers.AetherNodeContainer;
 
 import java.nio.file.Path;
 
@@ -26,7 +27,7 @@ class ClusterFormationE2ETest {
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(3, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(3, PROJECT_ROOT);
     }
 
     @AfterEach
@@ -77,7 +78,7 @@ class ClusterFormationE2ETest {
 
         // Collect leader info from all nodes
         var statuses = cluster.nodes().stream()
-                              .map(node -> node.getStatus())
+                              .map(AetherNodeContainer::getStatus)
                               .toList();
 
         // All should report the same leader

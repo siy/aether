@@ -92,7 +92,7 @@ class SliceStateTest {
         assertThat(SliceState.UNLOADING.validTransitions()).isEmpty();
 
         SliceState.UNLOADING.nextState()
-                            .onSuccessRun(() -> Assertions.fail("Should fail for terminal state"))
+                            .onSuccessRun(Assertions::fail)
                             .onFailure(cause -> assertThat(cause.message()).contains(
                                     "Cannot transition from UNLOADING terminal state"));
     }
@@ -108,11 +108,11 @@ class SliceStateTest {
     @Test
     void slice_state_parsing_rejects_invalid_values() {
         SliceState.sliceState("INVALID")
-                  .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
+                  .onSuccessRun(Assertions::fail)
                   .onFailure(cause -> assertThat(cause.message()).contains("Unknown slice state"));
 
         SliceState.sliceState("")
-                  .onSuccessRun(() -> org.junit.jupiter.api.Assertions.fail("Should have failed"))
+                  .onSuccessRun(Assertions::fail)
                   .onFailure(cause -> assertThat(cause.message()).contains("Unknown slice state"));
     }
 }

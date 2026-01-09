@@ -9,6 +9,7 @@ import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 
@@ -177,31 +178,22 @@ class ArtifactStoreImpl implements ArtifactStore {
         log.debug("Resolving artifact: {}", artifact.asString());
         return dht.get(metaKey(artifact))
                   .flatMap(metaOpt -> metaOpt.flatMap(ArtifactMetadata::fromBytes)
-                                             .fold(() -> new ArtifactStoreError.NotFound(artifact).promise(),
-                                                   meta -> resolveChunks(artifact, meta)));
+                                             .async(new ArtifactStoreError.NotFound(artifact))
+                                             .flatMap(meta -> resolveChunks(artifact, meta)));
     }
 
     private Promise<byte[]> resolveChunks(Artifact artifact, ArtifactMetadata meta) {
-        var chunkPromises = new ArrayList<Promise<Option<byte[]>>>();
+        var corruptedError = new ArtifactStoreError.CorruptedArtifact(artifact);
+        var chunkPromises = new ArrayList<Promise<byte[]>>();
         for (int i = 0; i < meta.chunkCount(); i++) {
-            chunkPromises.add(dht.get(chunkKey(artifact, i)));
+            chunkPromises.add(dht.get(chunkKey(artifact, i))
+                                 .flatMap(opt -> opt.async(corruptedError)));
         }
         return Promise.allOf(chunkPromises)
-                      .flatMap(results -> {
-                                   var chunks = new ArrayList<byte[]>();
-                                   for (var result : results) {
-                                       if (result.isFailure()) {
-                                           return new ArtifactStoreError.ResolveFailed(artifact, "Failed to fetch chunk").promise();
-                                       }
-                                       var chunkOpt = result.unwrap();
-                                       if (chunkOpt.isEmpty()) {
-                                           return new ArtifactStoreError.CorruptedArtifact(artifact).promise();
-                                       }
-                                       chunkOpt.onPresent(chunks::add);
-                                   }
-                                   return Promise.success(reassembleChunks(chunks,
-                                                                           (int) meta.size()));
-                               });
+                      .map(results -> reassembleChunks(results.stream()
+                                                              .map(Result::unwrap)
+                                                              .toList(),
+                                                       (int) meta.size()));
     }
 
     @Override
@@ -222,8 +214,8 @@ class ArtifactStoreImpl implements ArtifactStore {
         log.info("Deleting artifact: {}", artifact.asString());
         return dht.get(metaKey(artifact))
                   .flatMap(metaOpt -> metaOpt.flatMap(ArtifactMetadata::fromBytes)
-                                             .fold(() -> Promise.success(Unit.unit()),
-                                                   meta -> deleteChunksAndMeta(artifact, meta)));
+                                             .map(meta -> deleteChunksAndMeta(artifact, meta))
+                                             .or(Promise.unitPromise()));
     }
 
     private Promise<Unit> deleteChunksAndMeta(Artifact artifact, ArtifactMetadata meta) {
@@ -239,15 +231,19 @@ class ArtifactStoreImpl implements ArtifactStore {
     private Promise<Unit> updateVersionsList(Artifact artifact) {
         var versionsKey = versionsKey(artifact.groupId(), artifact.artifactId());
         return dht.get(versionsKey)
-                  .flatMap(opt -> {
-                               var versions = new ArrayList<>(opt.map(this::parseVersionsList)
-                                                                 .or(List.of()));
-                               if (!versions.contains(artifact.version())) {
-                                   versions.add(artifact.version());
-                               }
-                               return dht.put(versionsKey,
-                                              serializeVersionsList(versions));
-                           });
+                  .map(opt -> addVersionIfAbsent(opt,
+                                                 artifact.version()))
+                  .flatMap(versions -> dht.put(versionsKey,
+                                               serializeVersionsList(versions)));
+    }
+
+    private List<Version> addVersionIfAbsent(Option<byte[]> existingData, Version version) {
+        var versions = new ArrayList<>(existingData.map(this::parseVersionsList)
+                                                   .or(List.of()));
+        if (!versions.contains(version)) {
+            versions.add(version);
+        }
+        return versions;
     }
 
     private List<Version> parseVersionsList(byte[] data) {

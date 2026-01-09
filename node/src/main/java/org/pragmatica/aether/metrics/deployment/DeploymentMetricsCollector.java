@@ -10,6 +10,7 @@ import org.pragmatica.cluster.metrics.DeploymentMetricsMessage.DeploymentMetrics
 import org.pragmatica.consensus.net.ClusterNetwork;
 import org.pragmatica.consensus.NodeId;
 import org.pragmatica.consensus.topology.TopologyChangeNotification;
+import org.pragmatica.lang.Option;
 import org.pragmatica.messaging.MessageReceiver;
 
 import java.util.*;
@@ -139,7 +140,7 @@ class DeploymentMetricsCollectorImpl implements DeploymentMetricsCollector {
     @Override
     public void onDeploymentStarted(DeploymentStarted event) {
         var key = new DeploymentKey(event.artifact(), event.targetNode());
-        var metrics = DeploymentMetrics.started(event.artifact(), event.targetNode(), event.timestamp());
+        var metrics = DeploymentMetrics.deploymentMetrics(event.artifact(), event.targetNode(), event.timestamp());
         inProgress.put(key, metrics);
         log.debug("Deployment started: {} on {}", event.artifact(), event.targetNode());
     }
@@ -170,30 +171,35 @@ class DeploymentMetricsCollectorImpl implements DeploymentMetricsCollector {
     @Override
     public void onDeploymentCompleted(DeploymentCompleted event) {
         var key = new DeploymentKey(event.artifact(), event.nodeId());
-        var metrics = inProgress.remove(key);
-        if (metrics != null) {
-            var completedMetrics = metrics.completed(event.timestamp());
-            addToCompleted(event.artifact(), completedMetrics);
-            log.info("Deployment completed: {} on {} in {}ms",
-                     event.artifact(),
-                     event.nodeId(),
-                     completedMetrics.fullDeploymentTime());
-        }
+        Option.option(inProgress.remove(key))
+              .onPresent(metrics -> {
+                             var completedMetrics = metrics.completed(event.timestamp());
+                             addToCompleted(event.artifact(),
+                                            completedMetrics);
+                             log.info("Deployment completed: {} on {} in {}ms",
+                                      event.artifact(),
+                                      event.nodeId(),
+                                      completedMetrics.fullDeploymentTime());
+                         });
     }
 
     @Override
     public void onDeploymentFailed(DeploymentFailed event) {
         var key = new DeploymentKey(event.artifact(), event.nodeId());
-        var metrics = inProgress.remove(key);
-        if (metrics != null) {
-            var failedMetrics = switch (event.failedAt()) {
-                case LOADING -> metrics.failedLoading(event.timestamp());
-                case ACTIVATING -> metrics.failedActivating(event.timestamp());
-                default -> metrics.failedLoading(event.timestamp());
-            };
-            addToCompleted(event.artifact(), failedMetrics);
-            log.warn("Deployment failed: {} on {} at state {}", event.artifact(), event.nodeId(), event.failedAt());
-        }
+        Option.option(inProgress.remove(key))
+              .onPresent(metrics -> {
+                             var failedMetrics = switch (event.failedAt()) {
+            case LOADING -> metrics.failedLoading(event.timestamp());
+            case ACTIVATING -> metrics.failedActivating(event.timestamp());
+            default -> metrics.failedLoading(event.timestamp());
+        };
+                             addToCompleted(event.artifact(),
+                                            failedMetrics);
+                             log.warn("Deployment failed: {} on {} at state {}",
+                                      event.artifact(),
+                                      event.nodeId(),
+                                      event.failedAt());
+                         });
     }
 
     private void addToCompleted(Artifact artifact, DeploymentMetrics metrics) {
@@ -222,19 +228,7 @@ class DeploymentMetricsCollectorImpl implements DeploymentMetricsCollector {
                               result.put(artifact, sorted);
                           });
         // Merge remote metrics
-        remoteMetrics.forEach((artifact, remoteList) -> {
-                                  result.merge(artifact,
-                                               remoteList,
-                                               (local, remote) -> {
-                                                   var merged = new ArrayList<>(local);
-                                                   merged.addAll(remote);
-                                                   // Sort by startTime descending (most recent first), keep top N
-        merged.sort((a, b) -> Long.compare(b.startTime(), a.startTime()));
-                                                   return merged.size() > retentionCount
-                                                          ? merged.subList(0, retentionCount)
-                                                          : merged;
-                                               });
-                              });
+        remoteMetrics.forEach((artifact, remoteList) -> result.merge(artifact, remoteList, this::mergeMetricsList));
         return result;
     }
 
@@ -245,9 +239,15 @@ class DeploymentMetricsCollectorImpl implements DeploymentMetricsCollector {
         if (remote.isEmpty() && local.isEmpty()) {
             return List.of();
         }
-        var merged = new ArrayList<>(local);
-        merged.addAll(remote);
-        // Always sort by startTime descending (most recent first)
+        return mergeMetricsList(local, remote);
+    }
+
+    /**
+     * Merge two metrics lists, sort by startTime descending, and trim to retention count.
+     */
+    private List<DeploymentMetrics> mergeMetricsList(List<DeploymentMetrics> first, List<DeploymentMetrics> second) {
+        var merged = new ArrayList<>(first);
+        merged.addAll(second);
         merged.sort((a, b) -> Long.compare(b.startTime(), a.startTime()));
         return merged.size() > retentionCount
                ? merged.subList(0, retentionCount)
@@ -315,7 +315,7 @@ class DeploymentMetricsCollectorImpl implements DeploymentMetricsCollector {
                                     .onSuccess(artifact -> {
                                                    var metricsList = entryList.stream()
                                                                               .map(DeploymentMetrics::fromEntry)
-                                                                              .filter(m -> m != null)
+                                                                              .flatMap(Option::stream)
                                                                               .toList();
                                                    // Only store if not from our node
         var filteredList = metricsList.stream()

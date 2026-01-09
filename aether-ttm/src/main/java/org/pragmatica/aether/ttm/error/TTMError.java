@@ -48,4 +48,14 @@ public sealed interface TTMError extends Cause {
             return "TTM is disabled in configuration";
         }
     }
+
+    /**
+     * Unexpected output tensor type from model.
+     */
+    record UnexpectedOutputType(String actualType) implements TTMError {
+        @Override
+        public String message() {
+            return "Unexpected output tensor type: " + actualType;
+        }
+    }
 }

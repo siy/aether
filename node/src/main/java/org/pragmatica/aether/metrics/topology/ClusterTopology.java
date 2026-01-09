@@ -39,15 +39,15 @@ public record ClusterTopology(int totalNodes,
                            String status,
                            boolean isLeader,
                            long lastSeen) {
-        public static NodeInfo healthy(String nodeId, String address, boolean isLeader) {
+        public static NodeInfo nodeInfo(String nodeId, String address, boolean isLeader) {
             return new NodeInfo(nodeId, address, "HEALTHY", isLeader, System.currentTimeMillis());
         }
 
-        public static NodeInfo suspected(String nodeId, String address) {
+        public static NodeInfo suspectedNodeInfo(String nodeId, String address) {
             return new NodeInfo(nodeId, address, "SUSPECTED", false, System.currentTimeMillis());
         }
 
-        public static NodeInfo down(String nodeId, String address, long lastSeen) {
+        public static NodeInfo downNodeInfo(String nodeId, String address, long lastSeen) {
             return new NodeInfo(nodeId, address, "DOWN", false, lastSeen);
         }
     }

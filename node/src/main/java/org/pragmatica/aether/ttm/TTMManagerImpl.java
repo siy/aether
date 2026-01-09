@@ -86,11 +86,17 @@ final class TTMManagerImpl implements TTMManager {
     }
 
     @Override
-    public void stop() {
+    public boolean isEnabled() {
+        return true;
+    }
+
+    @Override
+    public Unit stop() {
         stopEvaluation();
         predictor.close();
         scheduler.shutdown();
         awaitSchedulerTermination();
+        return Unit.unit();
     }
 
     private void awaitSchedulerTermination() {

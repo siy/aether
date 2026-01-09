@@ -134,10 +134,8 @@ public interface EndpointRegistry {
                 var key = valueRemove.cause()
                                      .key();
                 if (key instanceof EndpointKey endpointKey) {
-                    var removed = endpoints.remove(endpointKey);
-                    if (removed != null) {
-                        log.debug("Unregistered endpoint: {}", removed);
-                    }
+                    Option.option(endpoints.remove(endpointKey))
+                          .onPresent(removed -> log.debug("Unregistered endpoint: {}", removed));
                 }
             }
 

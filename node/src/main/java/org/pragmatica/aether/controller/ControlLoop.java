@@ -18,6 +18,7 @@ import org.pragmatica.consensus.topology.TopologyChangeNotification;
 import org.pragmatica.consensus.topology.TopologyChangeNotification.NodeAdded;
 import org.pragmatica.consensus.topology.TopologyChangeNotification.NodeRemoved;
 import org.pragmatica.messaging.MessageReceiver;
+import org.pragmatica.lang.Option;
 
 import java.util.List;
 import java.util.Map;
@@ -232,11 +233,14 @@ class ControlLoopImpl implements ControlLoop {
 
     private void applyChange(BlueprintChange change) {
         var artifact = change.artifact();
-        var currentBlueprint = blueprints.get(artifact);
-        if (currentBlueprint == null) {
-            log.warn("Blueprint not found for {}, skipping change", artifact);
-            return;
-        }
+        Option.option(blueprints.get(artifact))
+              .onEmpty(() -> log.warn("Blueprint not found for {}, skipping change", artifact))
+              .onPresent(currentBlueprint -> applyChangeToBlueprint(change, artifact, currentBlueprint));
+    }
+
+    private void applyChangeToBlueprint(BlueprintChange change,
+                                        Artifact artifact,
+                                        ClusterController.Blueprint currentBlueprint) {
         int newInstances = switch (change) {
             case BlueprintChange.ScaleUp(_, int additional) ->
             currentBlueprint.instances() + additional;

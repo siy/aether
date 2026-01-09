@@ -109,7 +109,7 @@ public interface NodeDeploymentManager {
                                                           .value();
                                       switch (value) {
                     case SliceNodeValue(SliceState state) -> {
-                                          log.debug("ValuePut received for key: {}, state: {}", sliceKey, state);
+                                          log.info("ValuePut received for key: {}, state: {}", sliceKey, state);
                                           recordDeployment(sliceKey, state);
                                           processStateTransition(sliceKey, state);
                                       }
@@ -128,7 +128,7 @@ public interface NodeDeploymentManager {
                                       // WARNING: Removal may happen during abrupt stop due to lack of consensus.
                 // In this case slice might be active and we should immediately stop it,
                 // unload and remove, ignoring errors.
-                var deployment = deployments.remove(sliceKey);
+                var deployment = Option.option(deployments.remove(sliceKey));
                                       if (shouldForceCleanup(deployment)) {
                                           forceCleanupSlice(sliceKey);
                                       }
@@ -137,27 +137,27 @@ public interface NodeDeploymentManager {
 
             private void recordDeployment(SliceNodeKey sliceKey, SliceState state) {
                 var timestamp = System.currentTimeMillis();
-                var previousDeployment = deployments.get(sliceKey);
-                var previousState = previousDeployment != null
-                                    ? previousDeployment.state()
-                                    : null;
+                var previousDeployment = Option.option(deployments.get(sliceKey));
+                var previousState = previousDeployment.map(SliceDeployment::state);
                 var deployment = new SliceDeployment(sliceKey, state, timestamp);
                 deployments.put(sliceKey, deployment);
                 // Emit state transition event for metrics via MessageRouter
                 // For initial LOAD, use LOAD as both from and to (captures loadTime)
-                var effectiveFromState = previousState != null
-                                         ? previousState
-                                         : state;
+                var effectiveFromState = previousState.or(state);
                 router.route(new StateTransition(sliceKey.artifact(), self, effectiveFromState, state, timestamp));
                 // Emit deployment failed event if transitioning to FAILED
                 // We do this here because we have access to previousState
-                if (state == SliceState.FAILED && previousState != null) {
-                    router.route(new DeploymentFailed(sliceKey.artifact(), self, previousState, timestamp));
+                if (state == SliceState.FAILED) {
+                    previousState.onPresent(prevState -> router.route(new DeploymentFailed(sliceKey.artifact(),
+                                                                                           self,
+                                                                                           prevState,
+                                                                                           timestamp)));
                 }
             }
 
-            private boolean shouldForceCleanup(SliceDeployment deployment) {
-                return deployment != null && deployment.state() == SliceState.ACTIVE;
+            private boolean shouldForceCleanup(Option<SliceDeployment> deployment) {
+                return deployment.map(d -> d.state() == SliceState.ACTIVE)
+                                 .or(false);
             }
 
             private void forceCleanupSlice(SliceNodeKey sliceKey) {
@@ -237,35 +237,39 @@ public interface NodeDeploymentManager {
             private void registerRoutes(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                               .onPresent(ls -> {
-                                              var slice = ls.slice();
-                                              var routes = slice.routes();
-                                              if (routes.isEmpty()) {
-                                                  return;
-                                              }
-                                              routes.forEach(route -> {
-                                                                 var bindings = route.bindings()
-                                                                                     .stream()
-                                                                                     .map(this::toBinding)
-                                                                                     .toList();
-                                                                 routeRegistry.register(artifact,
-                                                                                        route.methodName(),
-                                                                                        route.httpMethod(),
-                                                                                        route.pathPattern(),
-                                                                                        bindings)
-                                                                              .onSuccess(_ -> log.info("Registered route {} {} -> {}:{}",
-                                                                                                       route.httpMethod(),
-                                                                                                       route.pathPattern(),
-                                                                                                       artifact.asString(),
-                                                                                                       route.methodName()))
-                                                                              .onFailure(cause -> log.error("Failed to register route {} {} -> {}:{}: {}",
-                                                                                                            route.httpMethod(),
-                                                                                                            route.pathPattern(),
-                                                                                                            artifact.asString(),
-                                                                                                            route.methodName(),
-                                                                                                            cause.message()));
-                                                             });
-                                          });
+                               .onPresent(ls -> registerRoutesForSlice(artifact,
+                                                                       ls.slice()));
+            }
+
+            private void registerRoutesForSlice(Artifact artifact, org.pragmatica.aether.slice.Slice slice) {
+                var routes = slice.routes();
+                if (routes.isEmpty()) {
+                    return;
+                }
+                routes.forEach(route -> registerSingleRoute(artifact, route));
+            }
+
+            private void registerSingleRoute(Artifact artifact, SliceRoute route) {
+                var bindings = route.bindings()
+                                    .stream()
+                                    .map(this::toBinding)
+                                    .toList();
+                routeRegistry.register(artifact,
+                                       route.methodName(),
+                                       route.httpMethod(),
+                                       route.pathPattern(),
+                                       bindings)
+                             .onSuccess(_ -> log.info("Registered route {} {} -> {}:{}",
+                                                      route.httpMethod(),
+                                                      route.pathPattern(),
+                                                      artifact.asString(),
+                                                      route.methodName()))
+                             .onFailure(cause -> log.error("Failed to register route {} {} -> {}:{}: {}",
+                                                           route.httpMethod(),
+                                                           route.pathPattern(),
+                                                           artifact.asString(),
+                                                           route.methodName(),
+                                                           cause.message()));
             }
 
             private Binding toBinding(SliceRoute.RouteBinding binding) {
@@ -281,25 +285,28 @@ public interface NodeDeploymentManager {
             private void registerSliceForInvocation(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                               .onPresent(ls -> {
-                                              var slice = ls.slice();
-                                              // Use configured provider or default to Fury (thread-safe, no pooling needed)
-                SerializerFactoryProvider serializerProvider = configuration.serializerProvider();
-                                              if (serializerProvider == null) {
-                                                  serializerProvider = FurySerializerFactoryProvider.furySerializerFactoryProvider();
-                                              }
-                                              // Create SerializerFactory from provider using all type tokens
+                               .onPresent(ls -> registerSliceBridge(artifact,
+                                                                    ls.slice()));
+            }
+
+            private void registerSliceBridge(Artifact artifact, org.pragmatica.aether.slice.Slice slice) {
+                var serializerProvider = resolveSerializerProvider();
                 var typeTokens = slice.methods()
                                       .stream()
                                       .flatMap(m -> java.util.stream.Stream.of(m.parameterType(),
                                                                                m.returnType()))
                                       .collect(Collectors.toList());
-                                              var serializerFactory = serializerProvider.createFactory(typeTokens);
-                                              // Create and register SliceBridge
+                var serializerFactory = serializerProvider.createFactory(typeTokens);
                 var sliceBridge = SliceBridgeImpl.sliceBridge(artifact, slice, serializerFactory);
-                                              invocationHandler.registerSlice(artifact, sliceBridge);
-                                              log.info("Registered slice {} for invocation", artifact);
-                                          });
+                invocationHandler.registerSlice(artifact, sliceBridge);
+                log.info("Registered slice {} for invocation", artifact);
+            }
+
+            private SerializerFactoryProvider resolveSerializerProvider() {
+                var provider = configuration.serializerProvider();
+                return provider != null
+                       ? provider
+                       : FurySerializerFactoryProvider.furySerializerFactoryProvider();
             }
 
             private void unregisterSliceFromInvocation(SliceNodeKey sliceKey) {
@@ -311,27 +318,29 @@ public interface NodeDeploymentManager {
             private void publishEndpoints(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 findLoadedSlice(artifact)
-                               .onPresent(ls -> {
-                                              var slice = ls.slice();
-                                              var methods = slice.methods();
-                                              // Use nodeId hash as instance number to ensure uniqueness across cluster
+                               .onPresent(ls -> publishEndpointsForSlice(artifact,
+                                                                         ls.slice()));
+            }
+
+            private void publishEndpointsForSlice(Artifact artifact, org.pragmatica.aether.slice.Slice slice) {
+                var methods = slice.methods();
                 int instanceNumber = Math.abs(self.id()
                                                   .hashCode());
-                                              var commands = methods.stream()
-                                                                    .map(method -> createEndpointPutCommand(artifact,
-                                                                                                            method.name(),
-                                                                                                            instanceNumber))
-                                                                    .toList();
-                                              if (!commands.isEmpty()) {
-                                                  cluster.apply(commands)
-                                                         .onSuccess(_ -> log.info("Published {} endpoints for slice {}",
-                                                                                  methods.size(),
-                                                                                  artifact))
-                                                         .onFailure(cause -> log.error("Failed to publish endpoints for {}: {}",
-                                                                                       artifact,
-                                                                                       cause.message()));
-                                              }
-                                          });
+                var commands = methods.stream()
+                                      .map(method -> createEndpointPutCommand(artifact,
+                                                                              method.name(),
+                                                                              instanceNumber))
+                                      .toList();
+                if (commands.isEmpty()) {
+                    return;
+                }
+                cluster.apply(commands)
+                       .onSuccess(_ -> log.info("Published {} endpoints for slice {}",
+                                                methods.size(),
+                                                artifact))
+                       .onFailure(cause -> log.error("Failed to publish endpoints for {}: {}",
+                                                     artifact,
+                                                     cause.message()));
             }
 
             private KVCommand<AetherKey> createEndpointPutCommand(org.pragmatica.aether.artifact.Artifact artifact,
@@ -389,34 +398,32 @@ public interface NodeDeploymentManager {
             private Promise<Unit> unpublishEndpoints(SliceNodeKey sliceKey) {
                 var artifact = sliceKey.artifact();
                 return findLoadedSlice(artifact)
-                                      .map(ls -> {
-                                               var slice = ls.slice();
-                                               var methods = slice.methods();
-                                               int instanceNumber = Math.abs(self.id()
-                                                                                 .hashCode());
-                                               var commands = methods.stream()
-                                                                     .map(method -> createEndpointRemoveCommand(artifact,
-                                                                                                                method.name(),
-                                                                                                                instanceNumber))
-                                                                     .toList();
-                                               if (commands.isEmpty()) {
-                                                   return Promise.success(Unit.unit());
-                                               }
-                                               return cluster.apply(commands)
-                                                             .map(_ -> {
-                                                                      log.info("Unpublished {} endpoints for slice {}",
-                                                                               methods.size(),
-                                                                               artifact);
-                                                                      return Unit.unit();
-                                                                  })
-                                                             .mapError(cause -> {
-                                                                           log.error("Failed to unpublish endpoints for {}: {}",
-                                                                                     artifact,
-                                                                                     cause.message());
-                                                                           return cause;
-                                                                       });
-                                           })
+                                      .map(ls -> unpublishEndpointsForSlice(artifact,
+                                                                            ls.slice()))
                                       .or(Promise.success(Unit.unit()));
+            }
+
+            private Promise<Unit> unpublishEndpointsForSlice(Artifact artifact,
+                                                             org.pragmatica.aether.slice.Slice slice) {
+                var methods = slice.methods();
+                int instanceNumber = Math.abs(self.id()
+                                                  .hashCode());
+                var commands = methods.stream()
+                                      .map(method -> createEndpointRemoveCommand(artifact,
+                                                                                 method.name(),
+                                                                                 instanceNumber))
+                                      .toList();
+                if (commands.isEmpty()) {
+                    return Promise.success(Unit.unit());
+                }
+                return cluster.apply(commands)
+                              .mapToUnit()
+                              .onSuccess(_ -> log.info("Unpublished {} endpoints for slice {}",
+                                                       methods.size(),
+                                                       artifact))
+                              .onFailure(cause -> log.error("Failed to unpublish endpoints for {}: {}",
+                                                            artifact,
+                                                            cause.message()));
             }
 
             private KVCommand<AetherKey> createEndpointRemoveCommand(org.pragmatica.aether.artifact.Artifact artifact,
@@ -447,10 +454,32 @@ public interface NodeDeploymentManager {
                                                     Promise< ? > operation,
                                                     SliceState successState,
                                                     SliceState failureState) {
+                log.debug("executeWithStateTransition: {} current={} success={} failure={}, operation.isResolved={}",
+                          sliceKey.artifact(),
+                          currentState,
+                          successState,
+                          failureState,
+                          operation.isResolved());
                 configuration.timeoutFor(currentState)
-                             .onSuccess(timeout -> operation.timeout(timeout)
-                                                            .onSuccess(_ -> transitionTo(sliceKey, successState))
-                                                            .onFailure(_ -> transitionTo(sliceKey, failureState)))
+                             .onSuccess(timeout -> {
+                                            log.debug("Got timeout {} for {}, setting up callbacks",
+                                                      timeout,
+                                                      sliceKey.artifact());
+                                            operation.timeout(timeout)
+                                                     .onSuccess(_ -> {
+                                                                    log.info("Operation succeeded for {}, transitioning to {}",
+                                                                             sliceKey.artifact(),
+                                                                             successState);
+                                                                    transitionTo(sliceKey, successState);
+                                                                })
+                                                     .onFailure(cause -> {
+                                                                    log.warn("Operation failed for {}: {}, transitioning to {}",
+                                                                             sliceKey.artifact(),
+                                                                             cause.message(),
+                                                                             failureState);
+                                                                    transitionTo(sliceKey, failureState);
+                                                                });
+                                        })
                              .onFailure(cause -> logStateUpdateFailure(sliceKey, cause));
             }
 
@@ -468,10 +497,16 @@ public interface NodeDeploymentManager {
             }
 
             private void updateSliceState(SliceNodeKey sliceKey, SliceState newState) {
+                log.debug("updateSliceState: {} -> {}",
+                          sliceKey,
+                          newState);
                 var value = new SliceNodeValue(newState);
                 KVCommand<AetherKey> command = new KVCommand.Put<>(sliceKey, value);
                 // Submit command to cluster for consensus
                 cluster.apply(List.of(command))
+                       .onSuccess(_ -> log.debug("State update succeeded: {} -> {}",
+                                                 sliceKey.artifact(),
+                                                 newState))
                        .onFailure(cause -> logStateUpdateFailure(sliceKey, cause));
             }
 
@@ -521,6 +556,8 @@ public interface NodeDeploymentManager {
                                  SliceActionConfig configuration,
                                  MessageRouter router,
                                  AtomicReference<NodeDeploymentState> state) implements NodeDeploymentManager {
+            private static final Logger log = LoggerFactory.getLogger(NodeDeploymentManager.class);
+
             @Override
             public void onValuePut(ValuePut<AetherKey, AetherValue> valuePut) {
                 state.get()
@@ -535,17 +572,27 @@ public interface NodeDeploymentManager {
 
             @Override
             public void onQuorumStateChange(QuorumStateNotification quorumStateNotification) {
+                log.info("Node {} received QuorumStateNotification: {}", self()
+                                                                             .id(), quorumStateNotification);
                 switch (quorumStateNotification) {
-                    case ESTABLISHED -> state()
-                                             .set(new NodeDeploymentState.ActiveNodeDeploymentState(self(),
-                                                                                                    sliceStore(),
-                                                                                                    configuration(),
-                                                                                                    cluster(),
-                                                                                                    kvStore(),
-                                                                                                    invocationHandler(),
-                                                                                                    routeRegistry(),
-                                                                                                    router(),
-                                                                                                    new ConcurrentHashMap<>()));
+                    case ESTABLISHED -> {
+                        // Only activate if currently dormant (idempotent)
+                        if (state()
+                                 .get() instanceof NodeDeploymentState.DormantNodeDeploymentState) {
+                            state()
+                                 .set(new NodeDeploymentState.ActiveNodeDeploymentState(self(),
+                                                                                        sliceStore(),
+                                                                                        configuration(),
+                                                                                        cluster(),
+                                                                                        kvStore(),
+                                                                                        invocationHandler(),
+                                                                                        routeRegistry(),
+                                                                                        router(),
+                                                                                        new ConcurrentHashMap<>()));
+                            log.info("Node {} NodeDeploymentManager activated", self()
+                                                                                    .id());
+                        }
+                    }
                     case DISAPPEARED -> {
                         // Clean up any pending operations before going dormant
                         // Individual Promise timeouts will handle their own cleanup

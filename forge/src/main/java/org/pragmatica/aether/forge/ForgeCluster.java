@@ -100,11 +100,13 @@ public final class ForgeCluster {
                                 .toList();
         return Promise.allOf(stopPromises)
                       .map(_ -> Unit.unit())
-                      .onSuccess(_ -> {
-                          nodes.clear();
-                          nodeInfos.clear();
-                          log.info("Forge cluster stopped");
-                      });
+                      .onSuccess(this::clearClusterState);
+    }
+
+    private void clearClusterState(Unit unit) {
+        nodes.clear();
+        nodeInfos.clear();
+        log.info("Forge cluster stopped");
     }
 
     /**
@@ -133,43 +135,48 @@ public final class ForgeCluster {
      * Gracefully stop a node.
      */
     public Promise<Unit> killNode(String nodeIdStr) {
-        var node = nodes.get(nodeIdStr);
-        if (node == null) {
-            log.warn("Node {} not found", nodeIdStr);
-            return Promise.success(Unit.unit());
-        }
-        log.info("Killing node {}", nodeIdStr);
-        return node.stop()
-                   .timeout(NODE_TIMEOUT)
-                   .map(_ -> {
-                       nodes.remove(nodeIdStr);
-                       nodeInfos.remove(nodeIdStr);
-                       return Unit.unit();
-                   })
-                   .onSuccess(_ -> log.info("Node {} killed", nodeIdStr));
+        return Option.option(nodes.get(nodeIdStr))
+                     .fold(() -> {
+                               log.warn("Node {} not found", nodeIdStr);
+                               return Promise.success(Unit.unit());
+                           },
+                           node -> killNodeInternal(nodeIdStr, node));
     }
 
     /**
      * Abruptly crash a node (immediate stop).
      */
     public Promise<Unit> crashNode(String nodeIdStr) {
-        var node = nodes.get(nodeIdStr);
-        if (node == null) {
-            log.warn("Node {} not found", nodeIdStr);
-            return Promise.success(Unit.unit());
-        }
+        return Option.option(nodes.get(nodeIdStr))
+                     .fold(() -> {
+                               log.warn("Node {} not found", nodeIdStr);
+                               return Promise.success(Unit.unit());
+                           },
+                           node -> crashNodeInternal(nodeIdStr, node));
+    }
+
+    private Promise<Unit> killNodeInternal(String nodeIdStr, AetherNode node) {
+        log.info("Killing node {}", nodeIdStr);
+        return node.stop()
+                   .timeout(NODE_TIMEOUT)
+                   .map(_ -> removeNodeState(nodeIdStr))
+                   .onSuccess(_ -> log.info("Node {} killed", nodeIdStr));
+    }
+
+    private Promise<Unit> crashNodeInternal(String nodeIdStr, AetherNode node) {
         log.info("Crashing node {} abruptly", nodeIdStr);
-        // For crash simulation, we still call stop() but don't wait long
         return node.stop()
                    .timeout(TimeSpan.timeSpan(1)
                                     .seconds())
                    .recover(_ -> Unit.unit())
-                   .map(_ -> {
-                       nodes.remove(nodeIdStr);
-                       nodeInfos.remove(nodeIdStr);
-                       return Unit.unit();
-                   })
+                   .map(_ -> removeNodeState(nodeIdStr))
                    .onSuccess(_ -> log.info("Node {} crashed", nodeIdStr));
+    }
+
+    private Unit removeNodeState(String nodeIdStr) {
+        nodes.remove(nodeIdStr);
+        nodeInfos.remove(nodeIdStr);
+        return Unit.unit();
     }
 
     /**
@@ -183,39 +190,36 @@ public final class ForgeCluster {
         // Chain restarts sequentially
         Promise<Unit> chain = Promise.success(Unit.unit());
         for (var nodeIdStr : nodeIds) {
-            var nodeInfo = nodeInfos.get(nodeIdStr);
-            if (nodeInfo == null) continue;
-            chain = chain.flatMap(_ -> restartNode(nodeIdStr, nodeInfo, currentTopology));
+            chain = chain.flatMap(_ -> Option.option(nodeInfos.get(nodeIdStr))
+                                             .fold(() -> Promise.success(Unit.unit()),
+                                                   nodeInfo -> restartNode(nodeIdStr, nodeInfo, currentTopology)));
         }
         return chain.onSuccess(_ -> log.info("Rolling restart completed"));
     }
 
     private Promise<Unit> restartNode(String nodeIdStr, NodeInfo nodeInfo, List<NodeInfo> topology) {
         log.info("Rolling restart: restarting {}", nodeIdStr);
-        var node = nodes.get(nodeIdStr);
-        if (node == null) {
-            return Promise.success(Unit.unit());
-        }
-        return node.stop()
-                   .timeout(NODE_TIMEOUT)
-                   .flatMap(_ -> Promise.promise(TimeSpan.timeSpan(300)
-                                                         .millis(),
-                                                 () -> Result.success(Unit.unit())))
-                   .flatMap(_ -> {
-                                var port = nodeInfo.address()
-                                                   .port();
-                                var mgmtPort = BASE_MGMT_PORT + (port - BASE_PORT);
-                                var newNode = createNode(nodeInfo.id(),
-                                                         port,
-                                                         mgmtPort,
-                                                         topology);
-                                nodes.put(nodeIdStr, newNode);
-                                return newNode.start();
-                            })
-                   .flatMap(_ -> Promise.promise(TimeSpan.timeSpan(500)
-                                                         .millis(),
-                                                 () -> Result.success(Unit.unit())))
-                   .onSuccess(_ -> log.info("Node {} restarted", nodeIdStr));
+        return Option.option(nodes.get(nodeIdStr))
+                     .fold(() -> Promise.success(Unit.unit()),
+                           node -> node.stop()
+                                       .timeout(NODE_TIMEOUT)
+                                       .flatMap(_ -> Promise.promise(TimeSpan.timeSpan(300)
+                                                                             .millis(),
+                                                                     () -> Result.success(Unit.unit())))
+                                       .flatMap(_ -> recreateAndStartNode(nodeIdStr, nodeInfo, topology))
+                                       .flatMap(_ -> Promise.promise(TimeSpan.timeSpan(500)
+                                                                             .millis(),
+                                                                     () -> Result.success(Unit.unit())))
+                                       .onSuccess(_ -> log.info("Node {} restarted", nodeIdStr)));
+    }
+
+    private Promise<Unit> recreateAndStartNode(String nodeIdStr, NodeInfo nodeInfo, List<NodeInfo> topology) {
+        var port = nodeInfo.address()
+                           .port();
+        var mgmtPort = BASE_MGMT_PORT + (port - BASE_PORT);
+        var newNode = createNode(nodeInfo.id(), port, mgmtPort, topology);
+        nodes.put(nodeIdStr, newNode);
+        return newNode.start();
     }
 
     /**
@@ -251,13 +255,12 @@ public final class ForgeCluster {
                                                                BASE_MGMT_PORT + (clusterPort - BASE_PORT),
                                                                "healthy",
                                                                currentLeader()
-                                                                            .fold(() -> false,
-                                                                                  leaderId -> leaderId.equals(entry.getKey())));
+                                                                            .map(leaderId -> leaderId.equals(entry.getKey()))
+                                                                            .or(false));
                                      })
                                 .toList();
         return new ClusterStatus(nodeStatuses, currentLeader()
-                                                            .fold(() -> "none",
-                                                                  leader -> leader));
+                                                            .or("none"));
     }
 
     /**
@@ -279,6 +282,16 @@ public final class ForgeCluster {
      */
     public int nodeCount() {
         return nodes.size();
+    }
+
+    /**
+     * Get the management port of the current leader node.
+     */
+    public Option<Integer> getLeaderManagementPort() {
+        return currentLeader()
+                            .flatMap(leaderId -> Option.option(nodeInfos.get(leaderId)))
+                            .map(info -> BASE_MGMT_PORT + (info.address()
+                                                               .port() - BASE_PORT));
     }
 
     private AetherNode createNode(NodeId nodeId, int port, int mgmtPort, List<NodeInfo> coreNodes) {
@@ -313,8 +326,8 @@ public final class ForgeCluster {
                              var heapMax = metrics.getOrDefault("heap.max", 1.0);
                              return new NodeMetrics(nodeId,
                                                     currentLeader()
-                                                                 .fold(() -> false,
-                                                                       l -> l.equals(nodeId)),
+                                                                 .map(l -> l.equals(nodeId))
+                                                                 .or(false),
                                                     cpuUsage,
                                                     (long)(heapUsed / 1024 / 1024),
                                                     (long)(heapMax / 1024 / 1024));

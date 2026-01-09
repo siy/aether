@@ -1,7 +1,8 @@
-// Aether Forge - Dashboard Controller (Simplified)
+// Aether Forge - Dashboard Controller
 
 const API_BASE = '';
 const REFRESH_INTERVAL = 500;
+const CONFIG_REFRESH_INTERVAL = 5000;
 
 // State
 let nodes = [];
@@ -13,13 +14,45 @@ let throughputHistory = [];
 const MAX_HISTORY = 60;
 let nodeMetricsData = [];
 let entryPointMetrics = [];
+let currentPage = 'overview';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initCharts();
     initControls();
+    initNavigation();
     startPolling();
 });
+
+// ===============================
+// Navigation
+// ===============================
+
+function initNavigation() {
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', () => switchPage(tab.dataset.page));
+    });
+}
+
+function switchPage(page) {
+    currentPage = page;
+
+    // Update tab styles
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.page === page);
+    });
+
+    // Update page visibility
+    document.querySelectorAll('.page').forEach(p => {
+        p.classList.toggle('active', p.id === `page-${page}`);
+    });
+
+    // Load page-specific data
+    if (page === 'config') loadConfigPage();
+    if (page === 'alerts') loadAlertsPage();
+    if (page === 'cluster') loadClusterPage();
+    if (page === 'load-testing') loadLoadTestingPage();
+}
 
 // ===============================
 // Charts (Chart.js)
@@ -135,6 +168,21 @@ function initControls() {
     });
 
     document.getElementById('modal-cancel').addEventListener('click', hideNodeModal);
+
+    // Config page controls
+    document.getElementById('btn-refresh-controller')?.addEventListener('click', loadControllerConfig);
+    document.getElementById('btn-refresh-ttm')?.addEventListener('click', loadTTMStatus);
+    document.getElementById('btn-refresh-thresholds')?.addEventListener('click', loadThresholds);
+    document.getElementById('btn-refresh-controller-status')?.addEventListener('click', loadControllerStatus);
+
+    // Alerts page controls
+    document.getElementById('btn-refresh-alerts')?.addEventListener('click', loadAlertsPage);
+    document.getElementById('btn-clear-alerts')?.addEventListener('click', clearAlerts);
+
+    // Cluster page controls
+    document.getElementById('btn-refresh-health')?.addEventListener('click', loadClusterHealth);
+    document.getElementById('btn-refresh-metrics')?.addEventListener('click', loadComprehensiveMetrics);
+    document.getElementById('btn-refresh-slices')?.addEventListener('click', loadSlicesStatus);
 }
 
 function showNodeModal(includeLeader) {
@@ -205,6 +253,13 @@ async function apiPost(endpoint, body = {}) {
     } catch { return null; }
 }
 
+async function apiGet(endpoint) {
+    try {
+        const response = await fetch(`${API_BASE}${endpoint}`);
+        return response.ok ? await response.json() : null;
+    } catch { return null; }
+}
+
 async function fetchNodeMetrics() {
     try {
         const response = await fetch(`${API_BASE}/api/node-metrics`);
@@ -221,6 +276,19 @@ async function fetchEntryPointMetrics() {
             updateEntryPointsTable();
         }
     } catch {}
+}
+
+let realSliceStatus = null;
+
+async function fetchSliceStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/api/slices/status`);
+        if (response.ok) {
+            realSliceStatus = await response.json();
+        }
+    } catch {
+        realSliceStatus = null;
+    }
 }
 
 function updateEntryPointsTable() {
@@ -277,13 +345,18 @@ async function poll() {
 
     document.getElementById('uptime').textContent = formatUptime(status.uptimeSeconds);
     document.getElementById('node-count').textContent = status.cluster.nodeCount;
-    document.getElementById('slice-count').textContent = status.sliceCount || 0;
+
+    // Fetch real slice status from cluster
+    await fetchSliceStatus();
+    // Count unique active slices (aggregate state per artifact)
+    const activeSliceCount = realSliceStatus?.slices?.filter(s => s.state === 'ACTIVE')?.length || status.sliceCount || 0;
+    document.getElementById('slice-count').textContent = activeSliceCount;
 
     const newEvents = await fetchEvents();
     updateTimeline(newEvents);
 
     await fetchNodeMetrics();
-    updateNodesList(status.cluster.nodes, status.sliceCount);
+    updateNodesList(status.cluster.nodes);
 
     await fetchEntryPointMetrics();
 }
@@ -349,14 +422,31 @@ function formatEventTime(isoString) {
     return new Date(isoString).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-function updateNodesList(clusterNodes, sliceCount) {
+function updateNodesList(clusterNodes) {
     const container = document.getElementById('nodes-list');
     if (!clusterNodes?.length) {
         container.innerHTML = '<div class="node-item placeholder">No nodes available</div>';
         return;
     }
 
-    const sliceNames = sliceCount > 0 ? ['inventory', 'pricing', 'place-order', 'get-status', 'cancel'] : [];
+    // Get real slice data per node from realSliceStatus
+    const slicesPerNode = {};
+    if (realSliceStatus?.slices) {
+        realSliceStatus.slices.forEach(slice => {
+            const artifactParts = (slice.artifact || '').split(':');
+            const shortName = artifactParts.length >= 2 ? artifactParts[1] : slice.artifact;
+            if (slice.instances) {
+                slice.instances.forEach(instance => {
+                    const nodeId = instance.nodeId || 'unknown';
+                    if (!slicesPerNode[nodeId]) slicesPerNode[nodeId] = [];
+                    slicesPerNode[nodeId].push({
+                        name: shortName,
+                        state: instance.state
+                    });
+                });
+            }
+        });
+    }
 
     container.innerHTML = [...clusterNodes]
         .sort((a, b) => a.isLeader ? -1 : b.isLeader ? 1 : a.id.localeCompare(b.id))
@@ -364,13 +454,475 @@ function updateNodesList(clusterNodes, sliceCount) {
             const metrics = nodeMetricsData.find(m => m.nodeId === node.id);
             const cpu = metrics ? (metrics.cpuUsage * 100).toFixed(0) : '?';
             const heap = metrics ? `${metrics.heapUsedMb}/${metrics.heapMaxMb}` : '?/?';
-            const slices = sliceNames.map(s => `<span class="slice-tag">${s}</span>`).join('');
+            const nodeSlices = slicesPerNode[node.id] || [];
+            const slices = nodeSlices.map(s => {
+                const stateClass = s.state === 'ACTIVE' ? 'active' : s.state === 'LOADING' ? 'loading' : 'inactive';
+                return `<span class="slice-tag ${stateClass}" title="${s.state}">${escapeHtml(s.name)}</span>`;
+            }).join('');
 
             return `<div class="node-item ${node.isLeader ? 'leader' : ''}">
                 <span class="node-id">${node.id}</span>
                 ${node.isLeader ? '<span class="leader-badge">LEADER</span>' : ''}
                 <span class="node-stats"><span>CPU ${cpu}%</span><span>Heap ${heap}MB</span></span>
-                <span class="node-slices">${slices}</span>
+                <span class="node-slices">${slices || '<span class="no-slices">No slices</span>'}</span>
             </div>`;
         }).join('');
+}
+
+// ===============================
+// Configuration Page
+// ===============================
+
+async function loadConfigPage() {
+    await Promise.all([
+        loadControllerConfig(),
+        loadTTMStatus(),
+        loadThresholds(),
+        loadControllerStatus()
+    ]);
+}
+
+async function loadControllerConfig() {
+    const container = document.getElementById('controller-config');
+    const data = await apiGet('/api/cluster/controller/config');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load controller config</div>';
+        return;
+    }
+
+    container.innerHTML = renderConfigItems(data.config || data);
+}
+
+async function loadTTMStatus() {
+    const container = document.getElementById('ttm-status');
+    const data = await apiGet('/api/cluster/ttm/status');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load TTM status</div>';
+        return;
+    }
+
+    const items = [
+        { key: 'Config Enabled', value: data.configEnabled, isBoolean: true },
+        { key: 'Active', value: data.active, isBoolean: true },
+        { key: 'State', value: data.state },
+        { key: 'Model Path', value: data.modelPath || 'N/A' },
+        { key: 'Input Window', value: `${data.inputWindowMinutes} min` },
+        { key: 'Eval Interval', value: `${data.evaluationIntervalMs}ms` },
+        { key: 'Confidence', value: data.confidenceThreshold },
+        { key: 'Has Forecast', value: data.hasForecast, isBoolean: true }
+    ];
+
+    if (data.lastForecast) {
+        items.push(
+            { key: 'Forecast Time', value: new Date(data.lastForecast.timestamp).toLocaleTimeString() },
+            { key: 'Forecast Confidence', value: data.lastForecast.confidence?.toFixed(2) },
+            { key: 'Recommendation', value: data.lastForecast.recommendation }
+        );
+    }
+
+    container.innerHTML = items.map(item => renderConfigItem(item.key, item.value, item.isBoolean)).join('');
+}
+
+async function loadThresholds() {
+    const container = document.getElementById('thresholds-config');
+    const data = await apiGet('/api/cluster/thresholds');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load thresholds</div>';
+        return;
+    }
+
+    if (data.thresholds && Object.keys(data.thresholds).length > 0) {
+        container.innerHTML = Object.entries(data.thresholds).map(([metric, config]) => {
+            return `<div class="config-item">
+                <span class="config-key">${escapeHtml(metric)}</span>
+                <span class="config-value">${config.warning}/${config.critical}</span>
+            </div>`;
+        }).join('');
+    } else {
+        container.innerHTML = '<div class="placeholder">No thresholds configured</div>';
+    }
+}
+
+async function loadControllerStatus() {
+    const container = document.getElementById('controller-status');
+    const data = await apiGet('/api/cluster/controller/status');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load controller status</div>';
+        return;
+    }
+
+    const items = [
+        { key: 'Enabled', value: data.enabled, isBoolean: true },
+        { key: 'Evaluation Interval', value: `${data.evaluationIntervalMs}ms` }
+    ];
+
+    container.innerHTML = items.map(item => renderConfigItem(item.key, item.value, item.isBoolean)).join('');
+}
+
+function renderConfigItems(obj, prefix = '') {
+    let html = '';
+    for (const [key, value] of Object.entries(obj)) {
+        const displayKey = prefix ? `${prefix}.${key}` : key;
+        if (typeof value === 'object' && value !== null) {
+            html += renderConfigItems(value, displayKey);
+        } else {
+            html += renderConfigItem(displayKey, value, typeof value === 'boolean');
+        }
+    }
+    return html;
+}
+
+function renderConfigItem(key, value, isBoolean = false) {
+    let valueClass = 'config-value';
+    if (isBoolean) {
+        valueClass += value ? ' enabled' : ' disabled';
+    }
+    return `<div class="config-item">
+        <span class="config-key">${escapeHtml(key)}</span>
+        <span class="${valueClass}">${value}</span>
+    </div>`;
+}
+
+// ===============================
+// Alerts Page
+// ===============================
+
+async function loadAlertsPage() {
+    await Promise.all([
+        loadActiveAlerts(),
+        loadAlertHistory()
+    ]);
+}
+
+async function loadActiveAlerts() {
+    const container = document.getElementById('active-alerts');
+    const data = await apiGet('/api/cluster/alerts/active');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load active alerts</div>';
+        return;
+    }
+
+    const alerts = data.alerts || [];
+    if (alerts.length === 0) {
+        container.innerHTML = '<div class="no-alerts">No active alerts</div>';
+        return;
+    }
+
+    container.innerHTML = alerts.map(alert => renderAlertItem(alert)).join('');
+}
+
+async function loadAlertHistory() {
+    const container = document.getElementById('alert-history');
+    const data = await apiGet('/api/cluster/alerts/history');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load alert history</div>';
+        return;
+    }
+
+    const alerts = data.alerts || [];
+    if (alerts.length === 0) {
+        container.innerHTML = '<div class="placeholder">No alert history</div>';
+        return;
+    }
+
+    container.innerHTML = alerts.slice(0, 50).map(alert => renderAlertItem(alert)).join('');
+}
+
+function renderAlertItem(alert) {
+    const severityClass = (alert.severity || 'WARNING').toLowerCase();
+    return `<div class="alert-item ${severityClass}">
+        <span class="alert-severity ${alert.severity || 'WARNING'}">${alert.severity || 'WARNING'}</span>
+        <span class="alert-metric">${escapeHtml(alert.metric || alert.type || 'Unknown')}</span>
+        <span class="alert-message">${escapeHtml(alert.message || '')}</span>
+        <span class="alert-time">${alert.timestamp ? formatEventTime(alert.timestamp) : ''}</span>
+    </div>`;
+}
+
+async function clearAlerts() {
+    await apiPost('/api/cluster/alerts/clear');
+    await loadAlertsPage();
+}
+
+// ===============================
+// Cluster Page
+// ===============================
+
+async function loadClusterPage() {
+    await Promise.all([
+        loadClusterHealth(),
+        loadComprehensiveMetrics(),
+        loadSlicesStatus()
+    ]);
+}
+
+async function loadClusterHealth() {
+    const container = document.getElementById('cluster-health');
+    const data = await apiGet('/api/cluster/health');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load cluster health</div>';
+        return;
+    }
+
+    const status = data.status || 'unknown';
+    const indicatorClass = status === 'healthy' ? '' : status === 'degraded' ? 'degraded' : 'unhealthy';
+    const textClass = status === 'healthy' ? 'healthy' : status === 'degraded' ? 'degraded' : 'unhealthy';
+
+    let html = `<div class="health-status">
+        <div class="health-indicator ${indicatorClass}"></div>
+        <span class="health-text ${textClass}">${status.toUpperCase()}</span>
+    </div>`;
+
+    const items = [
+        { key: 'Quorum', value: data.quorum, isBoolean: true },
+        { key: 'Node Count', value: data.nodeCount },
+        { key: 'Slice Count', value: data.sliceCount }
+    ];
+
+    html += items.map(item => renderConfigItem(item.key, item.value, item.isBoolean)).join('');
+    container.innerHTML = html;
+}
+
+async function loadComprehensiveMetrics() {
+    const container = document.getElementById('comprehensive-metrics');
+    const data = await apiGet('/api/cluster/metrics/comprehensive');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load comprehensive metrics</div>';
+        return;
+    }
+
+    let html = '';
+
+    // CPU & Memory
+    html += '<div class="metrics-section"><div class="metrics-section-title">System</div><div class="metrics-grid">';
+    html += renderMetricItem('CPU Usage', formatPercent(data.cpuUsage));
+    html += renderMetricItem('Heap Usage', formatPercent(data.heapUsage));
+    html += renderMetricItem('Heap Used', `${data.heapUsedMb || 0}MB`);
+    html += renderMetricItem('Heap Max', `${data.heapMaxMb || 0}MB`);
+    html += '</div></div>';
+
+    // GC
+    if (data.gc) {
+        html += '<div class="metrics-section"><div class="metrics-section-title">GC</div><div class="metrics-grid">';
+        html += renderMetricItem('Collections', data.gc.collectionCount);
+        html += renderMetricItem('Total Pause', `${data.gc.totalPauseMs}ms`);
+        html += '</div></div>';
+    }
+
+    // Event Loop
+    if (data.eventLoop) {
+        html += '<div class="metrics-section"><div class="metrics-section-title">Event Loop</div><div class="metrics-grid">';
+        html += renderMetricItem('Lag', `${data.eventLoop.lagMs}ms`);
+        html += renderMetricItem('Pending Tasks', data.eventLoop.pendingTasks);
+        html += '</div></div>';
+    }
+
+    // Invocations
+    html += '<div class="metrics-section"><div class="metrics-section-title">Invocations</div><div class="metrics-grid">';
+    html += renderMetricItem('Total', formatNumber(data.totalInvocations || 0));
+    html += renderMetricItem('Avg Latency', `${(data.avgLatencyMs || 0).toFixed(1)}ms`);
+    html += renderMetricItem('Error Rate', formatPercent(data.errorRate));
+    html += '</div></div>';
+
+    container.innerHTML = html;
+}
+
+function renderMetricItem(name, value) {
+    return `<div class="metric-item">
+        <span class="metric-name">${escapeHtml(name)}</span>
+        <span class="metric-val">${escapeHtml(String(value))}</span>
+    </div>`;
+}
+
+function formatPercent(value) {
+    if (value === undefined || value === null) return 'N/A';
+    return `${(value * 100).toFixed(1)}%`;
+}
+
+async function loadSlicesStatus() {
+    const container = document.getElementById('slices-status');
+    const data = await apiGet('/api/slices/status');
+    if (!data) {
+        container.innerHTML = '<div class="placeholder">Unable to load slices status</div>';
+        return;
+    }
+
+    const slices = data.slices || [];
+    if (slices.length === 0) {
+        container.innerHTML = '<div class="placeholder">No slices deployed</div>';
+        return;
+    }
+
+    container.innerHTML = slices.map(slice => {
+        const stateClass = slice.state === 'ACTIVE' ? '' :
+                          slice.state === 'LOADING' || slice.state === 'ACTIVATING' ? 'loading' : 'failed';
+
+        const instances = (slice.instances || []).map(inst => {
+            const healthClass = inst.state === 'ACTIVE' ? 'healthy' : '';
+            return `<span class="instance-badge ${healthClass}">${escapeHtml(inst.nodeId)}: ${inst.state}</span>`;
+        }).join('');
+
+        return `<div class="slice-item ${stateClass}">
+            <div class="slice-header">
+                <span class="slice-artifact">${escapeHtml(slice.artifact)}</span>
+                <span class="slice-state ${slice.state}">${slice.state}</span>
+            </div>
+            <div class="slice-instances">${instances || '<span class="no-slices">No instances</span>'}</div>
+        </div>`;
+    }).join('');
+}
+
+// ===============================
+// Load Testing Page
+// ===============================
+
+let loadTestingPollInterval = null;
+
+function loadLoadTestingPage() {
+    initLoadTestingControls();
+    startLoadTestingPolling();
+    refreshLoadConfig();
+    refreshLoadStatus();
+}
+
+function initLoadTestingControls() {
+    // Upload config button
+    const uploadBtn = document.getElementById('btn-upload-config');
+    if (uploadBtn && !uploadBtn._initialized) {
+        uploadBtn.addEventListener('click', uploadLoadConfig);
+        uploadBtn._initialized = true;
+    }
+
+    // Control buttons
+    const startBtn = document.getElementById('btn-load-start');
+    const pauseBtn = document.getElementById('btn-load-pause');
+    const resumeBtn = document.getElementById('btn-load-resume');
+    const stopBtn = document.getElementById('btn-load-stop');
+
+    if (startBtn && !startBtn._initialized) {
+        startBtn.addEventListener('click', () => loadAction('start'));
+        startBtn._initialized = true;
+    }
+    if (pauseBtn && !pauseBtn._initialized) {
+        pauseBtn.addEventListener('click', () => loadAction('pause'));
+        pauseBtn._initialized = true;
+    }
+    if (resumeBtn && !resumeBtn._initialized) {
+        resumeBtn.addEventListener('click', () => loadAction('resume'));
+        resumeBtn._initialized = true;
+    }
+    if (stopBtn && !stopBtn._initialized) {
+        stopBtn.addEventListener('click', () => loadAction('stop'));
+        stopBtn._initialized = true;
+    }
+}
+
+function startLoadTestingPolling() {
+    if (loadTestingPollInterval) {
+        clearInterval(loadTestingPollInterval);
+    }
+    loadTestingPollInterval = setInterval(() => {
+        if (currentPage === 'load-testing') {
+            refreshLoadStatus();
+        }
+    }, 1000);
+}
+
+async function uploadLoadConfig() {
+    const textarea = document.getElementById('load-config-text');
+    const statusSpan = document.getElementById('load-config-status');
+    const configInfo = document.getElementById('load-config-info');
+
+    if (!textarea.value.trim()) {
+        statusSpan.innerHTML = '<span class="error">Please enter a configuration</span>';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/load/config', {
+            method: 'POST',
+            body: textarea.value
+        });
+        const data = await response.json();
+
+        if (data.error) {
+            statusSpan.innerHTML = `<span class="error">${escapeHtml(data.error)}</span>`;
+        } else {
+            statusSpan.innerHTML = `<span class="success">Loaded ${data.targetCount} targets (${data.totalRps} req/s)</span>`;
+            configInfo.innerHTML = `<span class="success">${data.targetCount} targets configured, ${data.totalRps} total req/s</span>`;
+        }
+    } catch (e) {
+        statusSpan.innerHTML = `<span class="error">Upload failed: ${e.message}</span>`;
+    }
+}
+
+async function loadAction(action) {
+    try {
+        const response = await fetch(`/api/load/${action}`, { method: 'POST' });
+        const data = await response.json();
+
+        const stateSpan = document.getElementById('load-runner-state');
+        if (data.state) {
+            stateSpan.textContent = data.state;
+            stateSpan.className = 'state-value ' + data.state.toLowerCase();
+        }
+        if (data.error) {
+            const statusSpan = document.getElementById('load-config-status');
+            statusSpan.innerHTML = `<span class="error">${escapeHtml(data.error)}</span>`;
+        }
+    } catch (e) {
+        console.error('Load action failed:', e);
+    }
+}
+
+async function refreshLoadConfig() {
+    try {
+        const response = await fetch('/api/load/config');
+        const data = await response.json();
+
+        const configInfo = document.getElementById('load-config-info');
+        if (data.targetCount > 0) {
+            configInfo.innerHTML = `<span class="success">${data.targetCount} targets configured, ${data.totalRps} total req/s</span>`;
+        } else {
+            configInfo.innerHTML = '<span>No configuration loaded</span>';
+        }
+    } catch (e) {
+        console.error('Failed to load config:', e);
+    }
+}
+
+async function refreshLoadStatus() {
+    try {
+        const response = await fetch('/api/load/status');
+        const data = await response.json();
+
+        // Update state
+        const stateSpan = document.getElementById('load-runner-state');
+        if (stateSpan) {
+            stateSpan.textContent = data.state;
+            stateSpan.className = 'state-value ' + data.state.toLowerCase();
+        }
+
+        // Update targets table
+        const tbody = document.getElementById('load-targets-body');
+        if (tbody) {
+            if (!data.targets || data.targets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="placeholder">No targets running</td></tr>';
+            } else {
+                tbody.innerHTML = data.targets.map(t => `
+                    <tr>
+                        <td>${escapeHtml(t.name)}</td>
+                        <td>${t.actualRate} / ${t.targetRate}</td>
+                        <td>${t.requests.toLocaleString()}</td>
+                        <td class="success">${t.success.toLocaleString()}</td>
+                        <td class="error">${t.failures.toLocaleString()}</td>
+                        <td>${t.successRate.toFixed(1)}%</td>
+                        <td>${t.avgLatencyMs.toFixed(1)}ms</td>
+                        <td>${t.remaining || '-'}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+    } catch (e) {
+        console.error('Failed to refresh load status:', e);
+    }
 }

@@ -96,11 +96,11 @@ public final class LocalGenerator implements Generator {
                                                    .ports()
                                                    .cluster() + config.cluster()
                                                                      .nodes() - 1);
-            return Result.success(GeneratorOutput.withScripts(outputDir,
-                                                              generatedFiles,
-                                                              startPath,
-                                                              stopPath,
-                                                              instructions));
+            return Result.success(GeneratorOutput.generatorOutput(outputDir,
+                                                                  generatedFiles,
+                                                                  startPath,
+                                                                  stopPath,
+                                                                  instructions));
         } catch (IOException e) {
             return GeneratorError.ioError(e.getMessage())
                                  .result();

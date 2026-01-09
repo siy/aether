@@ -9,6 +9,7 @@ import org.pragmatica.aether.ttm.model.TTMPredictor;
 import org.pragmatica.consensus.leader.LeaderNotification.LeaderChange;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Result;
+import org.pragmatica.lang.Unit;
 import org.pragmatica.messaging.MessageReceiver;
 
 import java.util.function.Consumer;
@@ -48,9 +49,15 @@ public interface TTMManager {
     TTMConfig config();
 
     /**
+     * Check if TTM is actually enabled and functional.
+     * Returns false for NoOpTTMManager or if model failed to load.
+     */
+    boolean isEnabled();
+
+    /**
      * Stop the TTM manager.
      */
-    void stop();
+    Unit stop();
 
     /**
      * Create TTM manager.
@@ -119,5 +126,12 @@ final class NoOpTTMManager implements TTMManager {
     }
 
     @Override
-    public void stop() {}
+    public boolean isEnabled() {
+        return false;
+    }
+
+    @Override
+    public Unit stop() {
+        return Unit.unit();
+    }
 }

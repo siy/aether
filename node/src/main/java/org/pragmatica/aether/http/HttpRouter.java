@@ -3,6 +3,7 @@ package org.pragmatica.aether.http;
 import org.pragmatica.aether.invoke.SliceInvoker;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.net.tcp.TlsContextFactory;
@@ -88,8 +89,7 @@ class HttpRouterImpl implements HttpRouter {
         this.workerGroup = new MultiThreadIoEventLoopGroup(NioIoHandler.newFactory());
         this.sslContext = config.tls()
                                 .map(TlsContextFactory::create)
-                                .flatMap(result -> result.fold(_ -> Option.empty(),
-                                                               Option::some));
+                                .flatMap(Result::option);
     }
 
     @Override

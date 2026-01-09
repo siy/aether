@@ -97,11 +97,11 @@ class VersionPatternTest {
     @Test
     void invalid_pattern_returns_failure() {
         VersionPattern.parse("")
-                      .onSuccessRun(() -> Assertions.fail("Should have failed for empty pattern"))
+                      .onSuccessRun(Assertions::fail)
                       .onFailure(cause -> assertThat(cause.message()).contains("cannot be empty"));
 
         VersionPattern.parse("[1.0.0,]")
-                      .onSuccessRun(() -> Assertions.fail("Should have failed for invalid range"))
+                      .onSuccessRun(Assertions::fail)
                       .onFailure(cause -> assertThat(cause.message()).contains("Invalid"));
     }
 

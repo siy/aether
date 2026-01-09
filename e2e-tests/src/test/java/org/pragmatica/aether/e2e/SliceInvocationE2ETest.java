@@ -30,12 +30,12 @@ import static org.awaitility.Awaitility.await;
 class SliceInvocationE2ETest {
     private static final Path PROJECT_ROOT = Path.of(System.getProperty("project.basedir", ".."));
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(30);
-    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.7.1";
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.7.2";
     private AetherCluster cluster;
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(3, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(3, PROJECT_ROOT);
         cluster.start();
         cluster.awaitQuorum();
     }

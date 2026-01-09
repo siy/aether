@@ -10,10 +10,11 @@ import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +34,8 @@ public class AlertManager {
 
     private final Map<String, Threshold> thresholds = new ConcurrentHashMap<>();
     private final Map<String, ActiveAlert> activeAlerts = new ConcurrentHashMap<>();
-    private final List<AlertHistoryEntry> alertHistory = new ArrayList<>();
+    private final ConcurrentLinkedDeque<AlertHistoryEntry> alertHistory = new ConcurrentLinkedDeque<>();
+    private final AtomicInteger historySize = new AtomicInteger(0);
 
     private AlertManager(RabiaNode<KVCommand<AetherKey>> clusterNode,
                          KVStore<AetherKey, AetherValue> kvStore) {
@@ -90,7 +92,7 @@ public class AlertManager {
      */
     @SuppressWarnings("unchecked")
     public Promise<Unit> setThreshold(String metric, double warning, double critical) {
-        var key = AetherKey.AlertThresholdKey.alertThresholdKey(metric);
+        var key = new AetherKey.AlertThresholdKey(metric);
         var value = AetherValue.AlertThresholdValue.alertThresholdValue(metric, warning, critical);
         var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Put<>(key, value);
         return clusterNode.<Unit> apply(List.of(command))
@@ -115,7 +117,7 @@ public class AlertManager {
      */
     @SuppressWarnings("unchecked")
     public Promise<Unit> removeThreshold(String metric) {
-        var key = AetherKey.AlertThresholdKey.alertThresholdKey(metric);
+        var key = new AetherKey.AlertThresholdKey(metric);
         var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Remove<>(key);
         return clusterNode.<Unit> apply(List.of(command))
                           .map(_ -> {
@@ -158,43 +160,48 @@ public class AlertManager {
      * Check if a metric value exceeds threshold and return alert JSON if triggered.
      */
     public Option<String> checkThreshold(String metric, NodeId nodeId, double value) {
-        var threshold = thresholds.get(metric);
-        if (threshold == null) {
-            return Option.none();
-        }
-        var alertKey = metric + ":" + nodeId.id();
-        var existing = activeAlerts.get(alertKey);
-        return threshold.severity(value)
-                        .fold(() -> handleNormalValue(alertKey, existing, metric, nodeId, value),
-                              severity -> handleAlertValue(alertKey,
-                                                           existing,
-                                                           severity,
-                                                           metric,
-                                                           nodeId,
-                                                           value,
-                                                           threshold));
+        return Option.option(thresholds.get(metric))
+                     .flatMap(threshold -> {
+                                  var alertKey = metric + ":" + nodeId.id();
+                                  var existing = Option.option(activeAlerts.get(alertKey));
+                                  return threshold.severity(value)
+                                                  .fold(() -> handleNormalValue(alertKey,
+                                                                                existing,
+                                                                                metric,
+                                                                                nodeId,
+                                                                                value),
+                                                        severity -> handleAlertValue(alertKey,
+                                                                                     existing,
+                                                                                     severity,
+                                                                                     metric,
+                                                                                     nodeId,
+                                                                                     value,
+                                                                                     threshold));
+                              });
     }
 
     private Option<String> handleNormalValue(String alertKey,
-                                             ActiveAlert existing,
+                                             Option<ActiveAlert> existing,
                                              String metric,
                                              NodeId nodeId,
                                              double value) {
-        if (existing != null) {
-            activeAlerts.remove(alertKey);
-            addToHistory(metric, nodeId, value, existing.severity, "RESOLVED");
-        }
+        existing.onPresent(alert -> {
+                               activeAlerts.remove(alertKey);
+                               addToHistory(metric, nodeId, value, alert.severity, "RESOLVED");
+                           });
         return Option.none();
     }
 
     private Option<String> handleAlertValue(String alertKey,
-                                            ActiveAlert existing,
+                                            Option<ActiveAlert> existing,
                                             String severity,
                                             String metric,
                                             NodeId nodeId,
                                             double value,
                                             Threshold threshold) {
-        if (existing == null || !existing.severity.equals(severity)) {
+        var shouldTrigger = existing.filter(alert -> alert.severity.equals(severity))
+                                    .isEmpty();
+        if (shouldTrigger) {
             var alert = new ActiveAlert(metric,
                                         nodeId,
                                         value,
@@ -242,15 +249,16 @@ public class AlertManager {
     }
 
     private void addToHistory(String metric, NodeId nodeId, double value, String severity, String status) {
-        synchronized (alertHistory) {
-            alertHistory.add(new AlertHistoryEntry(System.currentTimeMillis(),
+        alertHistory.addLast(new AlertHistoryEntry(System.currentTimeMillis(),
                                                    metric,
                                                    nodeId.id(),
                                                    value,
                                                    severity,
                                                    status));
-            while (alertHistory.size() > MAX_ALERT_HISTORY) {
-                alertHistory.removeFirst();
+        // Approximate size tracking - may briefly exceed MAX_ALERT_HISTORY under contention
+        if (historySize.incrementAndGet() > MAX_ALERT_HISTORY) {
+            if (alertHistory.pollFirst() != null) {
+                historySize.decrementAndGet();
             }
         }
     }
@@ -319,32 +327,30 @@ public class AlertManager {
     public String alertHistoryAsJson() {
         var sb = new StringBuilder();
         sb.append("[");
-        synchronized (alertHistory) {
-            boolean first = true;
-            for (var entry : alertHistory) {
-                if (!first) sb.append(",");
-                sb.append("{");
-                sb.append("\"timestamp\":")
-                  .append(entry.timestamp)
-                  .append(",");
-                sb.append("\"metric\":\"")
-                  .append(entry.metric)
-                  .append("\",");
-                sb.append("\"nodeId\":\"")
-                  .append(entry.nodeId)
-                  .append("\",");
-                sb.append("\"value\":")
-                  .append(entry.value)
-                  .append(",");
-                sb.append("\"severity\":\"")
-                  .append(entry.severity)
-                  .append("\",");
-                sb.append("\"status\":\"")
-                  .append(entry.status)
-                  .append("\"");
-                sb.append("}");
-                first = false;
-            }
+        boolean first = true;
+        for (var entry : alertHistory) {
+            if (!first) sb.append(",");
+            sb.append("{");
+            sb.append("\"timestamp\":")
+              .append(entry.timestamp)
+              .append(",");
+            sb.append("\"metric\":\"")
+              .append(entry.metric)
+              .append("\",");
+            sb.append("\"nodeId\":\"")
+              .append(entry.nodeId)
+              .append("\",");
+            sb.append("\"value\":")
+              .append(entry.value)
+              .append(",");
+            sb.append("\"severity\":\"")
+              .append(entry.severity)
+              .append("\",");
+            sb.append("\"status\":\"")
+              .append(entry.status)
+              .append("\"");
+            sb.append("}");
+            first = false;
         }
         sb.append("]");
         return sb.toString();

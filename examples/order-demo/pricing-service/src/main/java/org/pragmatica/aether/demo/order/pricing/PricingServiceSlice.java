@@ -4,7 +4,10 @@ import org.pragmatica.aether.demo.order.domain.Money;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.Slice;
 import org.pragmatica.aether.slice.SliceMethod;
+import org.pragmatica.lang.Cause;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.type.TypeToken;
 
 import java.math.BigDecimal;
@@ -15,6 +18,36 @@ import java.util.Map;
  * Pricing Service Slice - handles product pricing and order total calculation.
  */
 public record PricingServiceSlice() implements Slice {
+    // === Requests ===
+    public record GetPriceRequest(String productId) {}
+
+    public record CalculateTotalRequest(List<LineItem> items, String discountCode) {
+        public record LineItem(String productId, int quantity) {}
+    }
+
+    // === Responses ===
+    public record ProductPrice(String productId, Money unitPrice) {}
+
+    public record OrderTotal(Money subtotal, Money discount, Money total) {}
+
+    // === Errors ===
+    public sealed interface PricingError extends Cause {
+        record PriceNotFound(String productId) implements PricingError {
+            @Override
+            public String message() {
+                return "Price not found for product: " + productId;
+            }
+        }
+
+        record DiscountCodeInvalid(String code) implements PricingError {
+            @Override
+            public String message() {
+                return "Invalid discount code: " + code;
+            }
+        }
+    }
+
+    // === Static Data ===
     private static final Map<String, BigDecimal> PRICES = Map.of("PROD-ABC123",
                                                                  new BigDecimal("29.99"),
                                                                  "PROD-DEF456",
@@ -27,10 +60,12 @@ public record PricingServiceSlice() implements Slice {
                                                                     "SAVE20",
                                                                     new BigDecimal("0.20"));
 
+    // === Factory ===
     public static PricingServiceSlice pricingServiceSlice() {
         return new PricingServiceSlice();
     }
 
+    // === Slice Implementation ===
     @Override
     public List<SliceMethod< ?, ? >> methods() {
         return List.of(new SliceMethod<>(MethodName.methodName("getPrice")
@@ -46,29 +81,47 @@ public record PricingServiceSlice() implements Slice {
     }
 
     private Promise<ProductPrice> getPrice(GetPriceRequest request) {
-        var price = PRICES.get(request.productId());
-        if (price == null) {
-            return new PricingError.PriceNotFound(request.productId()).promise();
-        }
-        return Promise.success(new ProductPrice(request.productId(), Money.usd(price)));
+        return Option.option(PRICES.get(request.productId()))
+                     .toResult(new PricingError.PriceNotFound(request.productId()))
+                     .flatMap(Money::usd)
+                     .map(price -> new ProductPrice(request.productId(),
+                                                    price))
+                     .async();
     }
 
     private Promise<OrderTotal> calculateTotal(CalculateTotalRequest request) {
-        var subtotal = BigDecimal.ZERO;
-        for (var item : request.items()) {
-            var price = PRICES.get(item.productId());
-            if (price == null) {
-                return new PricingError.PriceNotFound(item.productId()).promise();
-            }
-            subtotal = subtotal.add(price.multiply(BigDecimal.valueOf(item.quantity())));
+        return calculateSubtotal(request.items())
+                                .flatMap(subtotal -> applyDiscount(subtotal,
+                                                                   request.discountCode()))
+                                .async();
+    }
+
+    private Result<BigDecimal> calculateSubtotal(List<CalculateTotalRequest.LineItem> items) {
+        var missingProduct = items.stream()
+                                  .filter(item -> !PRICES.containsKey(item.productId()))
+                                  .findFirst();
+        if (missingProduct.isPresent()) {
+            return new PricingError.PriceNotFound(missingProduct.get()
+                                                                .productId()).result();
         }
-        var discountRate = request.discountCode() != null
-                           ? DISCOUNTS.get(request.discountCode())
+        var subtotal = items.stream()
+                            .map(item -> PRICES.get(item.productId())
+                                               .multiply(BigDecimal.valueOf(item.quantity())))
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return Result.success(subtotal);
+    }
+
+    private Result<OrderTotal> applyDiscount(BigDecimal subtotal, String discountCode) {
+        var discountRate = discountCode != null
+                           ? DISCOUNTS.get(discountCode)
                            : null;
         var discount = discountRate != null
                        ? subtotal.multiply(discountRate)
                        : BigDecimal.ZERO;
         var total = subtotal.subtract(discount);
-        return Promise.success(new OrderTotal(Money.usd(subtotal), Money.usd(discount), Money.usd(total)));
+        return Result.all(Money.usd(subtotal),
+                          Money.usd(discount),
+                          Money.usd(total))
+                     .map(OrderTotal::new);
     }
 }

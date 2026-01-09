@@ -25,7 +25,6 @@ import org.pragmatica.aether.metrics.MetricsCollector;
 import org.pragmatica.aether.metrics.MetricsScheduler;
 import org.pragmatica.aether.metrics.MinuteAggregator;
 import org.pragmatica.aether.metrics.eventloop.EventLoopMetricsCollector;
-import org.pragmatica.aether.metrics.events.EventPublisher;
 import org.pragmatica.aether.metrics.gc.GCMetricsCollector;
 import org.pragmatica.aether.metrics.consensus.RabiaMetricsCollector;
 import org.pragmatica.aether.metrics.deployment.DeploymentEvent;
@@ -166,6 +165,17 @@ public interface AetherNode {
      */
     <R> Promise<List<R>> apply(List<KVCommand<AetherKey>> commands);
 
+    /**
+     * Get the management server port for this node.
+     * Returns 0 if management server is disabled.
+     */
+    int managementPort();
+
+    /**
+     * Get the node uptime in seconds since start.
+     */
+    long uptimeSeconds();
+
     static Result<AetherNode> aetherNode(AetherNodeConfig config) {
         var delegateRouter = MessageRouter.DelegateRouter.delegate();
         var serializer = furySerializer(AetherCustomClasses::configure);
@@ -254,7 +264,8 @@ public interface AetherNode {
                               ComprehensiveSnapshotCollector snapshotCollector,
                               EventLoopMetricsCollector eventLoopMetricsCollector,
                               Option<ManagementServer> managementServer,
-                              Option<HttpRouter> httpRouter) implements AetherNode {
+                              Option<HttpRouter> httpRouter,
+                              long startTimeMs) implements AetherNode {
             private static final Logger log = LoggerFactory.getLogger(aetherNodeImpl.class);
 
             @Override
@@ -265,15 +276,13 @@ public interface AetherNode {
             @Override
             public Promise<Unit> start() {
                 log.info("Starting Aether node {}", self());
-                // Initialize event publisher for cluster events
-                EventPublisher.initialize();
                 // Start comprehensive snapshot collection (feeds TTM pipeline)
                 snapshotCollector.start();
                 SliceRuntime.setSliceInvoker(sliceInvoker);
-                return managementServer.fold(() -> Promise.success(Unit.unit()),
-                                             ManagementServer::start)
-                                       .flatMap(_ -> httpRouter.fold(() -> Promise.success(Unit.unit()),
-                                                                     HttpRouter::start))
+                return managementServer.map(ManagementServer::start)
+                                       .or(Promise.unitPromise())
+                                       .flatMap(_ -> httpRouter.map(HttpRouter::start)
+                                                               .or(Promise.unitPromise()))
                                        .flatMap(_ -> startClusterAsync())
                                        .onSuccess(_ -> log.info("Aether node {} HTTP server started, cluster forming...",
                                                                 self()));
@@ -287,12 +296,11 @@ public interface AetherNode {
                 deploymentMetricsScheduler.stop();
                 ttmManager.stop();
                 snapshotCollector.stop();
-                EventPublisher.shutdown();
                 SliceRuntime.clear();
-                return httpRouter.fold(() -> Promise.success(Unit.unit()),
-                                       HttpRouter::stop)
-                                 .flatMap(_ -> managementServer.fold(() -> Promise.success(Unit.unit()),
-                                                                     ManagementServer::stop))
+                return httpRouter.map(HttpRouter::stop)
+                                 .or(Promise.unitPromise())
+                                 .flatMap(_ -> managementServer.map(ManagementServer::stop)
+                                                               .or(Promise.unitPromise()))
                                  .flatMap(_ -> sliceInvoker.stop())
                                  .flatMap(_ -> clusterNode.stop())
                                  .onSuccess(_ -> log.info("Aether node {} stopped",
@@ -304,6 +312,9 @@ public interface AetherNode {
                            .onSuccess(_ -> {
                                           log.info("Aether node {} cluster formation complete",
                                                    self());
+                                          // Ensure NodeDeploymentManager is activated after cluster formation
+                // This guarantees activation even if QuorumStateNotification was missed
+                nodeDeploymentManager.onQuorumStateChange(QuorumStateNotification.ESTABLISHED);
                                           // Register Netty EventLoopGroups for metrics collection
                 clusterNode.network()
                            .server()
@@ -340,11 +351,21 @@ public interface AetherNode {
                 return clusterNode.leaderManager()
                                   .leader();
             }
+
+            @Override
+            public int managementPort() {
+                return config.managementPort();
+            }
+
+            @Override
+            public long uptimeSeconds() {
+                return (System.currentTimeMillis() - startTimeMs) / 1000;
+            }
         }
         // Create invocation handler BEFORE deployment manager (needed for slice registration)
         var invocationHandler = InvocationHandler.invocationHandler(config.self(), clusterNode.network());
         // Create route registry for dynamic route registration (before node deployment manager)
-        var routeRegistry = RouteRegistry.routeRegistry(clusterNode, kvStore);
+        var routeRegistry = RouteRegistry.routeRegistry(clusterNode);
         // Create deployment metrics components
         var deploymentMetricsCollector = DeploymentMetricsCollector.deploymentMetricsCollector(config.self(),
                                                                                                clusterNode.network());
@@ -360,10 +381,17 @@ public interface AetherNode {
                                                                                 invocationHandler,
                                                                                 routeRegistry,
                                                                                 config.sliceAction());
+        // Extract initial topology from config (node IDs from core nodes)
+        var initialTopology = config.topology()
+                                    .coreNodes()
+                                    .stream()
+                                    .map(org.pragmatica.consensus.net.NodeInfo::id)
+                                    .toList();
         var clusterDeploymentManager = ClusterDeploymentManager.clusterDeploymentManager(config.self(),
                                                                                          clusterNode,
                                                                                          kvStore,
-                                                                                         delegateRouter);
+                                                                                         delegateRouter,
+                                                                                         initialTopology);
         // Create endpoint registry
         var endpointRegistry = EndpointRegistry.endpointRegistry();
         // Create metrics components
@@ -412,11 +440,9 @@ public interface AetherNode {
         var ttmManager = TTMManager.ttmManager(config.ttm(),
                                                minuteAggregator,
                                                controller::getConfiguration)
-                                   .fold(_ -> TTMManager.noOp(config.ttm()),
-                                         manager -> manager);
-        // Create control loop with adaptive controller when TTM is enabled
-        ClusterController effectiveController = config.ttm()
-                                                      .enabled()
+                                   .or(TTMManager.noOp(config.ttm()));
+        // Create control loop with adaptive controller when TTM is actually enabled and functional
+        ClusterController effectiveController = ttmManager.isEnabled()
                                                 ? AdaptiveDecisionTree.adaptiveDecisionTree(controller, ttmManager)
                                                 : controller;
         var controlLoop = ControlLoop.controlLoop(config.self(), effectiveController, metricsCollector, clusterNode);
@@ -456,6 +482,7 @@ public interface AetherNode {
                                                                                     serializer,
                                                                                     deserializer));
         // Create the node first (without management server reference)
+        var startTimeMs = System.currentTimeMillis();
         var node = new aetherNodeImpl(config,
                                       delegateRouter,
                                       kvStore,
@@ -482,7 +509,8 @@ public interface AetherNode {
                                       snapshotCollector,
                                       eventLoopMetricsCollector,
                                       Option.empty(),
-                                      httpRouter);
+                                      httpRouter,
+                                      startTimeMs);
         // Build and wire ImmutableRouter, then create final node
         return RabiaNode.buildAndWireRouter(delegateRouter, allEntries)
                         .map(_ -> {
@@ -518,7 +546,8 @@ public interface AetherNode {
                                                                snapshotCollector,
                                                                eventLoopMetricsCollector,
                                                                Option.some(managementServer),
-                                                               httpRouter);
+                                                               httpRouter,
+                                                               startTimeMs);
                                  }
                                  return node;
                              });
@@ -540,7 +569,7 @@ public interface AetherNode {
                               : routerConfig;
         // Create artifact resolver that parses slice ID strings to Artifact
         SliceDispatcher.ArtifactResolver artifactResolver = sliceId -> Artifact.artifact(sliceId)
-                                                                               .fold(_ -> null, artifact -> artifact);
+                                                                               .option();
         return HttpRouter.httpRouter(effectiveConfig,
                                      routeRegistry,
                                      sliceInvoker,
@@ -656,19 +685,17 @@ public interface AetherNode {
                            },
                            // Framework path configured - try to create FrameworkClassLoader
         path -> FrameworkClassLoader.fromDirectory(path)
-                                    .fold(cause -> {
-                                              log.warn("Failed to create FrameworkClassLoader from {}: {}. "
-                                                       + "Falling back to Application ClassLoader.",
-                                                       path,
-                                                       cause.message());
-                                              return new SharedLibraryClassLoader(AetherNode.class.getClassLoader());
-                                          },
-                                          frameworkLoader -> {
-                                              log.info("Using FrameworkClassLoader with {} JARs as parent",
-                                                       frameworkLoader.getLoadedJars()
-                                                                      .size());
-                                              return new SharedLibraryClassLoader(frameworkLoader);
-                                          }));
+                                    .onFailure(cause -> log.warn("Failed to create FrameworkClassLoader from {}: {}. "
+                                                                 + "Falling back to Application ClassLoader.",
+                                                                 path,
+                                                                 cause.message()))
+                                    .map(loader -> {
+                                             log.info("Using FrameworkClassLoader with {} JARs as parent",
+                                                      loader.getLoadedJars()
+                                                            .size());
+                                             return new SharedLibraryClassLoader(loader);
+                                         })
+                                    .or(new SharedLibraryClassLoader(AetherNode.class.getClassLoader())));
     }
 
     /**

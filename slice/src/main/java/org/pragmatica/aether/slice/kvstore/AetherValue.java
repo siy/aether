@@ -57,12 +57,12 @@ public sealed interface AetherValue {
                                int oldWeight,
                                long updatedAt) implements AetherValue {
         /// Creates initial routing with all traffic to old version.
-        public static VersionRoutingValue initial(Version oldVersion, Version newVersion) {
+        public static VersionRoutingValue versionRoutingValue(Version oldVersion, Version newVersion) {
             return new VersionRoutingValue(oldVersion, newVersion, 0, 1, System.currentTimeMillis());
         }
 
         /// Creates routing with all traffic to new version.
-        public static VersionRoutingValue allNew(Version oldVersion, Version newVersion) {
+        public static VersionRoutingValue versionRoutingValueAllNew(Version oldVersion, Version newVersion) {
             return new VersionRoutingValue(oldVersion, newVersion, 1, 0, System.currentTimeMillis());
         }
 

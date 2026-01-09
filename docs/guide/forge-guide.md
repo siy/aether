@@ -19,14 +19,23 @@ Forge provides:
 - **Management API access** — Each node exposes management API (ports 5150+)
 - **Cluster operations** — Add/remove nodes, rolling restarts, scale up/down
 - **Chaos operations** — Kill nodes, inject failures, observe recovery
-- **Realistic load generation** — Configurable patterns (planned)
+- **Configurable load generation** — TOML-based multi-target load testing
 - **Automated verification** — System invariants (planned)
 
 ## Quick Start
 
 ```bash
-# Start Forge
-aether-forge
+# Build Forge
+mvn package -pl forge -am -DskipTests
+
+# Start Forge with default configuration
+java -jar forge/target/aether-forge.jar
+
+# Start with blueprint and load config
+java -jar forge/target/aether-forge.jar \
+  --blueprint examples/blueprint.toml \
+  --load-config examples/load-config.toml \
+  --auto-start
 
 # Open dashboard
 open http://localhost:8888
@@ -37,6 +46,32 @@ The dashboard shows:
 - **Per-node metrics** — CPU usage, heap memory, leader status
 - **Cluster controls** — Add node, kill node, rolling restart
 - **Management access** — Direct links to each node's management API (ports 5150+)
+
+### CLI Options
+
+```bash
+java -jar aether-forge.jar [options]
+
+Options:
+  --config <forge.toml>       Forge cluster configuration
+  --blueprint <file.toml>     Blueprint to deploy on startup
+  --load-config <file.toml>   Load test configuration
+  --auto-start                Start load generation after config loaded
+```
+
+### Environment Variables
+
+Environment variables override CLI arguments:
+
+| Variable | Description |
+|----------|-------------|
+| FORGE_CONFIG | Path to forge.toml |
+| FORGE_BLUEPRINT | Path to blueprint file |
+| FORGE_LOAD_CONFIG | Path to load config file |
+| FORGE_AUTO_START | Set to "true" to auto-start load |
+| FORGE_PORT | Dashboard port (default: 8888) |
+| CLUSTER_SIZE | Number of nodes (default: 5) |
+| LOAD_RATE | Initial load rate (legacy support) |
 
 ### Management Ports
 
@@ -58,167 +93,172 @@ curl http://localhost:5152/status
 
 ## Configuration
 
-### forge.yml
+### forge.toml
 
-```yaml
-# forge.yml - Forge configuration
+```toml
+# forge.toml - Forge cluster configuration
 
-cluster:
-  nodes: 5                    # Number of nodes to simulate
-  startPort: 4040             # Base port for cluster communication
-
-slices:
-  - artifact: "com.example:order-processor:1.0.0"
-    instances: 3
-  - artifact: "com.example:inventory-service:1.0.0"
-    instances: 2
-  - artifact: "com.example:pricing-service:1.0.0"
-    instances: 2
-
-load:
-  enabled: true
-  pattern: "steady"           # steady, ramp, spike, realistic
-  requestsPerSecond: 100
-  duration: "10m"
-
-chaos:
-  enabled: false              # Enable via dashboard or CLI
-  scenarios:
-    - type: "kill-node"
-      probability: 0.01       # 1% chance per minute
-    - type: "latency-injection"
-      targetSlice: "inventory-service"
-      delayMs: 500
-      probability: 0.05
-
-verification:
-  - name: "no-data-loss"
-    check: "all-orders-processed"
-  - name: "latency-sla"
-    check: "p99-latency < 500ms"
+[cluster]
+nodes = 5                    # Number of nodes to simulate
+management_port = 5150       # Base management port
+dashboard_port = 8888        # Dashboard port
 ```
 
-### Command Line Options
+### Blueprint (blueprint.toml)
 
-```bash
-# Start with specific node count
-aether forge start --nodes 7
+Blueprints define what slices to deploy:
 
-# Start with chaos enabled
-aether forge start --chaos
+```toml
+# blueprint.toml - Slices to deploy
 
-# Start with custom load pattern
-aether forge start --load-pattern spike --rps 500
+[[slices]]
+artifact = "com.example:order-processor:1.0.0"
+instances = 3
 
-# Start in headless mode (no dashboard)
-aether forge start --headless --duration 30m
+[[slices]]
+artifact = "com.example:inventory-service:1.0.0"
+instances = 2
+```
+
+### Load Configuration (load-config.toml)
+
+```toml
+# load-config.toml - Load generation configuration
+
+[[targets]]
+name = "place-order"
+target = "/api/orders"
+rate = "100/s"
+duration = "10m"
+
+[targets.body]
+template = '''
+{
+  "customerId": "${uuid}",
+  "items": [{"productId": "PROD-${range:1000:9999}", "quantity": ${range:1:5}}]
+}
+'''
+
+[[targets]]
+name = "get-order"
+target = "/api/orders/{orderId}"
+rate = "50/s"
+
+[targets.path_vars]
+orderId = "${uuid}"
 ```
 
 ## Load Generation
 
-### Load Patterns
+Forge supports configurable load generation via TOML configuration.
 
-#### Steady
+### Target Configuration
 
-Constant request rate:
+Each target defines:
+- **name** — Identifier for metrics
+- **target** — HTTP path or slice method
+- **rate** — Requests per second (e.g., "100/s")
+- **duration** — Optional duration limit (e.g., "10m")
+- **body** — Optional request body with template
+- **path_vars** — Variables for path substitution
 
-```
-RPS ───────────────────────────
-    │████████████████████████████
-    └───────────────────────────→ time
-```
+### Template Patterns
 
-```yaml
-load:
-  pattern: "steady"
-  requestsPerSecond: 100
-```
+Templates support these pattern generators:
 
-#### Ramp
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| `${uuid}` | Random UUID | `550e8400-e29b-41d4-a716-446655440000` |
+| `${range:min:max}` | Random integer in range | `${range:1:100}` → `42` |
+| `${choice:a,b,c}` | Random choice from list | `${choice:red,green,blue}` → `green` |
+| `${seq:prefix}` | Sequential with prefix | `${seq:ORD}` → `ORD-00001` |
+| `${random:pattern}` | Random string matching pattern | `${random:[A-Z]{3}-[0-9]{4}}` |
 
-Gradual increase:
+### Example Configurations
 
-```
-RPS                          ████
-    │                    ████
-    │                ████
-    │            ████
-    │        ████
-    │    ████
-    │████
-    └───────────────────────────→ time
-```
+#### Simple GET requests
 
-```yaml
-load:
-  pattern: "ramp"
-  startRps: 10
-  endRps: 500
-  rampDuration: "5m"
+```toml
+[[targets]]
+name = "health-check"
+target = "/health"
+rate = "10/s"
 ```
 
-#### Spike
+#### POST with body
 
-Sudden bursts:
+```toml
+[[targets]]
+name = "create-user"
+target = "/api/users"
+rate = "50/s"
 
-```
-RPS     ██
-    │   ██           ██
-    │   ██    ██     ██
-    ████████████████████████████
-    └───────────────────────────→ time
-```
-
-```yaml
-load:
-  pattern: "spike"
-  baseRps: 100
-  spikeRps: 1000
-  spikeDuration: "30s"
-  spikeInterval: "5m"
+[targets.body]
+template = '''
+{
+  "name": "User ${seq:U}",
+  "email": "${uuid}@example.com"
+}
+'''
 ```
 
-#### Realistic
+#### Path variables
 
-Based on real-world patterns (e.g., e-commerce):
+```toml
+[[targets]]
+name = "get-user"
+target = "/api/users/{userId}"
+rate = "100/s"
 
-```
-RPS         ████
-    │      ██  ██
-    │     ██    ██      ████
-    │    ██      ██    ██  ██
-    ████          ██████    ████
-    └───────────────────────────→ time
-       9am      12pm      6pm
+[targets.path_vars]
+userId = "${uuid}"
 ```
 
-```yaml
-load:
-  pattern: "realistic"
-  profile: "ecommerce"    # or "api", "batch", "custom"
-  peakRps: 500
-  offPeakRps: 50
+#### Duration-limited target
+
+```toml
+[[targets]]
+name = "stress-test"
+target = "/api/heavy-operation"
+rate = "500/s"
+duration = "5m"
 ```
 
-### Per-Slice Load
+### Dashboard Load Controls
 
-```yaml
-load:
-  slices:
-    - artifact: "com.example:order-processor:1.0.0"
-      method: "processOrder"
-      requestsPerSecond: 50
-      requestTemplate:
-        customerId: "${uuid}"
-        items:
-          - productId: "${randomProduct}"
-            quantity: "${randomInt(1,5)}"
+The dashboard provides controls for load generation:
+- **Start/Stop** — Start or stop all load generation
+- **Pause/Resume** — Temporarily pause without stopping
+- **Per-target metrics** — View rate, latency, success rate per target
+- **Upload Config** — Paste TOML configuration directly
 
-    - artifact: "com.example:inventory-service:1.0.0"
-      method: "checkStock"
-      requestsPerSecond: 200
-      requestTemplate:
-        productId: "${randomProduct}"
+### REST API
+
+```bash
+# Get load config
+curl http://localhost:8888/api/load/config
+
+# Upload load config
+curl -X POST http://localhost:8888/api/load/config \
+  -d '[[targets]]
+name = "test"
+target = "/health"
+rate = "10/s"'
+
+# Start load generation
+curl -X POST http://localhost:8888/api/load/start
+
+# Stop load generation
+curl -X POST http://localhost:8888/api/load/stop
+
+# Pause load generation
+curl -X POST http://localhost:8888/api/load/pause
+
+# Resume load generation
+curl -X POST http://localhost:8888/api/load/resume
+
+# Get load status with metrics
+curl http://localhost:8888/api/load/status
 ```
 
 ## Chaos Operations
@@ -230,409 +270,68 @@ The dashboard provides one-click chaos operations:
 - **Kill Node**: Immediately terminate a node
 - **Kill Leader**: Terminate the current leader node
 - **Rolling Restart**: Restart nodes one by one
-- **Network Partition**: Isolate a node from others
-- **Latency Injection**: Add delay to specific slice calls
+- **Add Node**: Add a new node to the cluster
+- **Reset Metrics**: Clear all metrics and events
 
-### Via CLI
+### Via REST API
 
 ```bash
 # Kill a specific node
-aether forge chaos kill-node node-3
+curl -X POST http://localhost:8888/api/chaos/kill/node-3
 
-# Kill the current leader
-aether forge chaos kill-leader
+# Add a new node
+curl -X POST http://localhost:8888/api/chaos/add-node
 
 # Rolling restart all nodes
-aether forge chaos rolling-restart --delay 30s
+curl -X POST http://localhost:8888/api/chaos/rolling-restart
 
-# Inject latency into a slice
-aether forge chaos inject-latency \
-  --slice order-processor \
-  --delay 500ms \
-  --probability 0.1 \
-  --duration 5m
+# Inject chaos event
+curl -X POST http://localhost:8888/api/chaos/inject \
+  -H "Content-Type: application/json" \
+  -d '{"type":"LATENCY_SPIKE","nodeId":"node-2","latencyMs":500,"durationSeconds":60}'
 
-# Create network partition
-aether forge chaos partition \
-  --isolate node-2,node-3 \
-  --duration 2m
+# Stop all chaos
+curl -X POST http://localhost:8888/api/chaos/stop-all
+
+# Get chaos status
+curl http://localhost:8888/api/chaos/status
 ```
 
-### Automated Chaos
+### Chaos Event Types
 
-```yaml
-chaos:
-  enabled: true
-  schedule:
-    - operation: "kill-random-node"
-      interval: "10m"
-    - operation: "inject-latency"
-      target: "inventory-service"
-      delay: "200ms"
-      duration: "1m"
-      interval: "5m"
-```
-
-## Verification
-
-### Built-in Checks
-
-```yaml
-verification:
-  # All requests should eventually succeed
-  - name: "eventual-success"
-    check: "error-rate < 1%"
-
-  # Latency SLA
-  - name: "latency-sla"
-    check: "p99-latency < 500ms"
-
-  # No stuck requests
-  - name: "no-stuck-requests"
-    check: "all-requests-complete-within 30s"
-
-  # Data consistency
-  - name: "consistency"
-    check: "all-nodes-same-state"
-```
-
-### Custom Verification
-
-```java
-// Custom verification class
-public class OrderVerification implements ForgeVerification {
-
-    @Override
-    public VerificationResult verify(ForgeContext context) {
-        // Get all submitted orders
-        var submittedOrders = context.getSubmittedRequests("order-processor", "processOrder");
-
-        // Get all orders from database
-        var storedOrders = orderRepository.findAll();
-
-        // Verify all submitted orders are stored
-        var missing = submittedOrders.stream()
-            .filter(req -> !storedOrders.containsKey(req.idempotencyKey()))
-            .toList();
-
-        if (missing.isEmpty()) {
-            return VerificationResult.pass("All orders processed");
-        } else {
-            return VerificationResult.fail("Missing orders: " + missing.size());
-        }
-    }
-}
-```
-
-```yaml
-verification:
-  - name: "order-consistency"
-    class: "com.example.OrderVerification"
-```
-
-## Scenarios
-
-### Scenario 1: Node Failure During Load
-
-Test that the system handles node failures gracefully:
-
-```yaml
-# scenario-node-failure.yml
-name: "Node Failure During Load"
-
-steps:
-  - action: "start-load"
-    rps: 200
-    duration: "10m"
-
-  - action: "wait"
-    duration: "2m"
-    description: "Let system stabilize"
-
-  - action: "kill-node"
-    target: "random"
-    description: "Kill a random node"
-
-  - action: "wait"
-    duration: "1m"
-    description: "Observe recovery"
-
-  - action: "verify"
-    checks:
-      - "error-rate < 5%"
-      - "recovery-time < 30s"
-      - "no-data-loss"
-
-  - action: "stop-load"
-```
-
-Run with:
-```bash
-aether forge scenario run scenario-node-failure.yml
-```
-
-### Scenario 2: Leader Failover
-
-Test leader election and recovery:
-
-```yaml
-name: "Leader Failover"
-
-steps:
-  - action: "start-load"
-    rps: 100
-
-  - action: "wait"
-    duration: "1m"
-
-  - action: "kill-leader"
-    repeat: 3
-    interval: "30s"
-    description: "Kill leader 3 times"
-
-  - action: "verify"
-    checks:
-      - "new-leader-elected-within 5s"
-      - "no-split-brain"
-      - "state-consistent"
-```
-
-### Scenario 3: Cascade Failure
-
-Test that one slow service doesn't take down others:
-
-```yaml
-name: "Cascade Failure Prevention"
-
-steps:
-  - action: "start-load"
-    rps: 200
-
-  - action: "inject-latency"
-    target: "inventory-service"
-    delay: "5s"
-    probability: 0.5
-    duration: "5m"
-    description: "Simulate slow inventory service"
-
-  - action: "verify"
-    during: "latency-injection"
-    checks:
-      - "order-processor-latency < 10s"
-      - "order-processor-error-rate < 10%"
-      - "pricing-service-unaffected"
-
-  - action: "wait"
-    duration: "1m"
-    description: "Recovery period"
-
-  - action: "verify"
-    checks:
-      - "all-services-healthy"
-      - "latency-back-to-normal"
-```
-
-### Scenario 4: Hot Deployment
-
-Test deploying new versions under load:
-
-```yaml
-name: "Hot Deployment"
-
-steps:
-  - action: "start-load"
-    rps: 300
-
-  - action: "deploy"
-    artifact: "com.example:order-processor:2.0.0"
-    strategy: "rolling"
-    description: "Deploy new version"
-
-  - action: "verify"
-    during: "deployment"
-    checks:
-      - "no-dropped-requests"
-      - "latency-increase < 20%"
-
-  - action: "verify"
-    checks:
-      - "all-instances-new-version"
-      - "no-errors"
-```
+| Type | Description | Parameters |
+|------|-------------|------------|
+| NODE_KILL | Kill a node | nodeId |
+| LATENCY_SPIKE | Add latency | nodeId, latencyMs, durationSeconds |
+| SLICE_CRASH | Crash a slice | artifact, nodeId |
+| INVOCATION_FAILURE | Inject failures | artifact, failureRate |
+| CPU_SPIKE | Simulate CPU load | nodeId, level |
+| MEMORY_PRESSURE | Simulate memory pressure | nodeId, level |
 
 ## Dashboard Features
 
 ### Topology View
 
-Visual representation of your cluster:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Cluster Topology                                    [Refresh]  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│    ┌─────────┐      ┌─────────┐      ┌─────────┐              │
-│    │ Node 1  │──────│ Node 2  │──────│ Node 3  │              │
-│    │ (Leader)│      │         │      │         │              │
-│    └────┬────┘      └────┬────┘      └────┬────┘              │
-│         │                │                │                     │
-│    ┌────┴────┐      ┌────┴────┐      ┌────┴────┐              │
-│    │ Order   │      │ Order   │      │Inventory│              │
-│    │Processor│      │Processor│      │ Service │              │
-│    └─────────┘      └─────────┘      └─────────┘              │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+Visual representation of your cluster with:
+- Node status (healthy, unhealthy, leader)
+- Management port links
+- Slice distribution
 
 ### Metrics Charts
 
 Real-time charts showing:
-- Requests per second (per slice)
-- Latency distribution (P50, P95, P99)
+- Requests per second
+- Latency distribution
 - Error rates
 - CPU and memory per node
-- Scaling events
-
-### Chaos Controls
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Chaos Engineering                                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  [Kill Random Node]  [Kill Leader]  [Rolling Restart]          │
-│                                                                 │
-│  Latency Injection:                                            │
-│  Target: [order-processor ▼]  Delay: [500] ms  [ Inject ]      │
-│                                                                 │
-│  Network Partition:                                            │
-│  Isolate: [node-3 ▼]  Duration: [60] s  [ Partition ]          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
 
 ### Event Log
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Events                                           [Clear] [▼]  │
-├─────────────────────────────────────────────────────────────────┤
-│ 14:32:15  SCALE      order-processor scaled 3→4 instances      │
-│ 14:32:00  CHAOS      Node node-2 killed                        │
-│ 14:31:58  LEADER     Node node-1 became leader                 │
-│ 14:31:45  RECOVERY   Node node-2 rejoined cluster              │
-│ 14:31:30  SCALE      inventory-service scaled 2→3 instances    │
-│ 14:31:00  LOAD       Started load generation (200 RPS)         │
-│ 14:30:00  START      Forge cluster started with 5 nodes        │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## CI/CD Integration
-
-### GitHub Actions
-
-```yaml
-# .github/workflows/chaos-test.yml
-name: Chaos Testing
-
-on:
-  push:
-    branches: [main]
-  schedule:
-    - cron: '0 2 * * *'  # Nightly
-
-jobs:
-  chaos-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Java 25
-        uses: actions/setup-java@v4
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-
-      - name: Build
-        run: mvn clean install -DskipTests
-
-      - name: Run Forge Scenarios
-        run: |
-          aether forge start --headless &
-          sleep 30  # Wait for cluster to form
-          aether forge scenario run scenarios/node-failure.yml
-          aether forge scenario run scenarios/leader-failover.yml
-          aether forge stop
-
-      - name: Upload Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: forge-results
-          path: forge-results/
-```
-
-### Docker Compose
-
-```yaml
-# docker-compose.forge.yml
-version: '3.8'
-
-services:
-  forge:
-    build:
-      context: .
-      dockerfile: Dockerfile.forge
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./slices:/app/slices
-      - ./forge.yml:/app/forge.yml
-    command: forge start --headless --duration 1h
-```
-
-## Best Practices
-
-### 1. Test Before Every Release
-
-```bash
-# Add to your release process
-mvn verify
-aether forge scenario run scenarios/release-validation.yml
-```
-
-### 2. Start Simple
-
-```yaml
-# First scenario: basic health
-steps:
-  - action: "start-load"
-    rps: 50
-    duration: "5m"
-  - action: "verify"
-    checks:
-      - "no-errors"
-```
-
-### 3. Gradually Increase Chaos
-
-```yaml
-# Week 1: Node failures
-# Week 2: Network partitions
-# Week 3: Cascading failures
-# Week 4: All combined
-```
-
-### 4. Monitor Production Patterns
-
-Use production metrics to create realistic load profiles:
-
-```yaml
-load:
-  pattern: "from-production"
-  source: "prometheus://metrics.example.com"
-  timeRange: "last-7d"
-  scale: 0.1  # 10% of production load
-```
+Timeline of cluster events:
+- Node joins/leaves
+- Leader elections
+- Scaling events
+- Chaos operations
 
 ## Troubleshooting
 
@@ -640,39 +339,42 @@ load:
 
 ```bash
 # Check port availability
-lsof -i :4040-4050
-lsof -i :8080
+lsof -i :5050-5060
+lsof -i :8888
 
 # Check Java version
 java -version  # Must be 25+
-
-# Check slice JARs exist
-ls -la slices/*/target/*.jar
 ```
 
 ### Load Not Generating
 
 ```bash
-# Check configuration
-aether forge config validate
+# Check load status
+curl http://localhost:8888/api/load/status
 
-# Check slice deployment
-aether forge status
-# Should show slices as "active"
+# Verify config loaded
+curl http://localhost:8888/api/load/config
 ```
 
-### Chaos Not Working
+### Dashboard Not Loading
 
 ```bash
-# Enable chaos mode
-aether forge chaos enable
+# Check if server is running
+curl http://localhost:8888/health
 
-# Check chaos log
-aether forge events --type chaos
+# Check logs for errors
 ```
+
+## Planned Features
+
+The following features are planned but not yet implemented:
+
+- **Scenario Runner** — YAML-based test scenarios with steps
+- **Verification Framework** — Custom verification classes
+- **Spike/Realistic Load Patterns** — Advanced load patterns
+- **Production Pattern Replay** — Load based on production metrics
 
 ## Next Steps
 
 - [Scaling Guide](scaling.md) - Understand what Forge tests
-- [CLI Reference](cli-reference.md) - All Forge commands
 - [Architecture](../architecture-overview.md) - How Aether handles failures

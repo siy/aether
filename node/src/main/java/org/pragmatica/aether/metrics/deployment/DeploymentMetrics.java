@@ -3,6 +3,7 @@ package org.pragmatica.aether.metrics.deployment;
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.cluster.metrics.DeploymentMetricsMessage.DeploymentMetricsEntry;
 import org.pragmatica.consensus.NodeId;
+import org.pragmatica.lang.Option;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,7 +30,7 @@ DeploymentStatus status) {
         SUCCESS,
         FAILED_LOADING,
         FAILED_ACTIVATING;
-        public static DeploymentStatus fromString(String value) {
+        public static DeploymentStatus deploymentStatus(String value) {
             return switch (value) {
                 case "IN_PROGRESS" -> IN_PROGRESS;
                 case "SUCCESS" -> SUCCESS;
@@ -96,25 +97,25 @@ DeploymentStatus status) {
 
     /**
      * Create from protocol message entry.
-     * Returns null if artifact parsing fails (should not happen with valid entries).
+     * Returns empty Option if artifact parsing fails (should not happen with valid entries).
      */
-    public static DeploymentMetrics fromEntry(DeploymentMetricsEntry entry) {
+    public static Option<DeploymentMetrics> fromEntry(DeploymentMetricsEntry entry) {
         return Artifact.artifact(entry.artifact())
-                       .fold(_ -> null,
-                             artifact -> new DeploymentMetrics(artifact,
-                                                               NodeId.nodeId(entry.nodeId()),
-                                                               entry.startTime(),
-                                                               entry.loadTime(),
-                                                               entry.loadedTime(),
-                                                               entry.activateTime(),
-                                                               entry.activeTime(),
-                                                               DeploymentStatus.fromString(entry.status())));
+                       .map(artifact -> new DeploymentMetrics(artifact,
+                                                              NodeId.nodeId(entry.nodeId()),
+                                                              entry.startTime(),
+                                                              entry.loadTime(),
+                                                              entry.loadedTime(),
+                                                              entry.activateTime(),
+                                                              entry.activeTime(),
+                                                              DeploymentStatus.deploymentStatus(entry.status())))
+                       .option();
     }
 
     /**
      * Create a new in-progress deployment starting now.
      */
-    public static DeploymentMetrics started(Artifact artifact, NodeId nodeId, long timestamp) {
+    public static DeploymentMetrics deploymentMetrics(Artifact artifact, NodeId nodeId, long timestamp) {
         return new DeploymentMetrics(artifact, nodeId, timestamp, 0, 0, 0, 0, DeploymentStatus.IN_PROGRESS);
     }
 

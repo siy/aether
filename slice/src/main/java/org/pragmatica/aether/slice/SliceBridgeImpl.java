@@ -74,14 +74,26 @@ public record SliceBridgeImpl(Artifact artifact,
     public Promise<byte[]> invoke(String methodName, byte[] input) {
         return lookupMethod(methodName)
                            .async()
-                           .flatMap(internalMethod -> acquireSerializationPair()
-                                                                              .flatMap(pair -> deserializeInput(pair.deserializer(),
-                                                                                                                input,
-                                                                                                                internalMethod.parameterType())
-                                                                                                               .flatMap(parameter -> invokeMethod(internalMethod.method(),
-                                                                                                                                                  parameter)
-                                                                                                                                                 .flatMap(response -> serializeResponse(pair.serializer(),
-                                                                                                                                                                                        response)))));
+                           .flatMap(method -> invokeWithSerialization(method, input));
+    }
+
+    private Promise<byte[]> invokeWithSerialization(InternalMethod method, byte[] input) {
+        return acquireSerializationPair()
+                                       .flatMap(pair -> executeInvocation(pair, method, input));
+    }
+
+    private Promise<byte[]> executeInvocation(SerializationPair pair, InternalMethod method, byte[] input) {
+        return deserializeInput(pair.deserializer(),
+                                input,
+                                method.parameterType())
+                               .flatMap(parameter -> invokeAndSerialize(pair.serializer(),
+                                                                        method.method(),
+                                                                        parameter));
+    }
+
+    private <T> Promise<byte[]> invokeAndSerialize(Serializer serializer, SliceMethod< ?, ? > method, T parameter) {
+        return invokeMethod(method, parameter)
+                           .flatMap(response -> serializeResponse(serializer, response));
     }
 
     @Override

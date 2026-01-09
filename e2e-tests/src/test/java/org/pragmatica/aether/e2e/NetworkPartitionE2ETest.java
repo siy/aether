@@ -33,7 +33,7 @@ class NetworkPartitionE2ETest {
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(3, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(3, PROJECT_ROOT);
         cluster.start();
         cluster.awaitQuorum();
     }
@@ -121,7 +121,7 @@ class NetworkPartitionE2ETest {
         cluster.awaitLeader();
 
         // Deploy a slice while cluster is healthy
-        cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.1", 1);
+        cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.2", 1);
         await().atMost(WAIT_TIMEOUT).until(() -> {
             var slices = cluster.anyNode().getSlices();
             return slices.contains("example-slice");

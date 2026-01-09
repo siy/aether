@@ -48,7 +48,7 @@ class EndpointRegistryIT {
         registerEndpoint(artifactBase, newVersion, method, 1, "node-4");
 
         // When: routing is 100% old
-        var routing = VersionRouting.parse("0:1").unwrap();
+        var routing = VersionRouting.versionRouting("0:1").unwrap();
         Map<String, Integer> counts = new HashMap<>();
 
         for (int i = 0; i < 100; i++) {
@@ -75,7 +75,7 @@ class EndpointRegistryIT {
         registerEndpoint(artifactBase, newVersion, method, 1, "node-4");
 
         // When: routing is 100% new
-        var routing = VersionRouting.parse("1:0").unwrap();
+        var routing = VersionRouting.versionRouting("1:0").unwrap();
         Map<String, Integer> counts = new HashMap<>();
 
         for (int i = 0; i < 100; i++) {
@@ -102,7 +102,7 @@ class EndpointRegistryIT {
         registerEndpoint(artifactBase, newVersion, method, 1, "node-4");
 
         // When: routing is 50/50
-        var routing = VersionRouting.parse("1:1").unwrap();
+        var routing = VersionRouting.versionRouting("1:1").unwrap();
         Map<String, Integer> counts = new HashMap<>();
 
         for (int i = 0; i < 100; i++) {
@@ -129,7 +129,7 @@ class EndpointRegistryIT {
         registerEndpoint(artifactBase, newVersion, method, 2, "node-4");
 
         // When: routing is 75/25 (3:1 ratio)
-        var routing = VersionRouting.parse("3:1").unwrap();
+        var routing = VersionRouting.versionRouting("3:1").unwrap();
         Map<String, Integer> counts = new HashMap<>();
 
         for (int i = 0; i < 100; i++) {
@@ -155,7 +155,7 @@ class EndpointRegistryIT {
         // No new version endpoints
 
         // When: routing is 50/50 but no new endpoints exist
-        var routing = VersionRouting.parse("1:1").unwrap();
+        var routing = VersionRouting.versionRouting("1:1").unwrap();
         Map<String, Integer> counts = new HashMap<>();
 
         for (int i = 0; i < 100; i++) {
@@ -180,7 +180,7 @@ class EndpointRegistryIT {
         registerEndpoint(artifactBase, oldVersion, method, 1, "node-2");
 
         // When: routing is 100% old
-        var routing = VersionRouting.parse("0:1").unwrap();
+        var routing = VersionRouting.versionRouting("0:1").unwrap();
         Map<String, Integer> nodeCounts = new HashMap<>();
 
         for (int i = 0; i < 100; i++) {

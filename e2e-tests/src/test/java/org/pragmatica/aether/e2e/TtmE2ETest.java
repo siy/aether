@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.pragmatica.aether.e2e.containers.AetherCluster;
+import org.pragmatica.aether.e2e.containers.AetherNodeContainer;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -34,7 +35,7 @@ class TtmE2ETest {
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(3, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(3, PROJECT_ROOT);
         cluster.start();
         cluster.awaitQuorum();
     }
@@ -104,7 +105,7 @@ class TtmE2ETest {
 
             // All nodes should report consistent TTM state
             var statuses = cluster.nodes().stream()
-                                  .map(node -> node.getTtmStatus())
+                                  .map(AetherNodeContainer::getTtmStatus)
                                   .toList();
 
             // All should show disabled (no model)

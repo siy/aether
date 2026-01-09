@@ -252,7 +252,8 @@ public record PlaceOrderSlice() implements Slice {
     }
 
     private OrderRepository.OrderItem toOrderItem(ValidPlaceOrderRequest.ValidOrderItem item) {
-        var unitPrice = Money.usd("29.99");
+        var unitPrice = Money.usd("29.99")
+                             .expect("Invalid unit price");
         return new OrderRepository.OrderItem(item.productId(), item.quantity(), unitPrice);
     }
 

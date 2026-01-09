@@ -98,7 +98,7 @@ public enum HttpStatus {
     public HttpError with(Throwable cause) {
         return httpError(this, Causes.fromThrowable(cause));
     }
-    public static HttpStatus fromCode(int code) {
+    public static HttpStatus httpStatus(int code) {
         return Option.option(LOOKUP.get(code))
                      .or(UNKNOWN_ERROR);
     }

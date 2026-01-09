@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Collects per-method invocation metrics with threshold-based slow call capture.
@@ -201,41 +201,62 @@ public final class InvocationMetricsCollector {
 
     /**
      * Combines MethodMetrics with a ring buffer for slow invocations.
+     * Uses explicit locking for thread-safe ring buffer operations.
      */
     private static final class MethodMetricsWithSlowCalls {
         final MethodMetrics metrics;
         final SlowInvocation[] slowBuffer = new SlowInvocation[MAX_SLOW_INVOCATIONS_PER_METHOD];
-        final AtomicInteger writeIndex = new AtomicInteger(0);
-        volatile int count = 0;
+        final ReentrantLock lock = new ReentrantLock();
+        int writeIndex = 0;
+        int count = 0;
 
         MethodMetricsWithSlowCalls(MethodName methodName) {
             this.metrics = new MethodMetrics(methodName);
         }
 
         void addSlowInvocation(SlowInvocation slow) {
-            var idx = writeIndex.getAndIncrement() % MAX_SLOW_INVOCATIONS_PER_METHOD;
-            slowBuffer[idx] = slow;
-            if (count < MAX_SLOW_INVOCATIONS_PER_METHOD) {
-                count++;
+            lock.lock();
+            try{
+                slowBuffer[writeIndex % MAX_SLOW_INVOCATIONS_PER_METHOD] = slow;
+                writeIndex++;
+                if (count < MAX_SLOW_INVOCATIONS_PER_METHOD) {
+                    count++;
+                }
+            } finally{
+                lock.unlock();
             }
         }
 
         List<SlowInvocation> drainSlowInvocations() {
-            var result = copySlowInvocations();
-            // Reset
-            writeIndex.set(0);
-            count = 0;
-            for (int i = 0; i < MAX_SLOW_INVOCATIONS_PER_METHOD; i++) {
-                slowBuffer[i] = null;
+            lock.lock();
+            try{
+                var result = copySlowInvocationsUnlocked();
+                // Reset
+                writeIndex = 0;
+                count = 0;
+                for (int i = 0; i < MAX_SLOW_INVOCATIONS_PER_METHOD; i++) {
+                    slowBuffer[i] = null;
+                }
+                return result;
+            } finally{
+                lock.unlock();
             }
-            return result;
         }
 
         List<SlowInvocation> copySlowInvocations() {
+            lock.lock();
+            try{
+                return copySlowInvocationsUnlocked();
+            } finally{
+                lock.unlock();
+            }
+        }
+
+        private List<SlowInvocation> copySlowInvocationsUnlocked() {
             var result = new ArrayList<SlowInvocation>(count);
             var currentCount = Math.min(count, MAX_SLOW_INVOCATIONS_PER_METHOD);
-            var startIdx = writeIndex.get() >= MAX_SLOW_INVOCATIONS_PER_METHOD
-                           ? writeIndex.get() % MAX_SLOW_INVOCATIONS_PER_METHOD
+            var startIdx = writeIndex >= MAX_SLOW_INVOCATIONS_PER_METHOD
+                           ? writeIndex % MAX_SLOW_INVOCATIONS_PER_METHOD
                            : 0;
             for (int i = 0; i < currentCount; i++) {
                 var idx = (startIdx + i) % MAX_SLOW_INVOCATIONS_PER_METHOD;

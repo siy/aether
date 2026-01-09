@@ -11,14 +11,14 @@ import org.pragmatica.cluster.state.kvstore.KVCommand;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.pragmatica.consensus.rabia.infrastructure.TestCluster.StringKey.key;
 import static org.pragmatica.serialization.fury.FuryDeserializer.furyDeserializer;
 import static org.pragmatica.serialization.fury.FurySerializer.furySerializer;
 
 class RabiaFurySerializerTest {
     @Test
-    void testRoundTripForProtocolMessage() {
+    void roundTrip_succeeds_forProtocolMessage() {
         var serializer = furySerializer(CustomClasses::configure, StringKey::register);
         var deserializer = furyDeserializer(CustomClasses::configure, StringKey::register);
 
@@ -32,7 +32,7 @@ class RabiaFurySerializerTest {
         var serialized = serializer.encode(message);
         var deserialized = deserializer.decode(serialized);
 
-        assertEquals(message, deserialized);
+        assertThat(deserialized).isEqualTo(message);
     }
 
 }

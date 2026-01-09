@@ -53,17 +53,19 @@ final class TTMPredictorImpl implements TTMPredictor {
 
     private static Result<TTMPredictor> loadModel(TTMConfig config) {
         return Result.lift(e -> new TTMError.ModelLoadFailed(config.modelPath(), e.getMessage()),
-                           () -> {
-                               var env = OrtEnvironment.getEnvironment();
-                               var sessionOptions = new OrtSession.SessionOptions();
-                               sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
-                               sessionOptions.setIntraOpNumThreads(2);
-                               var session = env.createSession(config.modelPath(), sessionOptions);
-                               log.info("Loaded TTM model from {}", config.modelPath());
-                               log.debug("Model inputs: {}", session.getInputNames());
-                               log.debug("Model outputs: {}", session.getOutputNames());
-                               return new TTMPredictorImpl(env, session, config);
-                           });
+                           () -> createOnnxPredictor(config));
+    }
+
+    private static TTMPredictorImpl createOnnxPredictor(TTMConfig config) throws OrtException {
+        var env = OrtEnvironment.getEnvironment();
+        var sessionOptions = new OrtSession.SessionOptions();
+        sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
+        sessionOptions.setIntraOpNumThreads(2);
+        var session = env.createSession(config.modelPath(), sessionOptions);
+        log.info("Loaded TTM model from {}", config.modelPath());
+        log.debug("Model inputs: {}", session.getInputNames());
+        log.debug("Model outputs: {}", session.getOutputNames());
+        return new TTMPredictorImpl(env, session, config);
     }
 
     @Override
@@ -89,20 +91,16 @@ final class TTMPredictorImpl implements TTMPredictor {
             // Get output tensor
             var outputTensor = (OnnxTensor) results.get(0);
             return flattenOutput(outputTensor)
-                                .map(output -> {
-                                         // Extract predictions for next time step (last features values)
-            float[] predictions = new float[FeatureIndex.FEATURE_COUNT];
-                                         int startIdx = Math.max(0, output.length - features);
-                                         System.arraycopy(output,
-                                                          startIdx,
-                                                          predictions,
-                                                          0,
-                                                          Math.min(features, predictions.length));
-                                         // Calculate confidence from output variance
-            lastConfidence = calculateConfidence(output);
-                                         return predictions;
-                                     });
+                                .map(output -> extractPredictions(output, features));
         }
+    }
+
+    private float[] extractPredictions(float[] output, int features) {
+        float[] predictions = new float[FeatureIndex.FEATURE_COUNT];
+        int startIdx = Math.max(0, output.length - features);
+        System.arraycopy(output, startIdx, predictions, 0, Math.min(features, predictions.length));
+        lastConfidence = calculateConfidence(output);
+        return predictions;
     }
 
     private Result<float[]> flattenOutput(OnnxTensor tensor) throws OrtException {
@@ -179,10 +177,12 @@ final class TTMPredictorImpl implements TTMPredictor {
     public void close() {
         ready = false;
         Result.lift(e -> new TTMError.InferenceFailed("Error closing ONNX session: " + e.getMessage()),
-                    () -> {
-                        session.close();
-                        return Unit.unit();
-                    })
+                    this::closeSession)
               .onFailure(cause -> log.warn(cause.message()));
+    }
+
+    private Unit closeSession() throws OrtException {
+        session.close();
+        return Unit.unit();
     }
 }

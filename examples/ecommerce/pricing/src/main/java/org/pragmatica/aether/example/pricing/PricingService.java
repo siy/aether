@@ -256,10 +256,23 @@ class PricingServiceImpl implements PricingService {
                                .stream()
                                .map(PriceBreakdown.LinePrice::lineTotal)
                                .toList();
-        return totals.stream()
-                     .reduce(Result.success(Money.ZERO_USD),
-                             (acc, money) -> acc.flatMap(m -> m.add(money)),
-                             (a, b) -> a.flatMap(m1 -> b.flatMap(m1::add)));
+        return sumMoney(totals);
+    }
+
+    private static Result<Money> sumMoney(List<Money> amounts) {
+        return amounts.stream()
+                      .reduce(Result.success(Money.ZERO_USD),
+                              PricingServiceImpl::addToAccumulator,
+                              PricingServiceImpl::combineMoneyResults);
+    }
+
+    private static Result<Money> addToAccumulator(Result<Money> acc, Money money) {
+        return acc.flatMap(m -> m.add(money));
+    }
+
+    private static Result<Money> combineMoneyResults(Result<Money> a, Result<Money> b) {
+        return Result.all(a, b)
+                     .flatMap(Money::add);
     }
 
     private Promise<DiscountResult> applyCodeDiscount(String code, Money subtotal) {

@@ -2,6 +2,7 @@ package org.pragmatica.aether.controller;
 
 import org.pragmatica.aether.artifact.Artifact;
 import org.pragmatica.consensus.NodeId;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 
 import java.util.List;
@@ -35,7 +36,8 @@ public interface ClusterController {
             var values = metrics.values()
                                 .stream()
                                 .map(m -> m.get(metricName))
-                                .filter(v -> v != null)
+                                .flatMap(v -> Option.option(v)
+                                                    .stream())
                                 .mapToDouble(Double::doubleValue)
                                 .toArray();
             if (values.length == 0) {
@@ -53,7 +55,8 @@ public interface ClusterController {
             return metrics.values()
                           .stream()
                           .map(m -> m.get(metricName))
-                          .filter(v -> v != null)
+                          .flatMap(v -> Option.option(v)
+                                              .stream())
                           .mapToDouble(Double::doubleValue)
                           .max()
                           .orElse(0.0);
@@ -66,7 +69,8 @@ public interface ClusterController {
             return metrics.values()
                           .stream()
                           .map(m -> m.get("method." + methodName + ".calls"))
-                          .filter(v -> v != null)
+                          .flatMap(v -> Option.option(v)
+                                              .stream())
                           .mapToDouble(Double::doubleValue)
                           .sum();
         }

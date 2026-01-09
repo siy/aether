@@ -179,13 +179,14 @@ public final class ChaosRoutes {
         return parseChaosEvent(request, duration)
                               .async()
                               .flatMap(controller::injectChaos)
-                              .map(eventId -> {
-                                       eventLogger.accept(new EventLogEntry("CHAOS_INJECTED",
-                                                                            "Injected " + request.type() + " event: " + eventId));
-                                       return new ChaosInjectResponse(true,
-                                                                      eventId,
-                                                                      request.type());
-                                   });
+                              .map(eventId -> logAndBuildInjectResponse(eventLogger, request, eventId));
+    }
+
+    private static ChaosInjectResponse logAndBuildInjectResponse(Consumer<EventLogEntry> eventLogger,
+                                                                 InjectRequest request,
+                                                                 String eventId) {
+        eventLogger.accept(new EventLogEntry("CHAOS_INJECTED", "Injected " + request.type() + " event: " + eventId));
+        return new ChaosInjectResponse(true, eventId, request.type());
     }
 
     private static Result<ChaosEvent> parseChaosEvent(InjectRequest request, Duration duration) {
@@ -234,10 +235,13 @@ public final class ChaosRoutes {
                                                            Consumer<EventLogEntry> eventLogger,
                                                            String eventId) {
         return controller.stopChaos(eventId)
-                         .map(_ -> {
-                                  eventLogger.accept(new EventLogEntry("CHAOS_STOPPED", "Stopped chaos event " + eventId));
-                                  return new ChaosStoppedResponse(true, eventId);
-                              });
+                         .map(_ -> logAndBuildStopResponse(eventLogger, eventId));
+    }
+
+    private static ChaosStoppedResponse logAndBuildStopResponse(Consumer<EventLogEntry> eventLogger,
+                                                                String eventId) {
+        eventLogger.accept(new EventLogEntry("CHAOS_STOPPED", "Stopped chaos event " + eventId));
+        return new ChaosStoppedResponse(true, eventId);
     }
 
     private static Promise<SuccessResponse> stopAllChaos(ChaosController controller,
@@ -251,15 +255,15 @@ public final class ChaosRoutes {
                                                       Consumer<EventLogEntry> eventLogger) {
         eventLogger.accept(new EventLogEntry("ADD_NODE", "Adding new node to cluster"));
         return cluster.addNode()
-                      .map(nodeId -> {
-                               eventLogger.accept(new EventLogEntry("NODE_JOINED",
-                                                                    "Node " + nodeId.id() + " joined the cluster"));
-                               return new NodeAddedResponse(true,
-                                                            nodeId.id(),
-                                                            "joining");
-                           })
+                      .map(nodeId -> logAndBuildNodeAddedResponse(eventLogger, nodeId))
                       .onFailure(cause -> eventLogger.accept(new EventLogEntry("ADD_NODE_FAILED",
                                                                                "Failed to add node: " + cause.message())));
+    }
+
+    private static NodeAddedResponse logAndBuildNodeAddedResponse(Consumer<EventLogEntry> eventLogger,
+                                                                  org.pragmatica.consensus.NodeId nodeId) {
+        eventLogger.accept(new EventLogEntry("NODE_JOINED", "Node " + nodeId.id() + " joined the cluster"));
+        return new NodeAddedResponse(true, nodeId.id(), "joining");
     }
 
     private static Promise<NodeActionResponse> killNode(ForgeCluster cluster,
@@ -272,29 +276,35 @@ public final class ChaosRoutes {
                                                                                       ? " (leader)"
                                                                                       : "")));
         return cluster.killNode(nodeId)
-                      .map(_ -> {
-                               String newLeader = cluster.currentLeader()
-                                                         .or("none");
-                               eventLogger.accept(new EventLogEntry("NODE_KILLED",
-                                                                    "Node " + nodeId + " killed" + (wasLeader
-                                                                                                    ? ", new leader: " + newLeader
-                                                                                                    : "")));
-                               return new NodeActionResponse(true, newLeader);
-                           })
+                      .map(_ -> logAndBuildNodeKilledResponse(cluster, eventLogger, nodeId, wasLeader))
                       .onFailure(cause -> eventLogger.accept(new EventLogEntry("KILL_FAILED",
                                                                                "Failed to kill node " + nodeId)));
+    }
+
+    private static NodeActionResponse logAndBuildNodeKilledResponse(ForgeCluster cluster,
+                                                                    Consumer<EventLogEntry> eventLogger,
+                                                                    String nodeId,
+                                                                    boolean wasLeader) {
+        String newLeader = cluster.currentLeader()
+                                  .or("none");
+        eventLogger.accept(new EventLogEntry("NODE_KILLED",
+                                             "Node " + nodeId + " killed" + (wasLeader
+                                                                             ? ", new leader: " + newLeader
+                                                                             : "")));
+        return new NodeActionResponse(true, newLeader);
     }
 
     private static Promise<SuccessResponse> rollingRestart(ForgeCluster cluster,
                                                            Consumer<EventLogEntry> eventLogger) {
         eventLogger.accept(new EventLogEntry("ROLLING_RESTART", "Starting rolling restart of all nodes"));
         return cluster.rollingRestart()
-                      .map(_ -> {
-                               eventLogger.accept(new EventLogEntry("ROLLING_RESTART_COMPLETE",
-                                                                    "Rolling restart completed successfully"));
-                               return SuccessResponse.OK;
-                           })
+                      .map(_ -> logAndBuildRollingRestartResponse(eventLogger))
                       .onFailure(cause -> eventLogger.accept(new EventLogEntry("ROLLING_RESTART_FAILED",
                                                                                "Rolling restart failed: " + cause.message())));
+    }
+
+    private static SuccessResponse logAndBuildRollingRestartResponse(Consumer<EventLogEntry> eventLogger) {
+        eventLogger.accept(new EventLogEntry("ROLLING_RESTART_COMPLETE", "Rolling restart completed successfully"));
+        return SuccessResponse.OK;
     }
 }

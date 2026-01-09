@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.pragmatica.aether.e2e.containers.AetherCluster;
+import org.pragmatica.aether.e2e.containers.AetherNodeContainer;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -34,7 +35,7 @@ class ChaosE2ETest {
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(5, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(5, PROJECT_ROOT);
         cluster.start();
         cluster.awaitQuorum();
         random = new Random(42); // Deterministic for reproducibility
@@ -54,7 +55,7 @@ class ChaosE2ETest {
         // Kill random nodes, keeping quorum
         for (int i = 0; i < 5; i++) {
             var runningNodes = cluster.nodes().stream()
-                                       .filter(n -> n.isRunning())
+                                       .filter(AetherNodeContainer::isRunning)
                                        .toList();
 
             if (runningNodes.size() > 3) { // Keep quorum
@@ -125,7 +126,7 @@ class ChaosE2ETest {
             while (chaosRunning.get()) {
                 try {
                     var nodes = cluster.nodes().stream()
-                                        .filter(n -> n.isRunning())
+                                        .filter(AetherNodeContainer::isRunning)
                                         .toList();
 
                     if (nodes.size() > 3 && random.nextBoolean()) {

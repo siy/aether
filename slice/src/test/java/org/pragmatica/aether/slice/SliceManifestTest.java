@@ -10,6 +10,8 @@ import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 
+import org.junit.jupiter.api.Assertions;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -43,7 +45,7 @@ class SliceManifestTest {
 
         // When: reading the manifest
         SliceManifest.read(jarFile.toUri().toURL())
-                     .onSuccessRun(() -> fail("Expected failure for missing Slice-Artifact"))
+                     .onSuccessRun(Assertions::fail)
                      .onFailure(cause -> {
                          // Then: error indicates missing attribute
                          assertThat(cause.message()).contains("Slice-Artifact");
@@ -57,7 +59,7 @@ class SliceManifestTest {
 
         // When: reading the manifest
         SliceManifest.read(jarFile.toUri().toURL())
-                     .onSuccessRun(() -> fail("Expected failure for missing Slice-Class"))
+                     .onSuccessRun(Assertions::fail)
                      .onFailure(cause -> {
                          // Then: error indicates missing attribute
                          assertThat(cause.message()).contains("Slice-Class");
@@ -71,7 +73,7 @@ class SliceManifestTest {
 
         // When: reading the manifest
         SliceManifest.read(jarFile.toUri().toURL())
-                     .onSuccessRun(() -> fail("Expected failure for invalid artifact format"))
+                     .onSuccessRun(Assertions::fail)
                      .onFailure(cause -> {
                          // Then: error indicates parsing failure
                          assertThat(cause.message()).isNotEmpty();
@@ -122,7 +124,7 @@ class SliceManifestTest {
         // When: reading the manifest
         try {
             SliceManifest.read(nonExistent.toUri().toURL())
-                         .onSuccessRun(() -> fail("Expected failure for non-existent JAR"))
+                         .onSuccessRun(Assertions::fail)
                          .onFailure(cause -> {
                              // Then: error indicates file issue
                              assertThat(cause.message()).isNotEmpty();

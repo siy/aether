@@ -81,56 +81,75 @@ class DecisionTreeControllerImpl implements DecisionTreeController {
 
     @Override
     public Promise<ControlDecisions> evaluate(ControlContext context) {
-        var changes = new ArrayList<BlueprintChange>();
         var currentConfig = this.config;
-        // Get current CPU usage
         var avgCpu = context.avgMetric(MetricsCollector.CPU_USAGE);
         log.debug("Evaluating: avgCpu={}, blueprints={}",
                   avgCpu,
                   context.blueprints()
                          .size());
-        for (var entry : context.blueprints()
-                                .entrySet()) {
-            var artifact = entry.getKey();
-            var blueprint = entry.getValue();
-            // Rule 1: High CPU → scale up
-            if (avgCpu > currentConfig.cpuScaleUpThreshold()) {
-                log.info("Rule triggered: High CPU ({} > {}), scaling up {}",
-                         avgCpu,
-                         currentConfig.cpuScaleUpThreshold(),
-                         artifact);
-                changes.add(new BlueprintChange.ScaleUp(artifact, 1));
-                continue;
-            }
-            // Rule 2: Low CPU → scale down (if more than 1 instance)
-            if (avgCpu < currentConfig.cpuScaleDownThreshold() && blueprint.instances() > 1) {
-                log.info("Rule triggered: Low CPU ({} < {}), scaling down {}",
-                         avgCpu,
-                         currentConfig.cpuScaleDownThreshold(),
-                         artifact);
-                changes.add(new BlueprintChange.ScaleDown(artifact, 1));
-                continue;
-            }
-            // Rule 3: High call rate → scale up
-            // Check all methods for this artifact
-            for (var metricsEntry : context.metrics()
-                                           .entrySet()) {
-                var nodeMetrics = metricsEntry.getValue();
-                for (var metricName : nodeMetrics.keySet()) {
-                    if (metricName.startsWith("method.") && metricName.endsWith(".calls")) {
-                        var callCount = nodeMetrics.get(metricName);
-                        if (callCount != null && callCount > currentConfig.callRateScaleUpThreshold()) {
-                            log.info("Rule triggered: High call rate ({} > {}), scaling up {}",
-                                     callCount,
-                                     currentConfig.callRateScaleUpThreshold(),
-                                     artifact);
-                            changes.add(new BlueprintChange.ScaleUp(artifact, 1));
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        var changes = context.blueprints()
+                             .entrySet()
+                             .stream()
+                             .map(entry -> evaluateBlueprint(entry.getKey(),
+                                                             entry.getValue(),
+                                                             avgCpu,
+                                                             context.metrics(),
+                                                             currentConfig))
+                             .flatMap(List::stream)
+                             .toList();
         return Promise.success(new ControlDecisions(changes));
+    }
+
+    private List<BlueprintChange> evaluateBlueprint(org.pragmatica.aether.artifact.Artifact artifact,
+                                                    Blueprint blueprint,
+                                                    double avgCpu,
+                                                    java.util.Map<org.pragmatica.consensus.NodeId, java.util.Map<String, Double>> metrics,
+                                                    ControllerConfig currentConfig) {
+        return evaluateCpuRules(artifact, blueprint, avgCpu, currentConfig)
+                               .or(() -> evaluateCallRateRule(artifact, metrics, currentConfig));
+    }
+
+    private org.pragmatica.lang.Option<List<BlueprintChange>> evaluateCpuRules(org.pragmatica.aether.artifact.Artifact artifact,
+                                                                               Blueprint blueprint,
+                                                                               double avgCpu,
+                                                                               ControllerConfig currentConfig) {
+        // Rule 1: High CPU → scale up
+        if (avgCpu > currentConfig.cpuScaleUpThreshold()) {
+            log.info("Rule triggered: High CPU ({} > {}), scaling up {}",
+                     avgCpu,
+                     currentConfig.cpuScaleUpThreshold(),
+                     artifact);
+            return org.pragmatica.lang.Option.some(List.of(new BlueprintChange.ScaleUp(artifact, 1)));
+        }
+        // Rule 2: Low CPU → scale down (if more than 1 instance)
+        if (avgCpu < currentConfig.cpuScaleDownThreshold() && blueprint.instances() > 1) {
+            log.info("Rule triggered: Low CPU ({} < {}), scaling down {}",
+                     avgCpu,
+                     currentConfig.cpuScaleDownThreshold(),
+                     artifact);
+            return org.pragmatica.lang.Option.some(List.of(new BlueprintChange.ScaleDown(artifact, 1)));
+        }
+        return org.pragmatica.lang.Option.empty();
+    }
+
+    private List<BlueprintChange> evaluateCallRateRule(org.pragmatica.aether.artifact.Artifact artifact,
+                                                       java.util.Map<org.pragmatica.consensus.NodeId, java.util.Map<String, Double>> metrics,
+                                                       ControllerConfig currentConfig) {
+        // Rule 3: High call rate → scale up
+        var hasHighCallRate = metrics.values()
+                                     .stream()
+                                     .flatMap(nodeMetrics -> nodeMetrics.entrySet()
+                                                                        .stream())
+                                     .filter(entry -> isCallMetric(entry.getKey()))
+                                     .anyMatch(entry -> entry.getValue() > currentConfig.callRateScaleUpThreshold());
+        if (hasHighCallRate) {
+            log.info("Rule triggered: High call rate, scaling up {}", artifact);
+            return List.of(new BlueprintChange.ScaleUp(artifact, 1));
+        }
+        return List.of();
+    }
+
+    private boolean isCallMetric(String metricName) {
+        return metricName.startsWith("method.") && metricName.endsWith(".calls");
     }
 }

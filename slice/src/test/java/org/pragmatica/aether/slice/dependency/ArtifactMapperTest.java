@@ -59,21 +59,21 @@ class ArtifactMapperTest {
     @Test
     void toArtifact_rejects_no_package() {
         ArtifactMapper.toArtifact("UserService", "1.0.0")
-                      .onSuccessRun(() -> Assertions.fail("Should reject class without package"))
+                      .onSuccessRun(Assertions::fail)
                       .onFailure(cause -> assertThat(cause.message()).contains("Invalid class name"));
     }
 
     @Test
     void toArtifact_rejects_empty_simple_name() {
         ArtifactMapper.toArtifact("org.example.", "1.0.0")
-                      .onSuccessRun(() -> Assertions.fail("Should reject empty simple name"))
+                      .onSuccessRun(Assertions::fail)
                       .onFailure(cause -> assertThat(cause.message()).contains("Invalid class name"));
     }
 
     @Test
     void toArtifact_rejects_lowercase_simple_name() {
         ArtifactMapper.toArtifact("org.example.userService", "1.0.0")
-                      .onSuccessRun(() -> Assertions.fail("Should reject lowercase simple name"))
+                      .onSuccessRun(Assertions::fail)
                       .onFailure(cause -> assertThat(cause.message()).contains("Invalid class name"));
     }
 

@@ -63,7 +63,7 @@ public record DependencyFile(List<ArtifactDependency> api,
      * @param content The file content as string
      * @return Parsed dependency file or error
      */
-    public static Result<DependencyFile> parse(String content) {
+    public static Result<DependencyFile> dependencyFile(String content) {
         var api = new ArrayList<ArtifactDependency>();
         var shared = new ArrayList<ArtifactDependency>();
         var slices = new ArrayList<ArtifactDependency>();
@@ -94,7 +94,7 @@ public record DependencyFile(List<ArtifactDependency> api,
                                       .result();
             }
             // Parse dependency line - skip empty/comment lines, fail on real errors
-            var parseResult = ArtifactDependency.parse(trimmed);
+            var parseResult = ArtifactDependency.artifactDependency(trimmed);
             // Use fold to handle success and failure cases
             final var currentSectionFinal = currentSection;
             var continueFlag = new boolean[]{false};
@@ -132,7 +132,7 @@ public record DependencyFile(List<ArtifactDependency> api,
      * @param inputStream The input stream to read from
      * @return Parsed dependency file or error
      */
-    public static Result<DependencyFile> parse(InputStream inputStream) {
+    public static Result<DependencyFile> dependencyFile(InputStream inputStream) {
         return Result.lift(Causes::fromThrowable,
                            () -> {
                                try (var reader = new BufferedReader(new InputStreamReader(inputStream))) {
@@ -145,7 +145,7 @@ public record DependencyFile(List<ArtifactDependency> api,
                                    return content.toString();
                                }
                            })
-                     .flatMap(DependencyFile::parse);
+                     .flatMap(DependencyFile::dependencyFile);
     }
 
     /**
@@ -162,7 +162,7 @@ public record DependencyFile(List<ArtifactDependency> api,
             // No dependencies file means no dependencies - this is valid
             return Result.success(new DependencyFile(List.of(), List.of(), List.of()));
         }
-        return parse(resource);
+        return dependencyFile(resource);
     }
 
     /**

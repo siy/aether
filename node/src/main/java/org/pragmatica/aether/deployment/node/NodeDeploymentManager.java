@@ -128,7 +128,7 @@ public interface NodeDeploymentManager {
                                       // WARNING: Removal may happen during abrupt stop due to lack of consensus.
                 // In this case slice might be active and we should immediately stop it,
                 // unload and remove, ignoring errors.
-                var deployment = deployments.remove(sliceKey);
+                var deployment = Option.option(deployments.remove(sliceKey));
                                       if (shouldForceCleanup(deployment)) {
                                           forceCleanupSlice(sliceKey);
                                       }
@@ -137,27 +137,27 @@ public interface NodeDeploymentManager {
 
             private void recordDeployment(SliceNodeKey sliceKey, SliceState state) {
                 var timestamp = System.currentTimeMillis();
-                var previousDeployment = deployments.get(sliceKey);
-                var previousState = previousDeployment != null
-                                    ? previousDeployment.state()
-                                    : null;
+                var previousDeployment = Option.option(deployments.get(sliceKey));
+                var previousState = previousDeployment.map(SliceDeployment::state);
                 var deployment = new SliceDeployment(sliceKey, state, timestamp);
                 deployments.put(sliceKey, deployment);
                 // Emit state transition event for metrics via MessageRouter
                 // For initial LOAD, use LOAD as both from and to (captures loadTime)
-                var effectiveFromState = previousState != null
-                                         ? previousState
-                                         : state;
+                var effectiveFromState = previousState.or(state);
                 router.route(new StateTransition(sliceKey.artifact(), self, effectiveFromState, state, timestamp));
                 // Emit deployment failed event if transitioning to FAILED
                 // We do this here because we have access to previousState
-                if (state == SliceState.FAILED && previousState != null) {
-                    router.route(new DeploymentFailed(sliceKey.artifact(), self, previousState, timestamp));
+                if (state == SliceState.FAILED) {
+                    previousState.onPresent(prevState -> router.route(new DeploymentFailed(sliceKey.artifact(),
+                                                                                           self,
+                                                                                           prevState,
+                                                                                           timestamp)));
                 }
             }
 
-            private boolean shouldForceCleanup(SliceDeployment deployment) {
-                return deployment != null && deployment.state() == SliceState.ACTIVE;
+            private boolean shouldForceCleanup(Option<SliceDeployment> deployment) {
+                return deployment.map(d -> d.state() == SliceState.ACTIVE)
+                                 .or(false);
             }
 
             private void forceCleanupSlice(SliceNodeKey sliceKey) {

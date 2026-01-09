@@ -29,7 +29,7 @@ public record ChoiceGenerator(List<String> choices) implements PatternGenerator 
     /**
      * Parses a choice specification like "A,B,C".
      */
-    public static Result<PatternGenerator> parse(String choiceSpec) {
+    public static Result<PatternGenerator> choiceGenerator(String choiceSpec) {
         return Option.option(choiceSpec)
                      .filter(s -> !s.isBlank())
                      .toResult(INVALID_CHOICE.apply("empty"))

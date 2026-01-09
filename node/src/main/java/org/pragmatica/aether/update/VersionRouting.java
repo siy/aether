@@ -34,12 +34,14 @@ public record VersionRouting(int newWeight, int oldWeight) {
     /**
      * Initial routing: all traffic to old version.
      */
-    public static final VersionRouting ALL_OLD = new VersionRouting(0, 1);
+    public static final VersionRouting ALL_OLD = versionRouting(0, 1)
+                                                               .unwrap();
 
     /**
      * Final routing: all traffic to new version.
      */
-    public static final VersionRouting ALL_NEW = new VersionRouting(1, 0);
+    public static final VersionRouting ALL_NEW = versionRouting(1, 0)
+                                                               .unwrap();
 
     /**
      * Creates a routing configuration.
@@ -62,7 +64,7 @@ public record VersionRouting(int newWeight, int oldWeight) {
      * @param ratio the ratio string
      * @return parsed routing, or failure if format is invalid
      */
-    public static Result<VersionRouting> parse(String ratio) {
+    public static Result<VersionRouting> versionRouting(String ratio) {
         var parts = ratio.split(":");
         if (parts.length != 2) {
             return INVALID_RATIO_FORMAT.apply(ratio)

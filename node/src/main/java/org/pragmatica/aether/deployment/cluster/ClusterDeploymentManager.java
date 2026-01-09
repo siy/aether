@@ -267,37 +267,35 @@ public interface ClusterDeploymentManager {
             }
 
             private void scaleUp(Artifact artifact, int toAdd, List<SliceNodeKey> existingInstances) {
-                // Find nodes without instances first, then allow duplicates if needed
                 var nodesWithInstances = existingInstances.stream()
                                                           .map(SliceNodeKey::nodeId)
-                                                          .toList();
-                var added = 0;
-                // First pass: allocate to nodes without instances
-                for (var node : activeNodes) {
-                    if (added >= toAdd) {
-                        break;
-                    }
-                    if (!nodesWithInstances.contains(node)) {
-                        var sliceKey = new SliceNodeKey(artifact, node);
-                        if (!sliceStates.containsKey(sliceKey)) {
-                            issueLoadCommand(sliceKey);
-                            added++;
-                        }
-                    }
-                }
-                // Second pass: if still need more, allocate additional instances (round-robin)
-                // This handles cases where instances > nodes
-                var nodeIndex = 0;
-                while (added < toAdd) {
-                    var targetNode = activeNodes.get(nodeIndex % activeNodes.size());
-                    var sliceKey = new SliceNodeKey(artifact, targetNode);
-                    // Note: In current design, one slice per node per artifact
-                    // For multiple instances per node, we'd need instance numbering
-                    // For now, just issue the command (will be idempotent if already exists)
+                                                          .collect(java.util.stream.Collectors.toSet());
+                var allocated = allocateToEmptyNodes(artifact, toAdd, nodesWithInstances);
+                allocateRoundRobin(artifact, toAdd - allocated);
+            }
+
+            private int allocateToEmptyNodes(Artifact artifact, int toAdd, java.util.Set<NodeId> nodesWithInstances) {
+                return (int) activeNodes.stream()
+                                       .filter(node -> !nodesWithInstances.contains(node))
+                                       .limit(toAdd)
+                                       .filter(node -> tryAllocate(artifact, node))
+                                       .count();
+            }
+
+            private boolean tryAllocate(Artifact artifact, NodeId node) {
+                var sliceKey = new SliceNodeKey(artifact, node);
+                if (!sliceStates.containsKey(sliceKey)) {
                     issueLoadCommand(sliceKey);
-                    added++;
-                    nodeIndex++;
+                    return true;
                 }
+                return false;
+            }
+
+            private void allocateRoundRobin(Artifact artifact, int remaining) {
+                java.util.stream.IntStream.range(0, remaining)
+                    .mapToObj(i -> activeNodes.get(i % activeNodes.size()))
+                    .map(node -> new SliceNodeKey(artifact, node))
+                    .forEach(this::issueLoadCommand);
             }
 
             private void scaleDown(Artifact artifact, int toRemove, List<SliceNodeKey> existingInstances) {

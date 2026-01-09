@@ -9,7 +9,7 @@ class DependencyDescriptorTest {
 
     @Test
     void parse_simple_dependency_without_param_name() {
-        DependencyDescriptor.parse("com.example.UserService:1.2.3")
+        DependencyDescriptor.dependencyDescriptor("com.example.UserService:1.2.3")
                             .onFailureRun(Assertions::fail)
                             .onSuccess(descriptor -> {
                                 assertThat(descriptor.sliceClassName()).isEqualTo("com.example.UserService");
@@ -20,7 +20,7 @@ class DependencyDescriptorTest {
 
     @Test
     void parse_dependency_with_param_name() {
-        DependencyDescriptor.parse("com.example.EmailService:^1.0.0:emailService")
+        DependencyDescriptor.dependencyDescriptor("com.example.EmailService:^1.0.0:emailService")
                             .onFailureRun(Assertions::fail)
                             .onSuccess(descriptor -> {
                                 assertThat(descriptor.sliceClassName()).isEqualTo("com.example.EmailService");
@@ -32,7 +32,7 @@ class DependencyDescriptorTest {
 
     @Test
     void parse_dependency_with_range_version() {
-        DependencyDescriptor.parse("com.example.OrderProcessor:[1.0.0,2.0.0):orderProcessor")
+        DependencyDescriptor.dependencyDescriptor("com.example.OrderProcessor:[1.0.0,2.0.0):orderProcessor")
                             .onFailureRun(Assertions::fail)
                             .onSuccess(descriptor -> {
                                 assertThat(descriptor.sliceClassName()).isEqualTo("com.example.OrderProcessor");
@@ -44,7 +44,7 @@ class DependencyDescriptorTest {
 
     @Test
     void parse_dependency_with_comparison_version() {
-        DependencyDescriptor.parse("com.example.CacheService:>=2.5.0")
+        DependencyDescriptor.dependencyDescriptor("com.example.CacheService:>=2.5.0")
                             .onFailureRun(Assertions::fail)
                             .onSuccess(descriptor -> {
                                 assertThat(descriptor.sliceClassName()).isEqualTo("com.example.CacheService");
@@ -54,53 +54,53 @@ class DependencyDescriptorTest {
 
     @Test
     void parse_empty_line_returns_failure() {
-        DependencyDescriptor.parse("")
-                            .onSuccessRun(() -> Assertions.fail("Should fail for empty line"))
+        DependencyDescriptor.dependencyDescriptor("")
+                            .onSuccessRun(Assertions::fail)
                             .onFailure(cause -> assertThat(cause.message()).contains("empty"));
 
-        DependencyDescriptor.parse("   ")
-                            .onSuccessRun(() -> Assertions.fail("Should fail for blank line"))
+        DependencyDescriptor.dependencyDescriptor("   ")
+                            .onSuccessRun(Assertions::fail)
                             .onFailure(cause -> assertThat(cause.message()).contains("empty"));
     }
 
     @Test
     void parse_comment_line_returns_failure() {
-        DependencyDescriptor.parse("# This is a comment")
-                            .onSuccessRun(() -> Assertions.fail("Should fail for comment line"))
+        DependencyDescriptor.dependencyDescriptor("# This is a comment")
+                            .onSuccessRun(Assertions::fail)
                             .onFailure(cause -> assertThat(cause.message()).contains("comment"));
     }
 
     @Test
     void parse_invalid_format_returns_failure() {
         // Missing version pattern
-        DependencyDescriptor.parse("com.example.UserService")
-                            .onSuccessRun(() -> Assertions.fail("Should fail for missing version"))
+        DependencyDescriptor.dependencyDescriptor("com.example.UserService")
+                            .onSuccessRun(Assertions::fail)
                             .onFailure(cause -> assertThat(cause.message()).contains("Invalid"));
 
         // Too many parts
-        DependencyDescriptor.parse("com.example.UserService:1.0.0:param:extra")
-                            .onSuccessRun(() -> Assertions.fail("Should fail for too many parts"))
+        DependencyDescriptor.dependencyDescriptor("com.example.UserService:1.0.0:param:extra")
+                            .onSuccessRun(Assertions::fail)
                             .onFailure(cause -> assertThat(cause.message()).contains("Too many"));
     }
 
     @Test
     void parse_empty_class_name_returns_failure() {
-        DependencyDescriptor.parse(":1.2.3")
-                            .onSuccessRun(() -> Assertions.fail("Should fail for empty class name"))
+        DependencyDescriptor.dependencyDescriptor(":1.2.3")
+                            .onSuccessRun(Assertions::fail)
                             .onFailure(cause -> assertThat(cause.message()).contains("Empty class name"));
     }
 
     @Test
     void parse_empty_version_returns_failure() {
-        DependencyDescriptor.parse("com.example.UserService:")
-                            .onSuccessRun(() -> Assertions.fail("Should fail for empty version"))
+        DependencyDescriptor.dependencyDescriptor("com.example.UserService:")
+                            .onSuccessRun(Assertions::fail)
                             .onFailure(cause -> assertThat(cause.message()).contains("Empty version pattern"));
     }
 
     @Test
     void asString_roundtrip_without_param_name() {
         var original = "com.example.UserService:1.2.3";
-        DependencyDescriptor.parse(original)
+        DependencyDescriptor.dependencyDescriptor(original)
                             .map(DependencyDescriptor::asString)
                             .onFailureRun(Assertions::fail)
                             .onSuccess(result -> assertThat(result).isEqualTo(original));
@@ -109,7 +109,7 @@ class DependencyDescriptorTest {
     @Test
     void asString_roundtrip_with_param_name() {
         var original = "com.example.EmailService:^1.0.0:emailService";
-        DependencyDescriptor.parse(original)
+        DependencyDescriptor.dependencyDescriptor(original)
                             .map(DependencyDescriptor::asString)
                             .onFailureRun(Assertions::fail)
                             .onSuccess(result -> assertThat(result).isEqualTo(original));
@@ -118,7 +118,7 @@ class DependencyDescriptorTest {
     @Test
     void asString_roundtrip_with_range() {
         var original = "com.example.OrderProcessor:[1.0.0,2.0.0):orderProcessor";
-        DependencyDescriptor.parse(original)
+        DependencyDescriptor.dependencyDescriptor(original)
                             .map(DependencyDescriptor::asString)
                             .onFailureRun(Assertions::fail)
                             .onSuccess(result -> assertThat(result).isEqualTo(original));
@@ -126,7 +126,7 @@ class DependencyDescriptorTest {
 
     @Test
     void parse_handles_whitespace() {
-        DependencyDescriptor.parse("  com.example.UserService  :  1.2.3  :  userService  ")
+        DependencyDescriptor.dependencyDescriptor("  com.example.UserService  :  1.2.3  :  userService  ")
                             .onFailureRun(Assertions::fail)
                             .onSuccess(descriptor -> {
                                 assertThat(descriptor.sliceClassName()).isEqualTo("com.example.UserService");

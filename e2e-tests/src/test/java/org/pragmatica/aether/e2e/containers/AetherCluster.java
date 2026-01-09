@@ -24,7 +24,7 @@ import static org.awaitility.Awaitility.await;
  *
  * <p>Usage:
  * <pre>{@code
- * try (var cluster = AetherCluster.create(3, projectRoot)) {
+ * try (var cluster = AetherCluster.aetherCluster(3, projectRoot)) {
  *     cluster.start();
  *     cluster.awaitQuorum();
  *
@@ -102,7 +102,7 @@ public class AetherCluster implements AutoCloseable {
      * @param projectRoot path to project root (for Dockerfile context)
      * @return cluster instance (not yet started)
      */
-    public static AetherCluster create(int size, Path projectRoot) {
+    public static AetherCluster aetherCluster(int size, Path projectRoot) {
         if (size < 1) {
             throw new IllegalArgumentException("Cluster size must be at least 1");
         }
@@ -119,27 +119,27 @@ public class AetherCluster implements AutoCloseable {
         // Start nodes sequentially
         for (var node : nodes) {
             node.start();
-            var ip = getContainerIp(node);
+            var ip = getContainerIp(node).orElse("unknown");
             System.out.println("[DEBUG] Node " + node.nodeId() + " started with IP: " + ip);
         }
 
         System.out.println("[DEBUG] All nodes started. Waiting for cluster formation...");
     }
 
-    private String getContainerIp(AetherNodeContainer node) {
+    private Optional<String> getContainerIp(AetherNodeContainer node) {
         try {
             var networkSettings = node.getContainerInfo().getNetworkSettings();
             var networks = networkSettings.getNetworks();
             for (var networkEntry : networks.entrySet()) {
                 var ip = networkEntry.getValue().getIpAddress();
                 if (ip != null && !ip.isEmpty()) {
-                    return ip;
+                    return Optional.of(ip);
                 }
             }
         } catch (Exception e) {
             System.err.println("[DEBUG] Failed to get IP for " + node.nodeId() + ": " + e.getMessage());
         }
-        return null;
+        return Optional.empty();
     }
 
     /**

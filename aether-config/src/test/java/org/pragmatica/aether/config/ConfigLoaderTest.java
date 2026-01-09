@@ -176,7 +176,7 @@ class ConfigLoaderTest {
 
     @Test
     void fromEnvironment_returnsValidConfig() {
-        var config = ConfigLoader.fromEnvironment(Environment.DOCKER);
+        var config = ConfigLoader.aetherConfig(Environment.DOCKER);
 
         ConfigValidator.validate(config)
             .onFailureRun(Assertions::fail);

@@ -26,9 +26,9 @@ import java.util.List;
  *     .await()
  *     .onSuccess(update -> {
  *         // Gradually shift traffic
- *         manager.adjustRouting(update.updateId(), VersionRouting.parse("1:3")).await();
- *         manager.adjustRouting(update.updateId(), VersionRouting.parse("1:1")).await();
- *         manager.adjustRouting(update.updateId(), VersionRouting.parse("1:0")).await();
+ *         manager.adjustRouting(update.updateId(), VersionRouting.versionRouting("1:3")).await();
+ *         manager.adjustRouting(update.updateId(), VersionRouting.versionRouting("1:1")).await();
+ *         manager.adjustRouting(update.updateId(), VersionRouting.versionRouting("1:0")).await();
  *
  *         // Complete and cleanup
  *         manager.completeUpdate(update.updateId()).await();

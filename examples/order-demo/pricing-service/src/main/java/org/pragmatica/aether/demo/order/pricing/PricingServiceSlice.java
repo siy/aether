@@ -7,6 +7,7 @@ import org.pragmatica.aether.slice.SliceMethod;
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.type.TypeToken;
 
 import java.math.BigDecimal;
@@ -82,8 +83,9 @@ public record PricingServiceSlice() implements Slice {
     private Promise<ProductPrice> getPrice(GetPriceRequest request) {
         return Option.option(PRICES.get(request.productId()))
                      .toResult(new PricingError.PriceNotFound(request.productId()))
+                     .flatMap(Money::usd)
                      .map(price -> new ProductPrice(request.productId(),
-                                                    Money.usd(price)))
+                                                    price))
                      .async();
     }
 
@@ -94,7 +96,7 @@ public record PricingServiceSlice() implements Slice {
                                 .async();
     }
 
-    private org.pragmatica.lang.Result<BigDecimal> calculateSubtotal(List<CalculateTotalRequest.LineItem> items) {
+    private Result<BigDecimal> calculateSubtotal(List<CalculateTotalRequest.LineItem> items) {
         var missingProduct = items.stream()
                                   .filter(item -> !PRICES.containsKey(item.productId()))
                                   .findFirst();
@@ -106,10 +108,10 @@ public record PricingServiceSlice() implements Slice {
                             .map(item -> PRICES.get(item.productId())
                                                .multiply(BigDecimal.valueOf(item.quantity())))
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return org.pragmatica.lang.Result.success(subtotal);
+        return Result.success(subtotal);
     }
 
-    private org.pragmatica.lang.Result<OrderTotal> applyDiscount(BigDecimal subtotal, String discountCode) {
+    private Result<OrderTotal> applyDiscount(BigDecimal subtotal, String discountCode) {
         var discountRate = discountCode != null
                            ? DISCOUNTS.get(discountCode)
                            : null;
@@ -117,8 +119,9 @@ public record PricingServiceSlice() implements Slice {
                        ? subtotal.multiply(discountRate)
                        : BigDecimal.ZERO;
         var total = subtotal.subtract(discount);
-        return org.pragmatica.lang.Result.success(new OrderTotal(Money.usd(subtotal),
-                                                                 Money.usd(discount),
-                                                                 Money.usd(total)));
+        return Result.all(Money.usd(subtotal),
+                          Money.usd(discount),
+                          Money.usd(total))
+                     .map(OrderTotal::new);
     }
 }

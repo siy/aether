@@ -28,7 +28,7 @@ public record StartupConfig(Option<Path> forgeConfig,
     /**
      * Parse startup configuration from CLI args with environment variable overrides.
      */
-    public static Result<StartupConfig> parse(String[] args) {
+    public static Result<StartupConfig> startupConfig(String[] args) {
         var parsed = parseArgs(args);
         // Apply env var overrides (highest priority)
         var forgeConfigPath = envOrArg("FORGE_CONFIG", parsed, "config");
@@ -83,14 +83,16 @@ public record StartupConfig(Option<Path> forgeConfig,
 
     private static int envOrArgInt(String envName, Map<String, String> args, String argName, int defaultValue) {
         return envOrArg(envName, args, argName)
-                       .flatMap(v -> {
-                                    try{
-                                        return Option.some(Integer.parseInt(v));
-                                    } catch (NumberFormatException e) {
-                                        return Option.none();
-                                    }
-                                })
+                       .flatMap(StartupConfig::parseIntSafe)
                        .or(defaultValue);
+    }
+
+    private static Option<Integer> parseIntSafe(String value) {
+        try{
+            return Option.some(Integer.parseInt(value));
+        } catch (NumberFormatException e) {
+            return Option.none();
+        }
     }
 
     private static Result<Option<Path>> validatePath(Option<String> pathStr, String name) {

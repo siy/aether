@@ -30,7 +30,7 @@ public record ArtifactDependency(String groupId,
      * @param line The dependency string
      * @return Parsed dependency or error
      */
-    public static Result<ArtifactDependency> parse(String line) {
+    public static Result<ArtifactDependency> artifactDependency(String line) {
         var trimmed = line.trim();
         if (trimmed.isEmpty()) {
             return EMPTY_LINE.result();

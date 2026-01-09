@@ -70,15 +70,15 @@ public interface SliceStoreImpl {
         @Override
         public Promise<LoadedSlice> loadSlice(Artifact artifact) {
             return Option.option(entries.get(artifact))
-                         .fold(() -> {
-                                   log.info("Loading slice {}", artifact);
-                                   return locateInRepositories(artifact)
-                                                              .flatMap(_ -> loadFromLocation(artifact));
-                               },
-                               existing -> {
-                                   log.debug("Slice {} already loaded", artifact);
-                                   return Promise.success(existing);
-                               });
+                         .map(existing -> {
+                                  log.debug("Slice {} already loaded", artifact);
+                                  return Promise.<LoadedSlice>success(existing);
+                              })
+                         .or(() -> {
+                                 log.info("Loading slice {}", artifact);
+                                 return locateInRepositories(artifact)
+                                                            .flatMap(_ -> loadFromLocation(artifact));
+                             });
         }
 
         private Promise<LoadedSlice> loadFromLocation(Artifact artifact) {
@@ -183,11 +183,11 @@ public interface SliceStoreImpl {
         @Override
         public Promise<Unit> unloadSlice(Artifact artifact) {
             return Option.option(entries.get(artifact))
-                         .fold(() -> {
-                                   log.debug("Slice {} not loaded, nothing to unload", artifact);
-                                   return Promise.success(Unit.unit());
-                               },
-                               entry -> unloadEntry(artifact, entry));
+                         .map(entry -> unloadEntry(artifact, entry))
+                         .or(() -> {
+                                 log.debug("Slice {} not loaded, nothing to unload", artifact);
+                                 return Promise.success(Unit.unit());
+                             });
         }
 
         private Promise<Unit> unloadEntry(Artifact artifact, LoadedSliceEntry entry) {

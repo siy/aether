@@ -205,25 +205,26 @@ public sealed interface DeploymentRoutes {
                                                                 RepositoryPutRequest request) {
         return findAnyNode(cluster)
                           .async(NoNodesAvailable.INSTANCE)
-                          .flatMap(node -> {
-                                       var path = buildRepositoryPath(request.groupId(),
-                                                                      request.artifactId(),
-                                                                      request.version());
-                                       return node.mavenProtocolHandler()
-                                                  .handlePut(path,
-                                                             request.content())
-                                                  .map(_ -> {
-                                                           var artifact = request.groupId() + ":" + request.artifactId()
-                                                                          + ":" + request.version();
-                                                           eventLogger.accept(new EventLogEntry("ARTIFACT_DEPLOYED",
-                                                                                                "Deployed " + artifact
-                                                                                                + " (" + request.content().length
-                                                                                                + " bytes)"));
-                                                           return new RepositoryPutResponse(true,
-                                                                                            path,
-                                                                                            request.content().length);
-                                                       });
-                                   });
+                          .flatMap(node -> storeArtifactOnNode(node, eventLogger, request));
+    }
+
+    private static Promise<RepositoryPutResponse> storeArtifactOnNode(AetherNode node,
+                                                                      Consumer<EventLogEntry> eventLogger,
+                                                                      RepositoryPutRequest request) {
+        var path = buildRepositoryPath(request.groupId(), request.artifactId(), request.version());
+        return node.mavenProtocolHandler()
+                   .handlePut(path,
+                              request.content())
+                   .map(_ -> createRepositoryResponse(eventLogger, request, path));
+    }
+
+    private static RepositoryPutResponse createRepositoryResponse(Consumer<EventLogEntry> eventLogger,
+                                                                  RepositoryPutRequest request,
+                                                                  String path) {
+        var artifact = request.groupId() + ":" + request.artifactId() + ":" + request.version();
+        eventLogger.accept(new EventLogEntry("ARTIFACT_DEPLOYED",
+                                             "Deployed " + artifact + " (" + request.content().length + " bytes)"));
+        return new RepositoryPutResponse(true, path, request.content().length);
     }
 
     // ========== Helper Methods ==========

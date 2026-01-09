@@ -32,10 +32,30 @@ public record ForgeConfig(int nodes,
     }
 
     /**
-     * Create configuration with specified values, using defaults for unspecified.
+     * Create configuration with specified values and validation.
      */
-    public static ForgeConfig forgeConfig(int nodes, int managementPort, int dashboardPort) {
-        return new ForgeConfig(nodes, managementPort, dashboardPort);
+    public static Result<ForgeConfig> forgeConfig(int nodes, int managementPort, int dashboardPort) {
+        if (nodes < 1) {
+            return ForgeConfigError.invalidValue("nodes", nodes, "must be at least 1")
+                                   .result();
+        }
+        if (nodes > 100) {
+            return ForgeConfigError.invalidValue("nodes", nodes, "must be at most 100")
+                                   .result();
+        }
+        if (managementPort < 1 || managementPort > 65535) {
+            return ForgeConfigError.invalidValue("management_port", managementPort, "must be valid port")
+                                   .result();
+        }
+        if (dashboardPort < 1 || dashboardPort > 65535) {
+            return ForgeConfigError.invalidValue("dashboard_port", dashboardPort, "must be valid port")
+                                   .result();
+        }
+        if (managementPort == dashboardPort) {
+            return ForgeConfigError.portConflict(managementPort)
+                                   .result();
+        }
+        return Result.success(new ForgeConfig(nodes, managementPort, dashboardPort));
     }
 
     /**
@@ -61,26 +81,7 @@ public record ForgeConfig(int nodes,
                                 .or(DEFAULT_MANAGEMENT_PORT);
         int dashboardPort = doc.getInt("cluster", "dashboard_port")
                                .or(DEFAULT_DASHBOARD_PORT);
-        return validateConfig(nodes, managementPort, dashboardPort);
-    }
-
-    private static Result<ForgeConfig> validateConfig(int nodes, int managementPort, int dashboardPort) {
-        if (nodes < 1) {
-            return Result.err(ForgeConfigError.invalidValue("nodes", nodes, "must be at least 1"));
-        }
-        if (nodes > 100) {
-            return Result.err(ForgeConfigError.invalidValue("nodes", nodes, "must be at most 100"));
-        }
-        if (managementPort < 1 || managementPort > 65535) {
-            return Result.err(ForgeConfigError.invalidValue("management_port", managementPort, "must be valid port"));
-        }
-        if (dashboardPort < 1 || dashboardPort > 65535) {
-            return Result.err(ForgeConfigError.invalidValue("dashboard_port", dashboardPort, "must be valid port"));
-        }
-        if (managementPort == dashboardPort) {
-            return Result.err(ForgeConfigError.portConflict(managementPort));
-        }
-        return Result.ok(new ForgeConfig(nodes, managementPort, dashboardPort));
+        return forgeConfig(nodes, managementPort, dashboardPort);
     }
 
     /**

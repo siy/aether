@@ -66,7 +66,7 @@ public record LoadTarget(Option<String> name,
             }
         }
 
-        public static Result<Rate> parse(String rateStr) {
+        public static Result<Rate> rate(String rateStr) {
             var matcher = RATE_PATTERN.matcher(rateStr.trim());
             if (!matcher.matches()) {
                 return INVALID_RATE.apply(rateStr)
@@ -99,7 +99,7 @@ public record LoadTarget(Option<String> name,
         return Option.option(target)
                      .filter(s -> !s.isBlank())
                      .toResult(INVALID_TARGET.apply("target is required"))
-                     .flatMap(_ -> Rate.parse(rateStr))
+                     .flatMap(_ -> Rate.rate(rateStr))
                      .map(rate -> buildLoadTarget(name, target, rate, duration, pathVars, body));
     }
 

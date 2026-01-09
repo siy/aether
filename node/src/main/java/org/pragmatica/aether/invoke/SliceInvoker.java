@@ -488,9 +488,9 @@ class SliceInvokerImpl implements SliceInvoker {
         // Check if there's an active rolling update for this artifact
         var artifactBase = ArtifactBase.artifactBase(slice.groupId(), slice.artifactId());
         return rollingUpdateManager.getActiveUpdate(artifactBase)
-                                   .fold(() -> endpointRegistry.selectEndpoint(slice, method)
-                                                               .async(NO_ENDPOINT_FOUND),
-                                         update -> selectEndpointWithWeightedRouting(slice, artifactBase, method, update));
+                                   .map(update -> selectEndpointWithWeightedRouting(slice, artifactBase, method, update))
+                                   .or(() -> endpointRegistry.selectEndpoint(slice, method)
+                                                             .async(NO_ENDPOINT_FOUND));
     }
 
     private Promise<Endpoint> selectEndpointWithWeightedRouting(Artifact slice,

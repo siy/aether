@@ -41,7 +41,7 @@ public sealed interface PatternParser {
             case RandomGenerator.TYPE -> parseRandom(args, pattern);
             case RangeGenerator.TYPE -> parseRange(args, pattern);
             case ChoiceGenerator.TYPE -> parseChoice(args, pattern);
-            case SequenceGenerator.TYPE -> SequenceGenerator.parse(args);
+            case SequenceGenerator.TYPE -> SequenceGenerator.sequenceGenerator(args);
             default -> UNKNOWN_TYPE.apply(type)
                                    .result();
         };
@@ -62,14 +62,14 @@ public sealed interface PatternParser {
         return Option.option(args)
                      .filter(s -> !s.isEmpty())
                      .toResult(INVALID_PATTERN.apply(pattern + " (range requires MIN-MAX)"))
-                     .flatMap(RangeGenerator::parse);
+                     .flatMap(RangeGenerator::rangeGenerator);
     }
 
     private static Result<PatternGenerator> parseChoice(String args, String pattern) {
         return Option.option(args)
                      .filter(s -> !s.isEmpty())
                      .toResult(INVALID_PATTERN.apply(pattern + " (choice requires values)"))
-                     .flatMap(ChoiceGenerator::parse);
+                     .flatMap(ChoiceGenerator::choiceGenerator);
     }
 
     /**

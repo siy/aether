@@ -9,7 +9,7 @@ class RangeGeneratorTest {
 
     @Test
     void parse_succeeds_forValidRange() {
-        RangeGenerator.parse("1-100")
+        RangeGenerator.rangeGenerator("1-100")
             .onFailureRun(Assertions::fail)
             .onSuccess(gen -> {
                 assertThat(gen).isInstanceOf(RangeGenerator.class);
@@ -21,7 +21,7 @@ class RangeGeneratorTest {
 
     @Test
     void parse_succeeds_forNegativeRange() {
-        RangeGenerator.parse("-50-50")
+        RangeGenerator.rangeGenerator("-50-50")
             .onFailureRun(Assertions::fail)
             .onSuccess(gen -> {
                 var rg = (RangeGenerator) gen;
@@ -32,7 +32,7 @@ class RangeGeneratorTest {
 
     @Test
     void parse_succeeds_forSingleValue() {
-        RangeGenerator.parse("5-5")
+        RangeGenerator.rangeGenerator("5-5")
             .onFailureRun(Assertions::fail)
             .onSuccess(gen -> {
                 assertThat(gen.generate()).isEqualTo("5");
@@ -41,21 +41,21 @@ class RangeGeneratorTest {
 
     @Test
     void parse_fails_forMinGreaterThanMax() {
-        RangeGenerator.parse("100-1")
+        RangeGenerator.rangeGenerator("100-1")
             .onSuccessRun(Assertions::fail)
             .onFailure(cause -> assertThat(cause.message()).contains("min cannot be greater than max"));
     }
 
     @Test
     void parse_fails_forInvalidFormat() {
-        RangeGenerator.parse("invalid")
+        RangeGenerator.rangeGenerator("invalid")
             .onSuccessRun(Assertions::fail)
             .onFailure(cause -> assertThat(cause.message()).contains("Invalid range format"));
     }
 
     @Test
     void parse_fails_forNonNumericValues() {
-        RangeGenerator.parse("a-b")
+        RangeGenerator.rangeGenerator("a-b")
             .onSuccessRun(Assertions::fail);
     }
 

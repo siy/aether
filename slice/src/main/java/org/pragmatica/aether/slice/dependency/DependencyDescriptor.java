@@ -30,7 +30,7 @@ public record DependencyDescriptor(String sliceClassName, VersionPattern version
      *
      * @return Parsed descriptor or error
      */
-    public static Result<DependencyDescriptor> parse(String line) {
+    public static Result<DependencyDescriptor> dependencyDescriptor(String line) {
         var trimmed = line.trim();
         if (trimmed.isEmpty()) {
             return EMPTY_LINE.result();

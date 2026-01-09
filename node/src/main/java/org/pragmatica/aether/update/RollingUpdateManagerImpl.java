@@ -197,12 +197,13 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
     private Promise<RollingUpdate> transitionToRouting(RollingUpdate update) {
         return update.transitionTo(RollingUpdateState.ROUTING)
                      .async()
-                     .flatMap(transitioned -> {
-                                  updates.put(transitioned.updateId(),
-                                              transitioned);
-                                  return persistRouting(transitioned)
-                                                       .map(_ -> transitioned);
-                              });
+                     .flatMap(this::cacheAndPersistRouting);
+    }
+
+    private Promise<RollingUpdate> cacheAndPersistRouting(RollingUpdate transitioned) {
+        updates.put(transitioned.updateId(), transitioned);
+        return persistRouting(transitioned)
+                             .map(_ -> transitioned);
     }
 
     @Override
@@ -354,37 +355,39 @@ public final class RollingUpdateManagerImpl implements RollingUpdateManager {
                                                         RollingUpdateState newState) {
         return update.transitionTo(newState)
                      .async()
-                     .flatMap(transitioned -> {
-                                  updates.put(update.updateId(),
-                                              transitioned);
-                                  // Store in KV-Store
-        var key = new AetherKey.RollingUpdateKey(update.updateId());
-                                  var value = new AetherValue.RollingUpdateValue(transitioned.updateId(),
-                                                                                 transitioned.artifactBase(),
-                                                                                 transitioned.oldVersion(),
-                                                                                 transitioned.newVersion(),
-                                                                                 transitioned.state()
-                                                                                             .name(),
-                                                                                 transitioned.routing()
-                                                                                             .newWeight(),
-                                                                                 transitioned.routing()
-                                                                                             .oldWeight(),
-                                                                                 transitioned.newInstances(),
-                                                                                 transitioned.thresholds()
-                                                                                             .maxErrorRate(),
-                                                                                 transitioned.thresholds()
-                                                                                             .maxLatencyMs(),
-                                                                                 transitioned.thresholds()
-                                                                                             .requireManualApproval(),
-                                                                                 transitioned.cleanupPolicy()
-                                                                                             .name(),
-                                                                                 transitioned.createdAt(),
-                                                                                 System.currentTimeMillis());
-                                  var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Put<>(key, value);
-                                  return clusterNode.<Unit> apply(List.of(command))
-                                                    .timeout(KV_OPERATION_TIMEOUT)
-                                                    .map(_ -> transitioned);
-                              });
+                     .flatMap(transitioned -> cacheAndPersistUpdate(update.updateId(),
+                                                                    transitioned));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Promise<RollingUpdate> cacheAndPersistUpdate(String updateId, RollingUpdate transitioned) {
+        updates.put(updateId, transitioned);
+        var key = new AetherKey.RollingUpdateKey(updateId);
+        var value = new AetherValue.RollingUpdateValue(transitioned.updateId(),
+                                                       transitioned.artifactBase(),
+                                                       transitioned.oldVersion(),
+                                                       transitioned.newVersion(),
+                                                       transitioned.state()
+                                                                   .name(),
+                                                       transitioned.routing()
+                                                                   .newWeight(),
+                                                       transitioned.routing()
+                                                                   .oldWeight(),
+                                                       transitioned.newInstances(),
+                                                       transitioned.thresholds()
+                                                                   .maxErrorRate(),
+                                                       transitioned.thresholds()
+                                                                   .maxLatencyMs(),
+                                                       transitioned.thresholds()
+                                                                   .requireManualApproval(),
+                                                       transitioned.cleanupPolicy()
+                                                                   .name(),
+                                                       transitioned.createdAt(),
+                                                       System.currentTimeMillis());
+        var command = (KVCommand<AetherKey>)(KVCommand< ? >) new KVCommand.Put<>(key, value);
+        return clusterNode.<Unit> apply(List.of(command))
+                          .timeout(KV_OPERATION_TIMEOUT)
+                          .map(_ -> transitioned);
     }
 
     @SuppressWarnings("unchecked")

@@ -78,12 +78,7 @@ public record InventoryServiceSlice() implements Slice {
     private static final AtomicLong TOTAL_RELEASES = new AtomicLong();
     private static final AtomicLong STOCK_OUTS = new AtomicLong();
 
-    private static final ScheduledExecutorService REFILL_SCHEDULER = Executors.newSingleThreadScheduledExecutor(r -> {
-                                                                                                                    var t = new Thread(r,
-                                                                                                                                       "inventory-refill");
-                                                                                                                    t.setDaemon(true);
-                                                                                                                    return t;
-                                                                                                                });
+    private static final ScheduledExecutorService REFILL_SCHEDULER = Executors.newSingleThreadScheduledExecutor(InventoryServiceSlice::createRefillThread);
 
     static {
         STOCK.put("PROD-ABC123", new AtomicInteger(INITIAL_STOCK));
@@ -134,15 +129,23 @@ public record InventoryServiceSlice() implements Slice {
         STOCK_OUTS.set(0);
     }
 
+    private static Thread createRefillThread(Runnable r) {
+        var t = new Thread(r, "inventory-refill");
+        t.setDaemon(true);
+        return t;
+    }
+
     private static void refillStock() {
         if (INFINITE_MODE.get()) return;
         var refillAmount = REFILL_RATE.get();
-        STOCK.forEach((productId, stock) -> {
-                          var current = stock.get();
-                          if (current < INITIAL_STOCK) {
-                              stock.set(Math.min(current + refillAmount, INITIAL_STOCK));
-                          }
-                      });
+        STOCK.forEach((productId, stock) -> refillProductStock(stock, refillAmount));
+    }
+
+    private static void refillProductStock(AtomicInteger stock, int refillAmount) {
+        var current = stock.get();
+        if (current < INITIAL_STOCK) {
+            stock.set(Math.min(current + refillAmount, INITIAL_STOCK));
+        }
     }
 
     // === Slice Implementation ===
@@ -184,12 +187,12 @@ public record InventoryServiceSlice() implements Slice {
         return Option.option(STOCK.get(request.productId()))
                      .toResult(new InventoryError.ProductNotFound(request.productId()))
                      .async()
-                     .map(stock -> {
-                              var available = stock.get();
-                              return new StockAvailability(request.productId(),
-                                                           available,
-                                                           available >= request.quantity());
-                          });
+                     .map(stock -> toStockAvailability(request, stock));
+    }
+
+    private static StockAvailability toStockAvailability(CheckStockRequest request, AtomicInteger stock) {
+        var available = stock.get();
+        return new StockAvailability(request.productId(), available, available >= request.quantity());
     }
 
     private Promise<StockReservation> reserveStock(ReserveStockRequest request) {
@@ -223,11 +226,13 @@ public record InventoryServiceSlice() implements Slice {
 
     private Promise<StockReleased> releaseStock(ReleaseStockRequest request) {
         Option.option(RESERVATIONS.remove(request.reservationId()))
-              .onPresent(reservation -> {
-                             Option.option(STOCK.get(reservation.productId()))
-                                   .onPresent(stock -> stock.addAndGet(reservation.quantity()));
-                             TOTAL_RELEASES.incrementAndGet();
-                         });
+              .onPresent(InventoryServiceSlice::returnReservedStock);
         return Promise.success(new StockReleased(request.reservationId()));
+    }
+
+    private static void returnReservedStock(ReservedStock reservation) {
+        Option.option(STOCK.get(reservation.productId()))
+              .onPresent(stock -> stock.addAndGet(reservation.quantity()));
+        TOTAL_RELEASES.incrementAndGet();
     }
 }

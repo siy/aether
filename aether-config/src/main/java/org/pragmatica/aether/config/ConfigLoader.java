@@ -53,7 +53,7 @@ public final class ConfigLoader {
     /**
      * Create configuration from environment defaults only.
      */
-    public static AetherConfig fromEnvironment(Environment env) {
+    public static AetherConfig aetherConfig(Environment env) {
         return AetherConfig.forEnvironment(env);
     }
 

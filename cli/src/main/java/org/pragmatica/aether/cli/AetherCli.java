@@ -131,20 +131,24 @@ public class AetherCli implements Runnable {
             nodeAddress = connectArg;
         } else if (configArg != null && Files.exists(configArg)) {
             ConfigLoader.load(configArg)
-                        .onSuccess(config -> {
-                                       var port = config.cluster()
-                                                        .ports()
-                                                        .management();
-                                       nodeAddress = "localhost:" + port;
-                                   })
-                        .onFailure(cause -> {
-                                       System.err.println("Warning: Failed to load config: " + cause.message());
-                                       nodeAddress = DEFAULT_ADDRESS;
-                                   });
+                        .onSuccess(this::setAddressFromConfig)
+                        .onFailure(this::handleConfigLoadFailure);
             configPath = configArg;
         } else {
             nodeAddress = DEFAULT_ADDRESS;
         }
+    }
+
+    private void setAddressFromConfig(AetherConfig config) {
+        var port = config.cluster()
+                         .ports()
+                         .management();
+        nodeAddress = "localhost:" + port;
+    }
+
+    private void handleConfigLoadFailure(org.pragmatica.lang.Cause cause) {
+        System.err.println("Warning: Failed to load config: " + cause.message());
+        nodeAddress = DEFAULT_ADDRESS;
     }
 
     @Override

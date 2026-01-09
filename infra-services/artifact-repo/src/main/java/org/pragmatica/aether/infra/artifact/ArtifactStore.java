@@ -9,6 +9,7 @@ import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 
@@ -190,7 +191,7 @@ class ArtifactStoreImpl implements ArtifactStore {
         }
         return Promise.allOf(chunkPromises)
                       .map(results -> reassembleChunks(results.stream()
-                                                              .map(r -> r.unwrap())
+                                                              .map(Result::unwrap)
                                                               .toList(),
                                                        (int) meta.size()));
     }

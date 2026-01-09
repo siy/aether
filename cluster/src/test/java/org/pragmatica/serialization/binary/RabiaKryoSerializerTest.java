@@ -13,13 +13,13 @@ import org.pragmatica.serialization.kryo.KryoSerializer;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.pragmatica.consensus.rabia.infrastructure.TestCluster.StringKey.key;
 
 class RabiaKryoSerializerTest {
 
     @Test
-    void testRoundTripForProtocolMessage() {
+    void roundTrip_succeeds_forProtocolMessage() {
         var serializer = KryoSerializer.kryoSerializer(CustomClasses::configure, StringKey::register);
         var deserializer = KryoDeserializer.kryoDeserializer(CustomClasses::configure, StringKey::register);
 
@@ -33,6 +33,6 @@ class RabiaKryoSerializerTest {
         var serialized = serializer.encode(message);
         var deserialized = deserializer.decode(serialized);
 
-        assertEquals(message, deserialized);
+        assertThat(deserialized).isEqualTo(message);
     }
 }

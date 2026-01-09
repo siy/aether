@@ -79,7 +79,7 @@ public final class ForgeServer {
 
     public static void main(String[] args) {
         // Parse CLI args with env var overrides
-        var startupConfigResult = StartupConfig.parse(args);
+        var startupConfigResult = StartupConfig.startupConfig(args);
         startupConfigResult.onFailure(cause -> {
             log.error("Configuration error: {}", cause.message());
             System.exit(1);
@@ -111,9 +111,11 @@ public final class ForgeServer {
     }
 
     private static ForgeConfig createDefaultForgeConfig(StartupConfig startupConfig) {
+        // Validation already done in StartupConfig, safe to unwrap
         return ForgeConfig.forgeConfig(startupConfig.clusterSize(),
                                        ForgeConfig.DEFAULT_MANAGEMENT_PORT,
-                                       startupConfig.port());
+                                       startupConfig.port())
+                          .or(ForgeConfig.defaultConfig());
     }
 
     private static void printBanner(ForgeConfig forgeConfig, StartupConfig startupConfig) {

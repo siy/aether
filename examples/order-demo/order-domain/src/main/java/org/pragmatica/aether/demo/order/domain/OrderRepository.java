@@ -91,9 +91,16 @@ final class InMemoryOrderRepository implements OrderRepository {
                                      CustomerId.customerId("CUST-00000001")
                                                .expect("Invalid customer ID: CUST-00000001"),
                                      OrderStatus.CONFIRMED,
-                                     Money.usd("129.97"),
-                                     List.of(new OrderItem("PROD-ABC123", 2, Money.usd("29.99")),
-                                             new OrderItem("PROD-DEF456", 1, Money.usd("49.99"))),
+                                     Money.usd("129.97")
+                                          .expect("Invalid mock order total"),
+                                     List.of(new OrderItem("PROD-ABC123",
+                                                           2,
+                                                           Money.usd("29.99")
+                                                                .expect("Invalid mock unit price")),
+                                             new OrderItem("PROD-DEF456",
+                                                           1,
+                                                           Money.usd("49.99")
+                                                                .expect("Invalid mock unit price"))),
                                      List.of("RES-11111111", "RES-22222222"),
                                      now.minusSeconds(3600),
                                      now);
@@ -105,8 +112,12 @@ final class InMemoryOrderRepository implements OrderRepository {
                                      CustomerId.customerId("CUST-00000002")
                                                .expect("Invalid customer ID: CUST-00000002"),
                                      OrderStatus.SHIPPED,
-                                     Money.usd("99.99"),
-                                     List.of(new OrderItem("PROD-GHI789", 1, Money.usd("99.99"))),
+                                     Money.usd("99.99")
+                                          .expect("Invalid mock order total"),
+                                     List.of(new OrderItem("PROD-GHI789",
+                                                           1,
+                                                           Money.usd("99.99")
+                                                                .expect("Invalid mock unit price"))),
                                      List.of("RES-33333333"),
                                      now.minusSeconds(86400),
                                      now.minusSeconds(3600));

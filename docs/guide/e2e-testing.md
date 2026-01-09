@@ -24,7 +24,7 @@ class MyE2ETest {
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(3, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(3, PROJECT_ROOT);
     }
 
     @AfterEach
@@ -143,10 +143,10 @@ Manages multi-node clusters for testing.
 
 ```java
 // Create 3-node cluster
-var cluster = AetherCluster.create(3, projectRoot);
+var cluster = AetherCluster.aetherCluster(3, projectRoot);
 
 // Create 5-node cluster for higher availability
-var cluster = AetherCluster.create(5, projectRoot);
+var cluster = AetherCluster.aetherCluster(5, projectRoot);
 ```
 
 ### Lifecycle
@@ -413,7 +413,7 @@ Each test should create and destroy its own cluster:
 ```java
 @BeforeEach
 void setUp() {
-    cluster = AetherCluster.create(3, PROJECT_ROOT);
+    cluster = AetherCluster.aetherCluster(3, PROJECT_ROOT);
 }
 
 @AfterEach
@@ -443,7 +443,7 @@ await().atMost(Duration.ofSeconds(30))
 - Clean up Docker networks
 
 ```java
-try (var cluster = AetherCluster.create(3, projectRoot)) {
+try (var cluster = AetherCluster.aetherCluster(3, projectRoot)) {
     cluster.start();
     // ... test code
 }  // Automatically cleaned up

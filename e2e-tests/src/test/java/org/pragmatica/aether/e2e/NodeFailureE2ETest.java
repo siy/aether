@@ -29,7 +29,7 @@ class NodeFailureE2ETest {
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(5, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(5, PROJECT_ROOT);
         cluster.start();
         cluster.awaitQuorum();
     }

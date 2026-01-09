@@ -68,18 +68,20 @@ public interface SliceManifest {
         var jarPath = path;
         return Result.lift(Causes::fromThrowable,
                            () -> new JarFile(jarPath))
-                     .flatMap(jarFile -> {
-                                  try (jarFile) {
-                                      var manifest = jarFile.getManifest();
-                                      return manifest == null
-                                             ? MANIFEST_NOT_FOUND_FN.apply(jarUrl.toString())
-                                                                    .result()
-                                             : Result.success(manifest);
-                                  } catch (IOException e) {
-                                      return Causes.fromThrowable(e)
-                                                   .result();
-                                  }
-                              });
+                     .flatMap(jarFile -> extractManifest(jarFile, jarUrl));
+    }
+
+    private static Result<Manifest> extractManifest(JarFile jarFile, URL jarUrl) {
+        try (jarFile) {
+            var manifest = jarFile.getManifest();
+            return manifest == null
+                   ? MANIFEST_NOT_FOUND_FN.apply(jarUrl.toString())
+                                          .result()
+                   : Result.success(manifest);
+        } catch (IOException e) {
+            return Causes.fromThrowable(e)
+                         .result();
+        }
     }
 
     private static Result<Manifest> readManifestFromUrl(URL manifestUrl) {

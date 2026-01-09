@@ -30,7 +30,7 @@ DeploymentStatus status) {
         SUCCESS,
         FAILED_LOADING,
         FAILED_ACTIVATING;
-        public static DeploymentStatus fromString(String value) {
+        public static DeploymentStatus deploymentStatus(String value) {
             return switch (value) {
                 case "IN_PROGRESS" -> IN_PROGRESS;
                 case "SUCCESS" -> SUCCESS;
@@ -108,7 +108,7 @@ DeploymentStatus status) {
                                                               entry.loadedTime(),
                                                               entry.activateTime(),
                                                               entry.activeTime(),
-                                                              DeploymentStatus.fromString(entry.status())))
+                                                              DeploymentStatus.deploymentStatus(entry.status())))
                        .option();
     }
 

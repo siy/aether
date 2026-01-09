@@ -32,7 +32,7 @@ public record RangeGenerator(int min, int max) implements PatternGenerator {
     /**
      * Parses a range specification like "1-100" or "-50-50".
      */
-    public static Result<PatternGenerator> parse(String rangeSpec) {
+    public static Result<PatternGenerator> rangeGenerator(String rangeSpec) {
         var matcher = RANGE_PATTERN.matcher(rangeSpec.trim());
         if (!matcher.matches()) {
             return INVALID_RANGE.apply(rangeSpec)

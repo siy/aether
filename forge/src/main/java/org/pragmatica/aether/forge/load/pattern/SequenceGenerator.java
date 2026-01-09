@@ -33,7 +33,7 @@ public final class SequenceGenerator implements PatternGenerator {
     /**
      * Parses a sequence specification like "1000".
      */
-    public static Result<PatternGenerator> parse(String seqSpec) {
+    public static Result<PatternGenerator> sequenceGenerator(String seqSpec) {
         return Option.option(seqSpec)
                      .map(String::trim)
                      .filter(s -> !s.isBlank())

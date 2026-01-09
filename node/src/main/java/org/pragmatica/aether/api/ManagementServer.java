@@ -249,37 +249,50 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     private void handleApiGet(ChannelHandlerContext ctx, AetherNode node, String uri) {
-        // Handle chaos panel endpoint (returns empty for Node, Forge overrides)
+        if (handleSpecialEndpoints(ctx, node, uri)) {
+            return;
+        }
+        routeStandardEndpoint(ctx, node, uri);
+    }
+
+    private boolean handleSpecialEndpoints(ChannelHandlerContext ctx, AetherNode node, String uri) {
         if (uri.equals("/panel/chaos")) {
             sendText(ctx, "");
-            return;
+            return true;
         }
-        // Handle rolling update paths
         if (uri.startsWith("/rolling-update/") || uri.equals("/rolling-updates")) {
             handleRollingUpdateGet(ctx, node, uri);
-            return;
+            return true;
         }
-        // Handle Prometheus metrics endpoint
         if (uri.equals("/metrics/prometheus")) {
             sendPrometheus(ctx, observability.scrape());
-            return;
+            return true;
         }
-        // Handle invocation metrics with optional query parameters
         if (uri.startsWith("/invocation-metrics")) {
-            var path = extractPath(uri);
-            if (path.equals("/invocation-metrics/slow")) {
-                sendJson(ctx, buildSlowInvocationsResponse(node));
-            } else if (path.equals("/invocation-metrics/strategy")) {
-                sendJson(ctx, buildStrategyResponse(node));
-            } else if (path.equals("/invocation-metrics")) {
-                var artifactFilter = extractQueryParam(uri, "artifact");
-                var methodFilter = extractQueryParam(uri, "method");
-                sendJson(ctx, buildInvocationMetricsResponse(node, artifactFilter, methodFilter));
-            } else {
-                sendError(ctx, HttpResponseStatus.NOT_FOUND);
-            }
-            return;
+            handleInvocationMetricsGet(ctx, node, uri);
+            return true;
         }
+        return false;
+    }
+
+    private void handleInvocationMetricsGet(ChannelHandlerContext ctx, AetherNode node, String uri) {
+        var path = extractPath(uri);
+        var response = switch (path) {
+            case "/invocation-metrics/slow" -> buildSlowInvocationsResponse(node);
+            case "/invocation-metrics/strategy" -> buildStrategyResponse(node);
+            case "/invocation-metrics" -> buildInvocationMetricsResponse(node,
+                                                                         extractQueryParam(uri, "artifact"),
+                                                                         extractQueryParam(uri, "method"));
+            default -> (String) null;
+        };
+        if (response != null) {
+            sendJson(ctx, response);
+        } else {
+            sendError(ctx, HttpResponseStatus.NOT_FOUND);
+        }
+    }
+
+    private void routeStandardEndpoint(ChannelHandlerContext ctx, AetherNode node, String uri) {
         var response = switch (uri) {
             case "/status" -> buildStatusResponse(node);
             case "/nodes" -> buildNodesResponse(node);
@@ -298,7 +311,6 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             case "/ttm/status" -> buildTtmStatusResponse(node);
             case "/node-metrics" -> buildNodeMetricsResponse(node);
             case "/events" -> "[]";
-            // Empty events for Node (Forge provides events)
             default -> (String) null;
         };
         if (response != null) {
@@ -707,7 +719,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             sendJsonError(ctx, HttpResponseStatus.BAD_REQUEST, "Missing routing field");
             return;
         }
-        org.pragmatica.aether.update.VersionRouting.parse(routingMatch.group(1))
+        org.pragmatica.aether.update.VersionRouting.versionRouting(routingMatch.group(1))
            .onSuccess(routing -> node.rollingUpdateManager()
                                      .adjustRouting(updateId, routing)
                                      .onSuccess(update -> sendJson(ctx,

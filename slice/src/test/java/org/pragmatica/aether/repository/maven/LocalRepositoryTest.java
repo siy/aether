@@ -10,8 +10,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.junit.jupiter.api.Assertions;
+
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.fail;
 
 class LocalRepositoryTest {
 
@@ -34,7 +35,7 @@ class LocalRepositoryTest {
         // When: locating the artifact
         repository.locate(artifact)
                   .await()
-                  .onFailure(cause -> fail("Expected success but got: " + cause.message()))
+                  .onFailure(cause -> Assertions.fail(cause.message()))
                   .onSuccess(location -> {
                       // Then: location points to the JAR
                       assertThat(location.artifact()).isEqualTo(artifact);
@@ -50,7 +51,7 @@ class LocalRepositoryTest {
         // When: locating the artifact
         repository.locate(artifact)
                   .await()
-                  .onSuccessRun(() -> fail("Expected failure for non-existent artifact"))
+                  .onSuccessRun(Assertions::fail)
                   .onFailure(cause -> {
                       // Then: error message indicates artifact not found
                       assertThat(cause.message()).contains("Artifact not found");
@@ -67,7 +68,7 @@ class LocalRepositoryTest {
         // When: locating the artifact
         repository.locate(artifact)
                   .await()
-                  .onFailure(cause -> fail("Expected success but got: " + cause.message()))
+                  .onFailure(cause -> Assertions.fail(cause.message()))
                   .onSuccess(location -> {
                       // Then: location includes qualifier in filename
                       assertThat(location.url().getPath()).endsWith("test-slice-1.0.0-SNAPSHOT.jar");
@@ -83,7 +84,7 @@ class LocalRepositoryTest {
         // When: locating the artifact
         repository.locate(artifact)
                   .await()
-                  .onFailure(cause -> fail("Expected success but got: " + cause.message()))
+                  .onFailure(cause -> Assertions.fail(cause.message()))
                   .onSuccess(location -> {
                       // Then: group ID is converted to path correctly
                       var urlPath = location.url().getPath();

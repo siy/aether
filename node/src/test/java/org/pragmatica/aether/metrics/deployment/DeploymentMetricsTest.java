@@ -220,15 +220,15 @@ class DeploymentMetricsTest {
 
     @Test
     void deploymentStatus_fromString_parses_all_values() {
-        assertThat(DeploymentStatus.fromString("IN_PROGRESS")).isEqualTo(DeploymentStatus.IN_PROGRESS);
-        assertThat(DeploymentStatus.fromString("SUCCESS")).isEqualTo(DeploymentStatus.SUCCESS);
-        assertThat(DeploymentStatus.fromString("FAILED_LOADING")).isEqualTo(DeploymentStatus.FAILED_LOADING);
-        assertThat(DeploymentStatus.fromString("FAILED_ACTIVATING")).isEqualTo(DeploymentStatus.FAILED_ACTIVATING);
+        assertThat(DeploymentStatus.deploymentStatus("IN_PROGRESS")).isEqualTo(DeploymentStatus.IN_PROGRESS);
+        assertThat(DeploymentStatus.deploymentStatus("SUCCESS")).isEqualTo(DeploymentStatus.SUCCESS);
+        assertThat(DeploymentStatus.deploymentStatus("FAILED_LOADING")).isEqualTo(DeploymentStatus.FAILED_LOADING);
+        assertThat(DeploymentStatus.deploymentStatus("FAILED_ACTIVATING")).isEqualTo(DeploymentStatus.FAILED_ACTIVATING);
     }
 
     @Test
     void deploymentStatus_fromString_defaults_to_in_progress_for_unknown() {
-        assertThat(DeploymentStatus.fromString("UNKNOWN")).isEqualTo(DeploymentStatus.IN_PROGRESS);
-        assertThat(DeploymentStatus.fromString("")).isEqualTo(DeploymentStatus.IN_PROGRESS);
+        assertThat(DeploymentStatus.deploymentStatus("UNKNOWN")).isEqualTo(DeploymentStatus.IN_PROGRESS);
+        assertThat(DeploymentStatus.deploymentStatus("")).isEqualTo(DeploymentStatus.IN_PROGRESS);
     }
 }

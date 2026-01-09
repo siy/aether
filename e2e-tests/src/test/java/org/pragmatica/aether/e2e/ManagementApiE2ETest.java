@@ -31,7 +31,7 @@ class ManagementApiE2ETest {
 
     @BeforeEach
     void setUp() {
-        cluster = AetherCluster.create(3, PROJECT_ROOT);
+        cluster = AetherCluster.aetherCluster(3, PROJECT_ROOT);
         cluster.start();
         cluster.awaitQuorum();
     }

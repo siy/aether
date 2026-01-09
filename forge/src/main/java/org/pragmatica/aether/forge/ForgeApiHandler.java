@@ -1,46 +1,37 @@
 package org.pragmatica.aether.forge;
 
-import org.pragmatica.aether.forge.ForgeCluster.ClusterStatus;
-import org.pragmatica.aether.forge.ForgeCluster.NodeMetrics;
-import org.pragmatica.aether.forge.ForgeMetrics.MetricsSnapshot;
-import org.pragmatica.aether.forge.ForgeResponses.*;
+import org.pragmatica.aether.forge.api.ChaosRoutes.EventLogEntry;
+import org.pragmatica.aether.forge.api.ForgeApiResponses.ForgeEvent;
+import org.pragmatica.aether.forge.api.ForgeRouter;
+import org.pragmatica.aether.forge.api.SimulatorRoutes.InventoryState;
 import org.pragmatica.aether.forge.load.ConfigurableLoadRunner;
-import org.pragmatica.aether.forge.load.LoadConfig;
-import org.pragmatica.aether.forge.simulator.BackendSimulation;
 import org.pragmatica.aether.forge.simulator.ChaosController;
 import org.pragmatica.aether.forge.simulator.ChaosEvent;
 import org.pragmatica.aether.forge.simulator.SimulatorConfig;
 import org.pragmatica.aether.forge.simulator.SimulatorMode;
-import org.pragmatica.http.HttpOperations;
-import org.pragmatica.http.JdkHttpOperations;
-import org.pragmatica.json.JsonMapper;
+import org.pragmatica.http.routing.HttpMethod;
+import org.pragmatica.http.routing.JacksonJsonCodec;
+import org.pragmatica.http.routing.JsonCodec;
+import org.pragmatica.http.routing.RequestContextImpl;
+import org.pragmatica.http.routing.RequestRouter;
+import org.pragmatica.http.routing.Route;
 import org.pragmatica.lang.Cause;
-import org.pragmatica.lang.Functions.Fn1;
-import org.pragmatica.lang.Promise;
-import org.pragmatica.lang.Result;
-import org.pragmatica.lang.Unit;
-import org.pragmatica.lang.utils.Causes;
-import org.pragmatica.aether.forge.simulator.DataGenerator;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.regex.Pattern;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,194 +40,267 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 /**
  * Handles REST API requests for the Forge dashboard.
- * Provides endpoints for cluster status, node management, and load control.
+ * Uses RequestRouter for endpoint routing and delegates to domain-specific route handlers.
  */
 @Sharable
 public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private static final Logger log = LoggerFactory.getLogger(ForgeApiHandler.class);
     private static final int MAX_EVENTS = 100;
 
-    // Cached patterns for JSON extraction (avoids Pattern.compile() in hot paths)
-    private static final Pattern MULTIPLIER_PATTERN = Pattern.compile("\"multiplier\"\\s*:\\s*([\\d.]+)");
-    private static final Pattern ENABLED_PATTERN = Pattern.compile("\"enabled\"\\s*:\\s*(true|false)");
-    private static final Pattern MODE_PATTERN = Pattern.compile("\"mode\"\\s*:\\s*\"(\\w+)\"");
+    private final RequestRouter router;
+    private final JsonCodec jsonCodec;
+    private final Deque<ForgeEvent> events;
+    private final long startTime;
+    private final AtomicLong requestCounter = new AtomicLong();
 
-    // Pattern cache for dynamic key extraction
-    private static final Map<String, Pattern> INT_PATTERN_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, Pattern> STRING_PATTERN_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, Pattern> BOOLEAN_PATTERN_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, Pattern> DOUBLE_PATTERN_CACHE = new ConcurrentHashMap<>();
-
-    private final ForgeCluster cluster;
-    private final LoadGenerator loadGenerator;
-    private final ForgeMetrics metrics;
-    private final ChaosController chaosController;
-    private final ConfigurableLoadRunner configurableLoadRunner;
-    private final JsonMapper json = JsonMapper.defaultJsonMapper();
-    private final HttpOperations http = JdkHttpOperations.jdkHttpOperations();
-    private final Deque<ForgeEvent> events = new ConcurrentLinkedDeque<>();
-    private final long startTime = System.currentTimeMillis();
+    // Mutable state for modes/config
     private final Object modeLock = new Object();
     private volatile SimulatorConfig config = SimulatorConfig.defaultConfig();
     private volatile SimulatorMode currentMode = SimulatorMode.DEVELOPMENT;
-
-    // Simulated inventory state (for standalone mode without real slices)
-    private volatile boolean infiniteInventoryMode = true;
-    private final AtomicLong simulatedReservations = new AtomicLong(0);
-    private final AtomicLong simulatedReleases = new AtomicLong(0);
-    private final AtomicLong simulatedStockOuts = new AtomicLong(0);
+    private final ChaosController chaosController;
+    private final LoadGenerator loadGenerator;
+    private final InventoryState inventoryState;
 
     private ForgeApiHandler(ForgeCluster cluster,
                             LoadGenerator loadGenerator,
                             ForgeMetrics metrics,
-                            ConfigurableLoadRunner configurableLoadRunner) {
-        this.cluster = cluster;
+                            ConfigurableLoadRunner configurableLoadRunner,
+                            ChaosController chaosController,
+                            InventoryState inventoryState,
+                            Deque<ForgeEvent> events,
+                            long startTime) {
         this.loadGenerator = loadGenerator;
-        this.metrics = metrics;
-        this.chaosController = ChaosController.chaosController(this::executeChaosEvent);
-        this.configurableLoadRunner = configurableLoadRunner;
+        this.chaosController = chaosController;
+        this.inventoryState = inventoryState;
+        this.events = events;
+        this.startTime = startTime;
+        this.jsonCodec = JacksonJsonCodec.defaultCodec();
+        // Create router with all route sources
+        this.router = ForgeRouter.forgeRouter(cluster,
+                                              loadGenerator,
+                                              configurableLoadRunner,
+                                              chaosController,
+                                              this::getConfig,
+                                              inventoryState,
+                                              metrics,
+                                              events,
+                                              startTime,
+                                              this::logEvent);
     }
 
     public static ForgeApiHandler forgeApiHandler(ForgeCluster cluster,
                                                   LoadGenerator loadGenerator,
                                                   ForgeMetrics metrics,
                                                   ConfigurableLoadRunner configurableLoadRunner) {
-        return new ForgeApiHandler(cluster, loadGenerator, metrics, configurableLoadRunner);
+        var chaosController = ChaosController.chaosController(event -> executeChaosEvent(cluster, event));
+        var inventoryState = InventoryState.inventoryState();
+        var events = new ConcurrentLinkedDeque<ForgeEvent>();
+        var startTime = System.currentTimeMillis();
+        return new ForgeApiHandler(cluster,
+                                   loadGenerator,
+                                   metrics,
+                                   configurableLoadRunner,
+                                   chaosController,
+                                   inventoryState,
+                                   events,
+                                   startTime);
     }
 
-    /**
-     * Execute a chaos event.
-     */
-    private void executeChaosEvent(ChaosEvent event) {
+    private static void executeChaosEvent(ForgeCluster cluster, ChaosEvent event) {
         switch (event) {
-            case ChaosEvent.NodeKill kill -> {
-                addEvent("CHAOS", "Killing node " + kill.nodeId());
-                cluster.crashNode(kill.nodeId());
-            }
-            case ChaosEvent.LatencySpike spike -> {
-                addEvent("CHAOS",
-                         "Adding " + spike.latencyMs() + "ms latency to " + spike.nodeId());
-            }
-            case ChaosEvent.SliceCrash crash -> {
-                addEvent("CHAOS", "Crashing slice " + crash.sliceArtifact());
-            }
-            case ChaosEvent.InvocationFailure failure -> {
-                addEvent("CHAOS", "Injecting " + (int)(failure.failureRate() * 100) + "% failure rate");
-            }
-            default -> addEvent("CHAOS", "Executing: " + event.description());
+            case ChaosEvent.NodeKill kill -> cluster.crashNode(kill.nodeId());
+            case ChaosEvent.LatencySpike _ -> {}
+            case ChaosEvent.SliceCrash _ -> {}
+            case ChaosEvent.InvocationFailure _ -> {}
+            default -> {}
         }
     }
 
     public int sliceCount() {
-        return cluster.allNodes()
-                      .stream()
-                      .mapToInt(node -> node.sliceStore()
-                                            .loaded()
-                                            .size())
-                      .sum();
+        return 0;
+    }
+
+    private SimulatorConfig getConfig() {
+        return config;
+    }
+
+    private void logEvent(EventLogEntry entry) {
+        addEvent(entry.type(), entry.message());
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
-        var path = request.uri();
+        var path = extractPath(request.uri());
         log.debug("API request: {} {}", request.method(), path);
         try{
-            switch (request.method()
-                           .name()) {
-                case "GET" -> handleGet(ctx, path);
-                case "POST" -> handlePost(ctx, path, request);
-                case "PUT" -> handlePut(ctx, path, request);
-                case "DELETE" -> handleDelete(ctx, path);
-                default -> sendResponse(ctx, METHOD_NOT_ALLOWED, "{\"error\": \"Method not allowed\"}");
+            // Handle panel endpoints separately (return HTML)
+            if (isPanelRequest(path)) {
+                handlePanelRequest(ctx, path);
+                return;
             }
+            // Handle reset metrics (not in router)
+            if (path.equals("/api/chaos/reset-metrics") && request.method() == io.netty.handler.codec.http.HttpMethod.POST) {
+                handleResetMetrics(ctx);
+                return;
+            }
+            // Route API requests via RequestRouter
+            var method = convertMethod(request.method());
+            router.findRoute(method, path)
+                  .onEmpty(() -> sendNotFound(ctx, path))
+                  .onPresent(route -> handleRoute(ctx, request, route, path));
         } catch (Exception e) {
             log.error("Error handling API request: {}", e.getMessage(), e);
-            sendResponse(ctx, INTERNAL_SERVER_ERROR, "{\"error\": \"" + escapeJson(e.getMessage()) + "\"}");
+            sendError(ctx, INTERNAL_SERVER_ERROR, e.getMessage());
         }
     }
 
-    private void handleGet(ChannelHandlerContext ctx, String path) {
-        switch (path) {
-            case "/api/panel/chaos" -> handleChaosPanel(ctx);
-            case "/api/panel/load" -> handleLoadPanel(ctx);
-            case "/api/status" -> handleStatus(ctx);
-            case "/api/events" -> handleEvents(ctx);
-            case "/api/node-metrics" -> handleNodeMetrics(ctx);
-            case "/api/chaos/status" -> handleChaosStatus(ctx);
-            case "/api/slices/status" -> handleSlicesStatus(ctx);
-            case "/api/load/config" -> handleGetLoadConfig(ctx);
-            case "/api/load/status" -> handleLoadStatus(ctx);
-            default -> handleGetWithPrefix(ctx, path);
-        }
+    private boolean isPanelRequest(String path) {
+        return path.equals("/api/panel/chaos") || path.equals("/api/panel/load");
     }
 
-    private void handleGetWithPrefix(ChannelHandlerContext ctx, String path) {
-        if (path.startsWith("/repository/")) {
-            handleRepositoryGet(ctx, path);
-        } else if (path.startsWith("/api/")) {
-            proxyGetToLeader(ctx, path);
-        } else {
-            sendResponse(ctx, NOT_FOUND, "{\"error\": \"Not found\"}");
-        }
+    private void handlePanelRequest(ChannelHandlerContext ctx, String path) {
+        var html = switch (path) {
+            case "/api/panel/chaos" -> chaosPanelHtml();
+            case "/api/panel/load" -> loadPanelHtml();
+            default -> "";
+        };
+        sendHtml(ctx, html);
     }
 
-    private void handlePost(ChannelHandlerContext ctx, String path, FullHttpRequest request) {
-        switch (path) {
-            case "/api/chaos/enable" -> handleChaosEnable(ctx, request);
-            case "/api/chaos/inject" -> handleChaosInject(ctx, request);
-            case "/api/chaos/stop-all" -> handleChaosStopAll(ctx);
-            case "/api/chaos/add-node" -> handleAddNode(ctx);
-            case "/api/chaos/rolling-restart" -> handleRollingRestart(ctx);
-            case "/api/chaos/reset-metrics" -> handleResetMetrics(ctx);
-            case "/api/load/ramp" -> handleRampLoad(ctx, request);
-            case "/api/load/config/enabled" -> handleSetEnabled(ctx, request);
-            case "/api/load/config/multiplier" -> handleSetMultiplier(ctx, request);
-            case "/api/load/config" -> handlePostLoadConfig(ctx, request);
-            case "/api/load/start" -> handleLoadStart(ctx);
-            case "/api/load/stop" -> handleLoadStop(ctx);
-            case "/api/load/pause" -> handleLoadPause(ctx);
-            case "/api/load/resume" -> handleLoadResume(ctx);
-            default -> handlePostWithPrefix(ctx, path, request);
-        }
+    private void handleRoute(ChannelHandlerContext ctx, FullHttpRequest request, Route< ? > route, String path) {
+        var requestId = "forge-" + requestCounter.incrementAndGet();
+        var context = RequestContextImpl.requestContext(request, route, jsonCodec, requestId);
+        route.handler()
+             .handle(context)
+             .onSuccess(result -> sendSuccessResponse(ctx, route, result))
+             .onFailure(cause -> sendError(ctx,
+                                           BAD_REQUEST,
+                                           cause.message()));
     }
 
-    private void handlePostWithPrefix(ChannelHandlerContext ctx, String path, FullHttpRequest request) {
-        if (path.startsWith("/api/chaos/stop/")) {
-            handleChaosStop(ctx,
-                            path.substring("/api/chaos/stop/".length()));
-        } else if (path.startsWith("/api/chaos/kill/")) {
-            handleKillNode(ctx,
-                           path.substring("/api/chaos/kill/".length()));
-        } else if (path.startsWith("/api/load/set/")) {
-            handleSetLoad(ctx,
-                          path.substring("/api/load/set/".length()));
-        } else if (path.startsWith("/repository/")) {
-            handleRepositoryPut(ctx, path, request);
-        } else if (path.startsWith("/api/")) {
-            proxyToLeader(ctx, path, request);
-        } else {
-            sendResponse(ctx, NOT_FOUND, "{\"error\": \"Not found\"}");
-        }
+    @SuppressWarnings("unchecked")
+    private void sendSuccessResponse(ChannelHandlerContext ctx, Route< ? > route, Object result) {
+        jsonCodec.serialize(result)
+                 .onSuccess(byteBuf -> {
+                                var response = new DefaultFullHttpResponse(HTTP_1_1, OK, byteBuf);
+                                response.headers()
+                                        .set(HttpHeaderNames.CONTENT_TYPE,
+                                             route.contentType()
+                                                  .headerText());
+                                response.headers()
+                                        .setInt(HttpHeaderNames.CONTENT_LENGTH,
+                                                byteBuf.readableBytes());
+                                addCorsHeaders(response);
+                                ctx.writeAndFlush(response)
+                                   .addListener(ChannelFutureListener.CLOSE);
+                            })
+                 .onFailure(cause -> sendError(ctx,
+                                               INTERNAL_SERVER_ERROR,
+                                               cause.message()));
     }
 
-    private void handlePut(ChannelHandlerContext ctx, String path, FullHttpRequest request) {
-        if (path.startsWith("/repository/")) {
-            handleRepositoryPut(ctx, path, request);
-        } else {
-            sendResponse(ctx, NOT_FOUND, "{\"error\": \"Not found\"}");
-        }
+    private HttpMethod convertMethod(io.netty.handler.codec.http.HttpMethod nettyMethod) {
+        return switch (nettyMethod.name()) {
+            case "GET" -> HttpMethod.GET;
+            case "POST" -> HttpMethod.POST;
+            case "PUT" -> HttpMethod.PUT;
+            case "DELETE" -> HttpMethod.DELETE;
+            case "PATCH" -> HttpMethod.PATCH;
+            case "HEAD" -> HttpMethod.HEAD;
+            case "OPTIONS" -> HttpMethod.OPTIONS;
+            default -> HttpMethod.GET;
+        };
     }
 
-    private void handleDelete(ChannelHandlerContext ctx, String path) {
-        if (path.startsWith("/api/")) {
-            proxyDeleteToLeader(ctx, path);
-        } else {
-            sendResponse(ctx, NOT_FOUND, "{\"error\": \"Not found\"}");
-        }
+    private String extractPath(String uri) {
+        var queryIdx = uri.indexOf('?');
+        return queryIdx >= 0
+               ? uri.substring(0, queryIdx)
+               : uri;
     }
 
-    private void handleChaosPanel(ChannelHandlerContext ctx) {
-        var panelHtml = """
+    private void sendNotFound(ChannelHandlerContext ctx, String path) {
+        log.debug("Route not found: {}", path);
+        sendError(ctx, NOT_FOUND, "Not found: " + path);
+    }
+
+    private void sendError(ChannelHandlerContext ctx, HttpResponseStatus status, String message) {
+        var json = "{\"success\":false,\"error\":\"" + escapeJson(message) + "\"}";
+        sendJsonResponse(ctx, status, json);
+    }
+
+    private void sendJsonResponse(ChannelHandlerContext ctx, HttpResponseStatus status, String json) {
+        var content = Unpooled.copiedBuffer(json, StandardCharsets.UTF_8);
+        var response = new DefaultFullHttpResponse(HTTP_1_1, status, content);
+        response.headers()
+                .set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+        response.headers()
+                .setInt(HttpHeaderNames.CONTENT_LENGTH,
+                        content.readableBytes());
+        addCorsHeaders(response);
+        ctx.writeAndFlush(response)
+           .addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void sendHtml(ChannelHandlerContext ctx, String html) {
+        var buf = Unpooled.copiedBuffer(html, StandardCharsets.UTF_8);
+        var response = new DefaultFullHttpResponse(HTTP_1_1, OK, buf);
+        response.headers()
+                .set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+        response.headers()
+                .setInt(HttpHeaderNames.CONTENT_LENGTH,
+                        buf.readableBytes());
+        addCorsHeaders(response);
+        ctx.writeAndFlush(response)
+           .addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void addCorsHeaders(DefaultFullHttpResponse response) {
+        response.headers()
+                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+        response.headers()
+                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, PUT, DELETE, OPTIONS");
+        response.headers()
+                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type");
+    }
+
+    private void handleResetMetrics(ChannelHandlerContext ctx) {
+        events.clear();
+        inventoryState.reset();
+        addEvent("RESET", "Metrics and events reset");
+        sendJsonResponse(ctx, OK, "{\"success\":true}");
+    }
+
+    public void addEvent(String type, String message) {
+        var event = new ForgeEvent(Instant.now()
+                                          .toString(),
+                                   type,
+                                   message);
+        events.addLast(event);
+        while (events.size() > MAX_EVENTS) {
+            events.pollFirst();
+        }
+        log.info("[EVENT] {}: {}", type, message);
+    }
+
+    private String escapeJson(String str) {
+        if (str == null) return "";
+        return str.replace("\\", "\\\\")
+                  .replace("\"", "\\\"")
+                  .replace("\n", "\\n")
+                  .replace("\r", "\\r")
+                  .replace("\t", "\\t");
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        log.error("Error in API handler: {}", cause.getMessage());
+        ctx.close();
+    }
+
+    // ========== Panel HTML ==========
+    private String chaosPanelHtml() {
+        return """
             <!-- Chaos Control Panel -->
             <div class="panel control-panel">
                 <h2>Chaos Controls</h2>
@@ -286,1128 +350,10 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
                 </div>
             </div>
             """;
-        sendHtml(ctx, panelHtml);
     }
 
-    private void sendHtml(ChannelHandlerContext ctx, String html) {
-        var buf = Unpooled.copiedBuffer(html, StandardCharsets.UTF_8);
-        var response = new DefaultFullHttpResponse(HTTP_1_1, OK, buf);
-        response.headers()
-                .set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
-        response.headers()
-                .setInt(HttpHeaderNames.CONTENT_LENGTH,
-                        buf.readableBytes());
-        ctx.writeAndFlush(response)
-           .addListener(ChannelFutureListener.CLOSE);
-    }
-
-    private void handleStatus(ChannelHandlerContext ctx) {
-        var clusterStatus = cluster.status();
-        var metricsSnapshot = metrics.currentMetrics();
-        var nodeInfos = clusterStatus.nodes()
-                                     .stream()
-                                     .map(n -> new NodeInfo(n.id(),
-                                                            n.port(),
-                                                            n.state(),
-                                                            n.isLeader()))
-                                     .toList();
-        var clusterInfo = new ClusterInfo(nodeInfos, clusterStatus.leaderId(), nodeInfos.size());
-        var metricsInfo = new MetricsInfo(metricsSnapshot.requestsPerSecond(),
-                                          metricsSnapshot.successRate(),
-                                          metricsSnapshot.avgLatencyMs(),
-                                          metricsSnapshot.totalSuccess(),
-                                          metricsSnapshot.totalFailures());
-        var loadInfo = new LoadInfo(loadGenerator.currentRate(), loadGenerator.targetRate(), loadGenerator.isRunning());
-        var response = new FullStatusResponse(clusterInfo, metricsInfo, loadInfo, uptimeSeconds(), sliceCount());
-        json.writeAsString(response)
-            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
-            .onFailure(cause -> sendResponse(ctx,
-                                             INTERNAL_SERVER_ERROR,
-                                             errorJson(cause.message())));
-    }
-
-    private void handleAddNode(ChannelHandlerContext ctx) {
-        addEvent("ADD_NODE", "Adding new node to cluster");
-        cluster.addNode()
-               .onSuccess(nodeId -> onNodeAdded(ctx, nodeId))
-               .onFailure(cause -> onAddNodeFailed(ctx, cause));
-    }
-
-    private void onNodeAdded(ChannelHandlerContext ctx, org.pragmatica.consensus.NodeId nodeId) {
-        addEvent("NODE_JOINED", "Node " + nodeId.id() + " joined the cluster");
-        sendResponse(ctx, OK, "{\"success\": true, \"nodeId\": \"" + nodeId.id() + "\", \"state\": \"joining\"}");
-    }
-
-    private void onAddNodeFailed(ChannelHandlerContext ctx, Cause cause) {
-        addEvent("ADD_NODE_FAILED", "Failed to add node: " + cause.message());
-        sendResponse(ctx,
-                     INTERNAL_SERVER_ERROR,
-                     "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
-    }
-
-    private void handleKillNode(ChannelHandlerContext ctx, String nodeId) {
-        var wasLeader = cluster.currentLeader()
-                               .map(l -> l.equals(nodeId))
-                               .or(false);
-        addEvent("KILL_NODE", "Killing node " + nodeId + (wasLeader
-                                                          ? " (leader)"
-                                                          : ""));
-        cluster.killNode(nodeId)
-               .onSuccess(_ -> onNodeKilled(ctx, nodeId, wasLeader))
-               .onFailure(cause -> onKillFailed(ctx, nodeId, cause));
-    }
-
-    private void onNodeKilled(ChannelHandlerContext ctx, String nodeId, boolean wasLeader) {
-        var newLeader = cluster.currentLeader()
-                               .or("none");
-        addEvent("NODE_KILLED", "Node " + nodeId + " killed" + (wasLeader
-                                                                ? ", new leader: " + newLeader
-                                                                : ""));
-        sendResponse(ctx, OK, "{\"success\": true, \"newLeader\": \"" + newLeader + "\"}");
-    }
-
-    private void onKillFailed(ChannelHandlerContext ctx, String nodeId, Cause cause) {
-        addEvent("KILL_FAILED", "Failed to kill node " + nodeId);
-        sendResponse(ctx,
-                     INTERNAL_SERVER_ERROR,
-                     "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
-    }
-
-    private void handleCrashNode(ChannelHandlerContext ctx, String nodeId) {
-        var wasLeader = cluster.currentLeader()
-                               .map(l -> l.equals(nodeId))
-                               .or(false);
-        addEvent("CRASH_NODE", "Crashing node " + nodeId + " abruptly" + (wasLeader
-                                                                          ? " (leader)"
-                                                                          : ""));
-        cluster.crashNode(nodeId)
-               .onSuccess(_ -> onNodeCrashed(ctx, nodeId))
-               .onFailure(cause -> onCrashFailed(ctx, nodeId, cause));
-    }
-
-    private void onNodeCrashed(ChannelHandlerContext ctx, String nodeId) {
-        var newLeader = cluster.currentLeader()
-                               .or("none");
-        addEvent("NODE_CRASHED", "Node " + nodeId + " crashed");
-        sendResponse(ctx, OK, "{\"success\": true, \"newLeader\": \"" + newLeader + "\"}");
-    }
-
-    private void onCrashFailed(ChannelHandlerContext ctx, String nodeId, Cause cause) {
-        addEvent("CRASH_FAILED", "Failed to crash node " + nodeId);
-        sendResponse(ctx,
-                     INTERNAL_SERVER_ERROR,
-                     "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
-    }
-
-    private void handleRollingRestart(ChannelHandlerContext ctx) {
-        addEvent("ROLLING_RESTART", "Starting rolling restart of all nodes");
-        cluster.rollingRestart()
-               .onSuccess(_ -> onRollingRestartComplete(ctx))
-               .onFailure(cause -> onRollingRestartFailed(ctx, cause));
-    }
-
-    private void onRollingRestartComplete(ChannelHandlerContext ctx) {
-        addEvent("ROLLING_RESTART_COMPLETE", "Rolling restart completed successfully");
-        sendResponse(ctx, OK, "{\"success\": true}");
-    }
-
-    private void onRollingRestartFailed(ChannelHandlerContext ctx, Cause cause) {
-        addEvent("ROLLING_RESTART_FAILED", "Rolling restart failed: " + cause.message());
-        sendResponse(ctx,
-                     INTERNAL_SERVER_ERROR,
-                     "{\"success\": false, \"error\": \"" + escapeJson(cause.message()) + "\"}");
-    }
-
-    private void handleSetLoad(ChannelHandlerContext ctx, String rateStr) {
-        try{
-            var rate = Integer.parseInt(rateStr);
-            loadGenerator.setRate(rate);
-            addEvent("LOAD_SET", "Load set to " + rate + " req/sec");
-            sendResponse(ctx, OK, "{\"success\": true, \"newRate\": " + rate + "}");
-        } catch (NumberFormatException e) {
-            sendResponse(ctx, BAD_REQUEST, "{\"success\": false, \"error\": \"Invalid rate\"}");
-        }
-    }
-
-    private void handleRampLoad(ChannelHandlerContext ctx, FullHttpRequest request) {
-        try{
-            var body = request.content()
-                              .toString(StandardCharsets.UTF_8);
-            // Simple parsing - expect {"targetRate": 5000, "durationMs": 30000}
-            var targetRate = extractInt(body, "targetRate", 5000);
-            var durationMs = extractLong(body, "durationMs", 30000);
-            loadGenerator.rampUp(targetRate, durationMs);
-            addEvent("LOAD_RAMP", "Ramping load to " + targetRate + " req/sec over " + (durationMs / 1000) + "s");
-            sendResponse(ctx,
-                         OK,
-                         "{\"success\": true, \"targetRate\": " + targetRate + ", \"durationMs\": " + durationMs + "}");
-        } catch (Exception e) {
-            sendResponse(ctx, BAD_REQUEST, "{\"success\": false, \"error\": \"" + escapeJson(e.getMessage()) + "\"}");
-        }
-    }
-
-    private void handleEvents(ChannelHandlerContext ctx) {
-        var eventsList = events.stream()
-                               .map(e -> new ForgeEvent(e.timestamp(),
-                                                        e.type(),
-                                                        e.message()))
-                               .toList();
-        json.writeAsString(eventsList)
-            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
-            .onFailure(cause -> sendResponse(ctx,
-                                             INTERNAL_SERVER_ERROR,
-                                             errorJson(cause.message())));
-    }
-
-    private void handleResetMetrics(ChannelHandlerContext ctx) {
-        metrics.reset();
-        events.clear();
-        addEvent("RESET", "Metrics and events reset");
-        sendResponse(ctx, OK, "{\"success\": true}");
-    }
-
-    private void handleNodeMetrics(ChannelHandlerContext ctx) {
-        var nodeMetrics = cluster.nodeMetrics();
-        var responses = nodeMetrics.stream()
-                                   .map(m -> new NodeMetricsResponse(m.nodeId(),
-                                                                     m.isLeader(),
-                                                                     m.cpuUsage(),
-                                                                     m.heapUsedMb(),
-                                                                     m.heapMaxMb()))
-                                   .toList();
-        json.writeAsString(responses)
-            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
-            .onFailure(cause -> sendResponse(ctx,
-                                             INTERNAL_SERVER_ERROR,
-                                             errorJson(cause.message())));
-    }
-
-    /**
-     * Handle simulator metrics request - returns per-entry-point metrics.
-     */
-    private void handleSimulatorMetrics(ChannelHandlerContext ctx) {
-        var snapshots = loadGenerator.entryPointMetrics()
-                                     .snapshot();
-        var json = new StringBuilder("{\"entryPoints\":[");
-        var first = true;
-        for (var snapshot : snapshots) {
-            if (!first) json.append(",");
-            first = false;
-            json.append(snapshot.toJson());
-        }
-        json.append("]}");
-        sendResponse(ctx, OK, json.toString());
-    }
-
-    /**
-     * Handle setting per-entry-point rate.
-     * Path format: /api/simulator/rate/{entryPoint}
-     * Body: {"rate": 500}
-     */
-    private void handleSimulatorRate(ChannelHandlerContext ctx, String entryPoint, FullHttpRequest request) {
-        try{
-            var body = request.content()
-                              .toString(StandardCharsets.UTF_8);
-            var rate = extractInt(body, "rate", - 1);
-            if (rate < 0) {
-                sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing or invalid rate\"}");
-                return;
-            }
-            loadGenerator.setRate(entryPoint, rate);
-            addEvent("RATE_SET", "Set " + entryPoint + " rate to " + rate + " req/sec");
-            sendResponse(ctx, OK, "{\"success\":true,\"entryPoint\":\"" + entryPoint + "\",\"rate\":" + rate + "}");
-        } catch (Exception e) {
-            sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
-        }
-    }
-
-    /**
-     * Handle listing all available entry points.
-     */
-    private void handleSimulatorEntryPoints(ChannelHandlerContext ctx) {
-        var entryPointInfos = loadGenerator.entryPoints()
-                                           .stream()
-                                           .map(ep -> new EntryPointInfo(ep,
-                                                                         loadGenerator.currentRate(ep)))
-                                           .toList();
-        var response = new EntryPointsResponse(entryPointInfos);
-        json.writeAsString(response)
-            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
-            .onFailure(cause -> sendResponse(ctx,
-                                             INTERNAL_SERVER_ERROR,
-                                             errorJson(cause.message())));
-    }
-
-    /**
-     * Handle get current simulator config.
-     */
-    private void handleGetConfig(ChannelHandlerContext ctx) {
-        sendResponse(ctx, OK, config.toJson());
-    }
-
-    /**
-     * Handle replace simulator config.
-     */
-    private void handlePutConfig(ChannelHandlerContext ctx, FullHttpRequest request) {
-        try{
-            var body = request.content()
-                              .toString(StandardCharsets.UTF_8);
-            var newConfig = SimulatorConfig.parseJson(body);
-            config = newConfig;
-            applyLoadGeneratorSettings(newConfig);
-            addEvent("CONFIG_UPDATE", "Simulator configuration updated");
-            sendResponse(ctx, OK, "{\"success\":true}");
-        } catch (Exception e) {
-            sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
-        }
-    }
-
-    /**
-     * Handle set global rate multiplier.
-     */
-    private void handleSetMultiplier(ChannelHandlerContext ctx, FullHttpRequest request) {
-        try{
-            var body = request.content()
-                              .toString(StandardCharsets.UTF_8);
-            var matcher = MULTIPLIER_PATTERN.matcher(body);
-            if (matcher.find()) {
-                var multiplier = Double.parseDouble(matcher.group(1));
-                var newConfig = config.withGlobalMultiplier(multiplier);
-                config = newConfig;
-                applyLoadGeneratorSettings(newConfig);
-                addEvent("MULTIPLIER_SET", "Global rate multiplier set to " + multiplier);
-                sendResponse(ctx, OK, "{\"success\":true,\"multiplier\":" + multiplier + "}");
-            } else {
-                sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing multiplier\"}");
-            }
-        } catch (Exception e) {
-            sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
-        }
-    }
-
-    /**
-     * Handle enable/disable load generator.
-     */
-    private void handleSetEnabled(ChannelHandlerContext ctx, FullHttpRequest request) {
-        try{
-            var body = request.content()
-                              .toString(StandardCharsets.UTF_8);
-            var matcher = ENABLED_PATTERN.matcher(body);
-            if (matcher.find()) {
-                var enabled = Boolean.parseBoolean(matcher.group(1));
-                var newConfig = config.withLoadGeneratorEnabled(enabled);
-                config = newConfig;
-                applyLoadGeneratorSettings(newConfig);
-                addEvent("LOAD_GENERATOR", "Load generator " + (enabled
-                                                                ? "enabled"
-                                                                : "disabled"));
-                sendResponse(ctx, OK, "{\"success\":true,\"enabled\":" + enabled + "}");
-            } else {
-                sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing enabled\"}");
-            }
-        } catch (Exception e) {
-            sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
-        }
-    }
-
-    /**
-     * Handle get inventory mode - simulated.
-     */
-    private void handleGetInventoryMode(ChannelHandlerContext ctx) {
-        sendResponse(ctx, OK, "{\"mode\":\"" + (infiniteInventoryMode
-                                                ? "infinite"
-                                                : "realistic") + "\"}");
-    }
-
-    /**
-     * Handle set inventory mode - simulated.
-     * Body: {"mode": "infinite"} or {"mode": "realistic"}
-     */
-    private void handleSetInventoryMode(ChannelHandlerContext ctx, FullHttpRequest request) {
-        try{
-            var body = request.content()
-                              .toString(StandardCharsets.UTF_8);
-            var matcher = MODE_PATTERN.matcher(body);
-            if (matcher.find()) {
-                var mode = matcher.group(1);
-                infiniteInventoryMode = "infinite".equalsIgnoreCase(mode);
-                addEvent("INVENTORY_MODE", "Inventory mode set to " + (infiniteInventoryMode
-                                                                       ? "infinite"
-                                                                       : "realistic"));
-                sendResponse(ctx,
-                             OK,
-                             "{\"success\":true,\"mode\":\"" + (infiniteInventoryMode
-                                                                ? "infinite"
-                                                                : "realistic") + "\"}");
-            } else {
-                sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"Missing mode\"}");
-            }
-        } catch (Exception e) {
-            sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}");
-        }
-    }
-
-    /**
-     * Handle inventory metrics request - simulated.
-     */
-    private void handleInventoryMetrics(ChannelHandlerContext ctx) {
-        var json = String.format("{\"totalReservations\":%d,\"totalReleases\":%d,\"stockOuts\":%d,\"infiniteMode\":%b,\"refillRate\":%d}",
-                                 simulatedReservations.get(),
-                                 simulatedReleases.get(),
-                                 simulatedStockOuts.get(),
-                                 infiniteInventoryMode,
-                                 100);
-        sendResponse(ctx, OK, json);
-    }
-
-    /**
-     * Handle inventory stock levels request - simulated.
-     */
-    private void handleInventoryStock(ChannelHandlerContext ctx) {
-        // Return simulated stock levels for known products
-        var json = "{\"stock\":{\"PROD-ABC123\":500,\"PROD-DEF456\":350,\"PROD-GHI789\":200}}";
-        sendResponse(ctx, OK, json);
-    }
-
-    /**
-     * Handle inventory reset - simulated.
-     */
-    private void handleInventoryReset(ChannelHandlerContext ctx) {
-        simulatedReservations.set(0);
-        simulatedReleases.set(0);
-        simulatedStockOuts.set(0);
-        addEvent("INVENTORY_RESET", "Inventory stock reset to initial levels");
-        sendResponse(ctx, OK, "{\"success\":true}");
-    }
-
-    // ==================== Chaos API Handlers ====================
-    /**
-     * Get chaos controller status.
-     */
-    private void handleChaosStatus(ChannelHandlerContext ctx) {
-        sendResponse(ctx,
-                     OK,
-                     chaosController.status()
-                                    .toJson());
-    }
-
-    /**
-     * Enable or disable chaos injection.
-     */
-    private void handleChaosEnable(ChannelHandlerContext ctx, FullHttpRequest request) {
-        var body = request.content()
-                          .toString(StandardCharsets.UTF_8);
-        var enabled = extractBoolean(body, "enabled", false);
-        chaosController.setEnabled(enabled);
-        addEvent("CHAOS_" + (enabled
-                             ? "ENABLED"
-                             : "DISABLED"), "Chaos controller " + (enabled
-                                                                   ? "enabled"
-                                                                   : "disabled"));
-        sendResponse(ctx, OK, "{\"success\":true,\"enabled\":" + enabled + "}");
-    }
-
-    private static final Fn1<Cause, String> UNKNOWN_CHAOS_TYPE = Causes.forOneValue("Unknown chaos type: %s");
-
-    /**
-     * Inject a chaos event.
-     * Body format: {"type":"NODE_KILL","nodeId":"node-1","durationSeconds":30}
-     */
-    private void handleChaosInject(ChannelHandlerContext ctx, FullHttpRequest request) {
-        var body = request.content()
-                          .toString(StandardCharsets.UTF_8);
-        var type = extractString(body, "type", "");
-        var durationSeconds = extractLong(body, "durationSeconds", 60);
-        var duration = Duration.ofSeconds(durationSeconds);
-        parseChaosEvent(body, type, duration)
-                       .async()
-                       .flatMap(chaosController::injectChaos)
-                       .onSuccess(eventId -> sendChaosSuccess(ctx, eventId, type))
-                       .onFailure(cause -> sendChaosError(ctx, cause));
-    }
-
-    private Result<ChaosEvent> parseChaosEvent(String body, String type, Duration duration) {
-        return switch (type.toUpperCase()) {
-            case "NODE_KILL" -> ChaosEvent.NodeKill.kill(extractString(body, "nodeId", null),
-                                                         duration)
-                                          .map(e -> e);
-            case "LATENCY_SPIKE" -> ChaosEvent.LatencySpike.addLatency(extractString(body, "nodeId", null),
-                                                                       extractLong(body, "latencyMs", 500),
-                                                                       duration)
-                                              .map(e -> e);
-            case "SLICE_CRASH" -> ChaosEvent.SliceCrash.crashSlice(extractString(body, "artifact", null),
-                                                                   extractString(body, "nodeId", null),
-                                                                   duration)
-                                            .map(e -> e);
-            case "INVOCATION_FAILURE" -> ChaosEvent.InvocationFailure.forSlice(extractString(body, "artifact", null),
-                                                                               extractDouble(body, "failureRate", 0.5),
-                                                                               duration)
-                                                   .map(e -> e);
-            case "CPU_SPIKE" -> ChaosEvent.CpuSpike.onNode(extractString(body, "nodeId", null),
-                                                           extractDouble(body, "level", 0.8),
-                                                           duration)
-                                          .map(e -> e);
-            case "MEMORY_PRESSURE" -> ChaosEvent.MemoryPressure.onNode(extractString(body, "nodeId", null),
-                                                                       extractDouble(body, "level", 0.9),
-                                                                       duration)
-                                                .map(e -> e);
-            default -> UNKNOWN_CHAOS_TYPE.apply(type)
-                                         .result();
-        };
-    }
-
-    private void sendChaosSuccess(ChannelHandlerContext ctx, String eventId, String type) {
-        sendResponse(ctx, OK, "{\"success\":true,\"eventId\":\"" + eventId + "\",\"type\":\"" + type + "\"}");
-    }
-
-    private void sendChaosError(ChannelHandlerContext ctx, Cause cause) {
-        sendResponse(ctx, BAD_REQUEST, "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
-    }
-
-    /**
-     * Stop a specific chaos event.
-     */
-    private void handleChaosStop(ChannelHandlerContext ctx, String eventId) {
-        chaosController.stopChaos(eventId);
-        addEvent("CHAOS_STOPPED", "Stopped chaos event " + eventId);
-        sendResponse(ctx, OK, "{\"success\":true,\"eventId\":\"" + eventId + "\"}");
-    }
-
-    /**
-     * Stop all chaos events.
-     */
-    private void handleChaosStopAll(ChannelHandlerContext ctx) {
-        chaosController.stopAllChaos();
-        addEvent("CHAOS_STOPPED_ALL", "Stopped all chaos events");
-        sendResponse(ctx, OK, "{\"success\":true}");
-    }
-
-    // ==================== Mode API Handlers ====================
-    /**
-     * Get current simulator mode.
-     */
-    private void handleGetMode(ChannelHandlerContext ctx) {
-        sendResponse(ctx, OK, currentMode.toJson());
-    }
-
-    /**
-     * Get all available modes.
-     */
-    private void handleGetModes(ChannelHandlerContext ctx) {
-        sendResponse(ctx, OK, SimulatorMode.allModesJson());
-    }
-
-    /**
-     * Set simulator mode.
-     */
-    private void handleSetMode(ChannelHandlerContext ctx, String modeName) {
-        SimulatorMode.simulatorMode(modeName)
-                     .onSuccess(newMode -> applyMode(ctx, newMode))
-                     .onFailure(cause -> sendResponse(ctx,
-                                                      BAD_REQUEST,
-                                                      "{\"success\":false,\"error\":\"" + escapeJson(cause.message())
-                                                      + "\"}"));
-    }
-
-    /**
-     * Apply a new simulator mode with proper synchronization.
-     */
-    private void applyMode(ChannelHandlerContext ctx, SimulatorMode newMode) {
-        String oldModeName;
-        SimulatorConfig newConfig;
-        // Synchronized update of mode and config
-        synchronized (modeLock) {
-            oldModeName = currentMode.name();
-            currentMode = newMode;
-            newConfig = newMode.applyTo(config);
-            config = newConfig;
-        }
-        // These operations are idempotent and can be outside the lock
-        chaosController.setEnabled(newMode.chaosEnabled());
-        applyLoadGeneratorSettings(newConfig);
-        addEvent("MODE_CHANGED", "Simulator mode changed from " + oldModeName + " to " + newMode.displayName());
-        sendResponse(ctx,
-                     OK,
-                     String.format("{\"success\":true,\"previousMode\":\"%s\",\"currentMode\":\"%s\"}",
-                                   oldModeName,
-                                   newMode.name()));
-    }
-
-    // ==================== Simulated Order API Handlers ====================
-    // These handlers return simulated responses for load testing when no slices are loaded
-    /**
-     * Handle order placement - returns simulated response.
-     */
-    private void handlePlaceOrder(ChannelHandlerContext ctx, FullHttpRequest request) {
-        applySimulation("place-order")
-                       .onSuccess(_ -> sendPlaceOrderSuccess(ctx))
-                       .onFailure(cause -> sendErrorResponse(ctx, INTERNAL_SERVER_ERROR, cause));
-    }
-
-    private void sendPlaceOrderSuccess(ChannelHandlerContext ctx) {
-        var random = java.util.concurrent.ThreadLocalRandom.current();
-        var orderId = String.format("ORD-%08d", random.nextInt(100_000_000));
-        DataGenerator.OrderIdGenerator.trackOrderId(orderId);
-        var total = 10.00 + random.nextDouble() * 990.00;
-        var json = String.format("{\"success\":true,\"orderId\":\"%s\",\"status\":\"CONFIRMED\",\"total\":\"USD %.2f\"}",
-                                 orderId,
-                                 total);
-        sendResponse(ctx, OK, json);
-    }
-
-    private void sendErrorResponse(ChannelHandlerContext ctx, HttpResponseStatus status, Cause cause) {
-        sendResponse(ctx, status, "{\"success\":false,\"error\":\"" + escapeJson(cause.message()) + "\"}");
-    }
-
-    /**
-     * Handle get order status - returns simulated response.
-     */
-    private void handleGetOrderStatus(ChannelHandlerContext ctx, String orderId) {
-        applySimulation("get-order-status")
-                       .onSuccess(_ -> sendOrderStatusSuccess(ctx, orderId))
-                       .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
-    }
-
-    private void sendOrderStatusSuccess(ChannelHandlerContext ctx, String orderId) {
-        var random = java.util.concurrent.ThreadLocalRandom.current();
-        var statuses = List.of("CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED");
-        var status = statuses.get(random.nextInt(statuses.size()));
-        var total = 10.00 + random.nextDouble() * 990.00;
-        var itemCount = 1 + random.nextInt(5);
-        var json = String.format("{\"success\":true,\"orderId\":\"%s\",\"status\":\"%s\",\"total\":\"USD %.2f\",\"itemCount\":%d}",
-                                 orderId,
-                                 status,
-                                 total,
-                                 itemCount);
-        sendResponse(ctx, OK, json);
-    }
-
-    /**
-     * Handle cancel order - returns simulated response.
-     */
-    private void handleCancelOrder(ChannelHandlerContext ctx, String orderId, FullHttpRequest request) {
-        var body = request.content()
-                          .toString(StandardCharsets.UTF_8);
-        var reason = extractString(body, "reason", "User requested cancellation");
-        applySimulation("cancel-order")
-                       .onSuccess(_ -> sendCancelOrderSuccess(ctx, orderId, reason))
-                       .onFailure(cause -> sendErrorResponse(ctx, BAD_REQUEST, cause));
-    }
-
-    private void sendCancelOrderSuccess(ChannelHandlerContext ctx, String orderId, String reason) {
-        var json = String.format("{\"success\":true,\"orderId\":\"%s\",\"status\":\"CANCELLED\",\"reason\":\"%s\"}",
-                                 orderId,
-                                 escapeJson(reason));
-        sendResponse(ctx, OK, json);
-    }
-
-    /**
-     * Handle check stock - returns simulated response.
-     */
-    private void handleCheckStock(ChannelHandlerContext ctx, String productId) {
-        applySimulation("inventory-service")
-                       .onSuccess(_ -> sendCheckStockSuccess(ctx, productId))
-                       .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
-    }
-
-    private void sendCheckStockSuccess(ChannelHandlerContext ctx, String productId) {
-        var random = java.util.concurrent.ThreadLocalRandom.current();
-        var available = random.nextInt(1000);
-        var json = String.format("{\"success\":true,\"productId\":\"%s\",\"available\":%d,\"sufficient\":%b}",
-                                 productId,
-                                 available,
-                                 available > 0);
-        sendResponse(ctx, OK, json);
-    }
-
-    /**
-     * Handle get price - returns simulated response.
-     */
-    private void handleGetPrice(ChannelHandlerContext ctx, String productId) {
-        applySimulation("pricing-service")
-                       .onSuccess(_ -> sendGetPriceSuccess(ctx, productId))
-                       .onFailure(cause -> sendErrorResponse(ctx, NOT_FOUND, cause));
-    }
-
-    private void sendGetPriceSuccess(ChannelHandlerContext ctx, String productId) {
-        var random = java.util.concurrent.ThreadLocalRandom.current();
-        var price = 5.00 + random.nextDouble() * 495.00;
-        var json = String.format("{\"success\":true,\"productId\":\"%s\",\"price\":\"USD %.2f\"}", productId, price);
-        sendResponse(ctx, OK, json);
-    }
-
-    /**
-     * Apply backend simulation for a slice based on current config.
-     */
-    private Promise<Unit> applySimulation(String sliceName) {
-        var sliceConfig = config.sliceConfig(sliceName);
-        return sliceConfig.buildSimulation()
-                          .apply();
-    }
-
-    /**
-     * Apply load generator settings from config.
-     * Centralized method to avoid duplication across handlers.
-     */
-    private void applyLoadGeneratorSettings(SimulatorConfig cfg) {
-        for (var entryPoint : loadGenerator.entryPoints()) {
-            var rate = cfg.loadGeneratorEnabled()
-                       ? cfg.effectiveRate(entryPoint)
-                       : 0;
-            loadGenerator.setRate(entryPoint, rate);
-        }
-    }
-
-    // ==================== Deployment API Handlers ====================
-    // These handlers proxy to the actual cluster nodes for real slice management
-    /**
-     * Handle POST /api/deploy - deploy a slice via blueprint.
-     * Proxies to leader node's ManagementServer.
-     * Body: {"artifact": "group:id:version", "instances": 1}
-     */
-    private void handleDeploy(ChannelHandlerContext ctx, FullHttpRequest request) {
-        proxyToLeader(ctx, "/deploy", request);
-    }
-
-    /**
-     * Handle POST /api/blueprint - apply a complete blueprint.
-     * Proxies to leader node's ManagementServer.
-     */
-    private void handleBlueprint(ChannelHandlerContext ctx, FullHttpRequest request) {
-        proxyToLeader(ctx, "/blueprint", request);
-    }
-
-    /**
-     * Handle POST /api/undeploy - undeploy a slice.
-     * Proxies to leader node's ManagementServer.
-     * Body: {"artifact": "group:id:version"}
-     */
-    private void handleUndeploy(ChannelHandlerContext ctx, FullHttpRequest request) {
-        proxyToLeader(ctx, "/undeploy", request);
-    }
-
-    /**
-     * Handle GET /api/slices/status - get real slice status from cluster.
-     * Proxies to leader node's ManagementServer.
-     */
-    private void handleSlicesStatus(ChannelHandlerContext ctx) {
-        proxyGetToLeader(ctx, "/slices/status");
-    }
-
-    /**
-     * Handle GET /api/cluster/metrics - get real cluster metrics.
-     * Proxies to leader node's ManagementServer.
-     */
-    private void handleClusterMetrics(ChannelHandlerContext ctx) {
-        proxyGetToLeader(ctx, "/metrics");
-    }
-
-    /**
-     * Proxy a POST request to the leader node's ManagementServer.
-     */
-    private void proxyToLeader(ChannelHandlerContext ctx, String endpoint, FullHttpRequest request) {
-        var leaderNode = findLeaderNode();
-        if (leaderNode.isEmpty()) {
-            sendResponse(ctx, SERVICE_UNAVAILABLE, "{\"error\": \"No leader available\"}");
-            return;
-        }
-        var node = leaderNode.get();
-        var mgmtPort = node.managementPort();
-        var body = request.content()
-                          .toString(StandardCharsets.UTF_8);
-        proxyHttpPost("localhost", mgmtPort, endpoint, body)
-                     .onSuccess(response -> {
-                                    addEvent("DEPLOY", "Proxied " + endpoint + " to leader: " + response);
-                                    sendResponse(ctx, OK, response);
-                                })
-                     .onFailure(cause -> {
-                                    log.error("Failed to proxy to leader: {}",
-                                              cause.message());
-                                    sendResponse(ctx,
-                                                 INTERNAL_SERVER_ERROR,
-                                                 "{\"error\": \"" + escapeJson(cause.message()) + "\"}");
-                                });
-    }
-
-    /**
-     * Proxy a GET request to the leader node's ManagementServer.
-     */
-    private void proxyGetToLeader(ChannelHandlerContext ctx, String endpoint) {
-        var leaderNode = findLeaderNode();
-        if (leaderNode.isEmpty()) {
-            sendResponse(ctx, SERVICE_UNAVAILABLE, "{\"error\": \"No leader available\"}");
-            return;
-        }
-        var node = leaderNode.get();
-        var mgmtPort = node.managementPort();
-        proxyHttpGet("localhost", mgmtPort, endpoint)
-                    .onSuccess(response -> sendResponse(ctx, OK, response))
-                    .onFailure(cause -> {
-                                   log.error("Failed to proxy GET to leader: {}",
-                                             cause.message());
-                                   sendResponse(ctx,
-                                                INTERNAL_SERVER_ERROR,
-                                                "{\"error\": \"" + escapeJson(cause.message()) + "\"}");
-                               });
-    }
-
-    private void proxyDeleteToLeader(ChannelHandlerContext ctx, String endpoint) {
-        var leaderNode = findLeaderNode();
-        if (leaderNode.isEmpty()) {
-            sendResponse(ctx, SERVICE_UNAVAILABLE, "{\"error\": \"No leader available\"}");
-            return;
-        }
-        var node = leaderNode.get();
-        var mgmtPort = node.managementPort();
-        proxyHttpDelete("localhost", mgmtPort, endpoint)
-                       .onSuccess(response -> sendResponse(ctx, OK, response))
-                       .onFailure(cause -> {
-                                      log.error("Failed to proxy DELETE to leader: {}",
-                                                cause.message());
-                                      sendResponse(ctx,
-                                                   INTERNAL_SERVER_ERROR,
-                                                   "{\"error\": \"" + escapeJson(cause.message()) + "\"}");
-                                  });
-    }
-
-    /**
-     * Find the current leader node.
-     */
-    private java.util.Optional<org.pragmatica.aether.node.AetherNode> findLeaderNode() {
-        return cluster.allNodes()
-                      .stream()
-                      .filter(org.pragmatica.aether.node.AetherNode::isLeader)
-                      .findFirst();
-    }
-
-    /**
-     * Execute HTTP POST to a node's ManagementServer.
-     */
-    private Promise<String> proxyHttpPost(String host, int port, String path, String body) {
-        var request = java.net.http.HttpRequest.newBuilder()
-                          .uri(java.net.URI.create("http://" + host + ":" + port + path))
-                          .header("Content-Type", "application/json")
-                          .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
-                          .timeout(Duration.ofSeconds(30))
-                          .build();
-        return http.sendString(request)
-                   .flatMap(result -> result.toResult()
-                                            .async());
-    }
-
-    /**
-     * Execute HTTP GET to a node's ManagementServer.
-     */
-    private Promise<String> proxyHttpGet(String host, int port, String path) {
-        var request = java.net.http.HttpRequest.newBuilder()
-                          .uri(java.net.URI.create("http://" + host + ":" + port + path))
-                          .GET()
-                          .timeout(Duration.ofSeconds(30))
-                          .build();
-        return http.sendString(request)
-                   .flatMap(result -> result.toResult()
-                                            .async());
-    }
-
-    /**
-     * Execute HTTP DELETE to a node's ManagementServer.
-     */
-    private Promise<String> proxyHttpDelete(String host, int port, String path) {
-        var request = java.net.http.HttpRequest.newBuilder()
-                          .uri(java.net.URI.create("http://" + host + ":" + port + path))
-                          .DELETE()
-                          .timeout(Duration.ofSeconds(30))
-                          .build();
-        return http.sendString(request)
-                   .flatMap(result -> result.toResult()
-                                            .async());
-    }
-
-    // ==================== Repository API Handlers ====================
-    /**
-     * Handle GET /repository/** - retrieve artifact from DHT.
-     */
-    private void handleRepositoryGet(ChannelHandlerContext ctx, String path) {
-        var nodes = cluster.allNodes();
-        if (nodes.isEmpty()) {
-            sendResponse(ctx, SERVICE_UNAVAILABLE, "{\"error\": \"No nodes available\"}");
-            return;
-        }
-        var node = nodes.getFirst();
-        node.mavenProtocolHandler()
-            .handleGet(path)
-            .onSuccess(response -> sendRepositoryGetResponse(ctx, response))
-            .onFailure(cause -> sendResponse(ctx,
-                                             INTERNAL_SERVER_ERROR,
-                                             "{\"error\": \"" + escapeJson(cause.message()) + "\"}"));
-    }
-
-    private void sendRepositoryGetResponse(ChannelHandlerContext ctx,
-                                           org.pragmatica.aether.infra.artifact.MavenProtocolHandler.MavenResponse response) {
-        if (response.statusCode() == 200) {
-            var content = Unpooled.wrappedBuffer(response.content());
-            var httpResponse = new DefaultFullHttpResponse(HTTP_1_1, OK, content);
-            httpResponse.headers()
-                        .set(HttpHeaderNames.CONTENT_TYPE,
-                             response.contentType());
-            httpResponse.headers()
-                        .set(HttpHeaderNames.CONTENT_LENGTH,
-                             response.content().length);
-            httpResponse.headers()
-                        .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-            ctx.writeAndFlush(httpResponse)
-               .addListener(ChannelFutureListener.CLOSE);
-        } else if (response.statusCode() == 404) {
-            sendResponse(ctx, NOT_FOUND, "{\"error\": \"Artifact not found\"}");
-        } else {
-            sendResponse(ctx,
-                         HttpResponseStatus.valueOf(response.statusCode()),
-                         new String(response.content(), StandardCharsets.UTF_8));
-        }
-    }
-
-    /**
-     * Handle PUT/POST /repository/** - store artifact in DHT.
-     */
-    private void handleRepositoryPut(ChannelHandlerContext ctx, String path, FullHttpRequest request) {
-        var nodes = cluster.allNodes();
-        if (nodes.isEmpty()) {
-            sendResponse(ctx, SERVICE_UNAVAILABLE, "{\"error\": \"No nodes available\"}");
-            return;
-        }
-        var node = nodes.getFirst();
-        var byteBuf = request.content();
-        var content = new byte[byteBuf.readableBytes()];
-        byteBuf.readBytes(content);
-        node.mavenProtocolHandler()
-            .handlePut(path, content)
-            .onSuccess(_ -> sendRepositoryPutSuccess(ctx, path, content.length))
-            .onFailure(cause -> sendResponse(ctx,
-                                             INTERNAL_SERVER_ERROR,
-                                             "{\"error\": \"" + escapeJson(cause.message()) + "\"}"));
-    }
-
-    private void sendRepositoryPutSuccess(ChannelHandlerContext ctx, String path, int contentLength) {
-        var json = String.format("{\"success\":true,\"path\":\"%s\",\"size\":%d}", escapeJson(path), contentLength);
-        sendResponse(ctx, OK, json);
-        addEvent("ARTIFACT_DEPLOYED", "Deployed " + path + " (" + contentLength + " bytes)");
-    }
-
-    public void addEvent(String type, String message) {
-        var event = new ForgeEvent(Instant.now()
-                                          .toString(),
-                                   type,
-                                   message);
-        events.addLast(event);
-        // Trim in a thread-safe manner - over-deletion is acceptable
-        while (events.size() > MAX_EVENTS) {
-            events.pollFirst();
-        }
-        log.info("[EVENT] {}: {}", type, message);
-    }
-
-    private long uptimeSeconds() {
-        return (System.currentTimeMillis() - startTime) / 1000;
-    }
-
-    private void sendResponse(ChannelHandlerContext ctx, HttpResponseStatus status, String json) {
-        var content = Unpooled.copiedBuffer(json, StandardCharsets.UTF_8);
-        var response = new DefaultFullHttpResponse(HTTP_1_1, status, content);
-        response.headers()
-                .set(HttpHeaderNames.CONTENT_TYPE, "application/json");
-        response.headers()
-                .set(HttpHeaderNames.CONTENT_LENGTH,
-                     content.readableBytes());
-        response.headers()
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-        response.headers()
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, DELETE, OPTIONS");
-        response.headers()
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type");
-        ctx.writeAndFlush(response)
-           .addListener(ChannelFutureListener.CLOSE);
-    }
-
-    private String escapeJson(String str) {
-        if (str == null) return "";
-        return str.replace("\\", "\\\\")
-                  .replace("\"", "\\\"")
-                  .replace("\n", "\\n")
-                  .replace("\r", "\\r")
-                  .replace("\t", "\\t");
-    }
-
-    private int extractInt(String json, String key, int defaultValue) {
-        var pattern = INT_PATTERN_CACHE.computeIfAbsent(key, k -> Pattern.compile("\"" + k + "\"\\s*:\\s*(\\d+)"));
-        var matcher = pattern.matcher(json);
-        if (matcher.find()) {
-            return Integer.parseInt(matcher.group(1));
-        }
-        return defaultValue;
-    }
-
-    private long extractLong(String json, String key, long defaultValue) {
-        var pattern = INT_PATTERN_CACHE.computeIfAbsent(key, k -> Pattern.compile("\"" + k + "\"\\s*:\\s*(\\d+)"));
-        var matcher = pattern.matcher(json);
-        if (matcher.find()) {
-            return Long.parseLong(matcher.group(1));
-        }
-        return defaultValue;
-    }
-
-    private String extractString(String json, String key, String defaultValue) {
-        var pattern = STRING_PATTERN_CACHE.computeIfAbsent(key,
-                                                           k -> Pattern.compile("\"" + k + "\"\\s*:\\s*\"([^\"]*)\""));
-        var matcher = pattern.matcher(json);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-        return defaultValue;
-    }
-
-    private boolean extractBoolean(String json, String key, boolean defaultValue) {
-        var pattern = BOOLEAN_PATTERN_CACHE.computeIfAbsent(key,
-                                                            k -> Pattern.compile("\"" + k + "\"\\s*:\\s*(true|false)"));
-        var matcher = pattern.matcher(json);
-        if (matcher.find()) {
-            return Boolean.parseBoolean(matcher.group(1));
-        }
-        return defaultValue;
-    }
-
-    private double extractDouble(String json, String key, double defaultValue) {
-        var pattern = DOUBLE_PATTERN_CACHE.computeIfAbsent(key, k -> Pattern.compile("\"" + k + "\"\\s*:\\s*([\\d.]+)"));
-        var matcher = pattern.matcher(json);
-        if (matcher.find()) {
-            return Double.parseDouble(matcher.group(1));
-        }
-        return defaultValue;
-    }
-
-    // ========== Load Config Endpoints ==========
-    /**
-     * GET /api/load/config - Get current load configuration
-     */
-    private void handleGetLoadConfig(ChannelHandlerContext ctx) {
-        var loadConfig = configurableLoadRunner.config();
-        var targetInfos = loadConfig.targets()
-                                    .stream()
-                                    .map(t -> new LoadTargetInfo(t.name()
-                                                                  .or(t.target()),
-                                                                 t.target(),
-                                                                 t.rate()
-                                                                  .requestsPerSecond() + "/s",
-                                                                 t.duration()
-                                                                  .map(Object::toString)
-                                                                  .or((String) null)))
-                                    .toList();
-        var response = new LoadConfigResponse(loadConfig.targets()
-                                                        .size(),
-                                              loadConfig.totalRequestsPerSecond(),
-                                              targetInfos);
-        json.writeAsString(response)
-            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
-            .onFailure(cause -> sendResponse(ctx,
-                                             INTERNAL_SERVER_ERROR,
-                                             errorJson(cause.message())));
-    }
-
-    /**
-     * POST /api/load/config - Upload TOML configuration
-     */
-    private void handlePostLoadConfig(ChannelHandlerContext ctx, FullHttpRequest request) {
-        var body = request.content()
-                          .toString(StandardCharsets.UTF_8);
-        configurableLoadRunner.loadConfigFromString(body)
-                              .onSuccess(config -> {
-                                             addEvent("LOAD_CONFIG",
-                                                      "Loaded " + config.targets()
-                                                                       .size() + " targets");
-                                             sendResponse(ctx,
-                                                          OK,
-                                                          String.format("{\"success\":true,\"targetCount\":%d,\"totalRps\":%d}",
-                                                                        config.targets()
-                                                                              .size(),
-                                                                        config.totalRequestsPerSecond()));
-                                         })
-                              .onFailure(cause -> sendResponse(ctx,
-                                                               BAD_REQUEST,
-                                                               "{\"error\":\"" + escapeJson(cause.message()) + "\"}"));
-    }
-
-    /**
-     * POST /api/load/start - Start load generation
-     */
-    private void handleLoadStart(ChannelHandlerContext ctx) {
-        configurableLoadRunner.start()
-                              .onSuccess(state -> {
-                                             addEvent("LOAD_START", "Load generation started");
-                                             sendResponse(ctx, OK, "{\"success\":true,\"state\":\"" + state + "\"}");
-                                         })
-                              .onFailure(cause -> sendResponse(ctx,
-                                                               BAD_REQUEST,
-                                                               "{\"error\":\"" + escapeJson(cause.message()) + "\"}"));
-    }
-
-    /**
-     * POST /api/load/stop - Stop load generation
-     */
-    private void handleLoadStop(ChannelHandlerContext ctx) {
-        configurableLoadRunner.stop();
-        addEvent("LOAD_STOP", "Load generation stopped");
-        sendResponse(ctx, OK, "{\"success\":true,\"state\":\"IDLE\"}");
-    }
-
-    /**
-     * POST /api/load/pause - Pause load generation
-     */
-    private void handleLoadPause(ChannelHandlerContext ctx) {
-        configurableLoadRunner.pause();
-        addEvent("LOAD_PAUSE", "Load generation paused");
-        sendResponse(ctx, OK, "{\"success\":true,\"state\":\"" + configurableLoadRunner.state() + "\"}");
-    }
-
-    /**
-     * POST /api/load/resume - Resume load generation
-     */
-    private void handleLoadResume(ChannelHandlerContext ctx) {
-        configurableLoadRunner.resume();
-        addEvent("LOAD_RESUME", "Load generation resumed");
-        sendResponse(ctx, OK, "{\"success\":true,\"state\":\"" + configurableLoadRunner.state() + "\"}");
-    }
-
-    /**
-     * GET /api/load/status - Get load generation status with per-target metrics
-     */
-    private void handleLoadStatus(ChannelHandlerContext ctx) {
-        var state = configurableLoadRunner.state();
-        var targetMetrics = configurableLoadRunner.allTargetMetrics();
-        var targetInfos = targetMetrics.values()
-                                       .stream()
-                                       .map(m -> new LoadRunnerTargetInfo(m.name(),
-                                                                          m.targetRate(),
-                                                                          m.actualRate(),
-                                                                          m.totalRequests(),
-                                                                          m.successCount(),
-                                                                          m.failureCount(),
-                                                                          m.avgLatencyMs(),
-                                                                          m.successRate(),
-                                                                          m.remainingDuration()
-                                                                           .map(Object::toString)))
-                                       .toList();
-        var response = new LoadRunnerStatusResponse(state.name(), targetInfos.size(), targetInfos);
-        json.writeAsString(response)
-            .onSuccess(jsonStr -> sendResponse(ctx, OK, jsonStr))
-            .onFailure(cause -> sendResponse(ctx,
-                                             INTERNAL_SERVER_ERROR,
-                                             errorJson(cause.message())));
-    }
-
-    /**
-     * GET /api/panel/load - Load Testing panel HTML
-     */
-    private void handleLoadPanel(ChannelHandlerContext ctx) {
-        var panelHtml = """
+    private String loadPanelHtml() {
+        return """
             <!-- Load Testing Panel -->
             <div class="panel-section">
                 <h3>Configuration</h3>
@@ -1490,22 +436,5 @@ public final class ForgeApiHandler extends SimpleChannelInboundHandler<FullHttpR
             updateLoadMetrics();
             </script>
             """;
-        sendHtml(ctx, panelHtml);
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        log.error("Error in API handler: {}", cause.getMessage());
-        ctx.close();
-    }
-
-    private String errorJson(String message) {
-        return json.writeAsString(ErrorResponse.error(message))
-                   .or("{}");
-    }
-
-    private String successJson() {
-        return json.writeAsString(SuccessResponse.OK)
-                   .or("{}");
     }
 }

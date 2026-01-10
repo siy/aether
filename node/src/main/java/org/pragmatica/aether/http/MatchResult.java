@@ -7,6 +7,9 @@ import org.pragmatica.lang.utils.Causes;
 
 import java.util.Map;
 
+import static org.pragmatica.lang.Verify.Is;
+import static org.pragmatica.lang.Verify.ensure;
+
 /**
  * Result of matching a request to a route.
  */
@@ -16,12 +19,9 @@ public record MatchResult(Route route,
     private static final Cause NULL_PATH_VARIABLES = Causes.cause("Path variables map cannot be null");
 
     public static Result<MatchResult> matchResult(Route route, Map<String, String> pathVariables) {
-        if (route == null) {
-            return NULL_ROUTE.result();
-        }
-        if (pathVariables == null) {
-            return NULL_PATH_VARIABLES.result();
-        }
-        return Result.success(new MatchResult(route, Map.copyOf(pathVariables)));
+        return Result.all(ensure(route, Is::notNull, NULL_ROUTE),
+                          ensure(pathVariables, Is::notNull, NULL_PATH_VARIABLES))
+                     .map((r, pv) -> new MatchResult(r,
+                                                     Map.copyOf(pv)));
     }
 }

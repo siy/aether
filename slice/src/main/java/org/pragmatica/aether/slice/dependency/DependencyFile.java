@@ -95,12 +95,13 @@ public record DependencyFile(List<ArtifactDependency> api,
             }
             // Parse dependency line - skip empty/comment lines, fail on real errors
             var parseResult = ArtifactDependency.artifactDependency(trimmed);
-            // Use fold to handle success and failure cases
-            final var currentSectionFinal = currentSection;
-            var continueFlag = new boolean[]{false};
-            var errorResult = new Result[]{null};
+            // Capture the section for the lambda
+            final var sectionRef = currentSection;
+            // Use AtomicReference as a holder to capture error from lambda
+            var errorHolder = new java.util.concurrent.atomic.AtomicReference<Cause>();
+            var skipFlag = new java.util.concurrent.atomic.AtomicBoolean(false);
             parseResult.onSuccess(dependency -> {
-                                      switch (currentSectionFinal) {
+                                      switch (sectionRef) {
                 case API -> api.add(dependency);
                 case SHARED -> shared.add(dependency);
                 case SLICES, NONE -> slices.add(dependency);
@@ -111,16 +112,17 @@ public record DependencyFile(List<ArtifactDependency> api,
             if (cause == ArtifactDependency.EMPTY_LINE ||
             cause == ArtifactDependency.COMMENT_LINE ||
             cause == ArtifactDependency.SECTION_HEADER) {
-                                          continueFlag[0] = true;
+                                          skipFlag.set(true);
                                       } else {
-                                          errorResult[0] = cause.result();
+                                          errorHolder.set(cause);
                                       }
                                   });
-            if (continueFlag[0]) {
+            if (skipFlag.get()) {
                 continue;
             }
-            if (errorResult[0] != null) {
-                return (Result<DependencyFile>) errorResult[0];
+            if (errorHolder.get() != null) {
+                return errorHolder.get()
+                                  .result();
             }
         }
         return Result.success(new DependencyFile(List.copyOf(api), List.copyOf(shared), List.copyOf(slices)));

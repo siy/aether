@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-01-10
+
 ### Added
 - **Production Readiness Features**
   - Request ID propagation through inter-slice invocations (KSUID-based)

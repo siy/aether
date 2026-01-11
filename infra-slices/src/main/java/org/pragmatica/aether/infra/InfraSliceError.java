@@ -26,4 +26,17 @@ public sealed interface InfraSliceError extends Cause {
             return "Infrastructure slice not available: " + sliceName;
         }
     }
+
+    record RetryError(String detail, Throwable cause) implements InfraSliceError {
+        public static RetryError retryError(String detail, Throwable cause) {
+            return new RetryError(detail, cause);
+        }
+
+        @Override
+        public String message() {
+            return "Retry failed: " + detail + (cause != null
+                                                ? " - " + cause.getMessage()
+                                                : "");
+        }
+    }
 }

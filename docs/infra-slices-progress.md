@@ -2,7 +2,7 @@
 
 Status: **IN PROGRESS**
 
-## Completed (10/21)
+## Completed (13/21)
 
 | # | Component | Package | Key Classes | Tests |
 |---|-----------|---------|-------------|-------|
@@ -16,22 +16,20 @@ Status: **IN PROGRESS**
 | 8 | RateLimiter | `infra-slices/.../ratelimit` | `RateLimitStrategy`, `RateLimitConfig`, `RateLimitResult`, `RateLimiter`, `InMemoryRateLimiter` | `RateLimiterTest` |
 | 9 | PubSub | `infra-slices/.../pubsub` | `Message`, `Subscription`, `PubSubError`, `PubSub`, `InMemoryPubSub` | `PubSubTest` |
 | 10 | FeatureFlags | `infra-slices/.../feature` | `Context`, `FlagConfig`, `FeatureFlagError`, `FeatureFlags`, `InMemoryFeatureFlags` | `FeatureFlagsTest` |
+| 11 | HttpClientSlice | `infra-slices/.../http` | `HttpClientConfig`, `HttpClientSlice`, `JdkHttpClientSlice` | `HttpClientSliceTest` |
+| 12 | ConfigService | `infra-slices/.../config` | `ConfigScope`, `ConfigError`, `ConfigSubscription`, `ConfigService`, `InMemoryConfigService` | `ConfigServiceTest` |
+| 13 | Scheduler | `infra-slices/.../scheduler` | `ScheduledTaskHandle`, `SchedulerError`, `Scheduler`, `DefaultScheduler` | `SchedulerTest` |
 
-## Remaining (11)
+## Remaining (8)
 
 ### Phase 1: Foundation
 - [ ] **HTTP Server** - Self-registering routes, Route builder API
-- [ ] **HTTP Client** - Outbound HTTP with retry, timeout, base URL config
 - [ ] **CacheService extensions** - Hash/List/Set ops, TypedCache, consistency modes
 
 ### Phase 2: Communication
 - [ ] **Streaming** - Kafka-like partitioned messaging with consumer groups
 
-### Phase 3: Coordination
-- [ ] **Scheduler** - Cron expressions, fixed-rate tasks, leader-only execution
-
 ### Phase 4: Configuration
-- [ ] **ConfigService** - Hierarchical config with GLOBAL/NODE/SLICE scopes, watch support
 - [ ] **SecretsManager** - Encrypted storage, rotation, metadata-only listing
 
 ### Phase 5: Data
@@ -53,10 +51,13 @@ infra-slices/src/main/java/org/pragmatica/aether/infra/
 ├── aspect/          # Logging, Metrics, Retry aspects
 ├── cache/           # CacheService
 ├── circuit/         # CircuitBreakerFactory
+├── config/          # ConfigService with hierarchical scopes
 ├── feature/         # FeatureFlags
+├── http/            # HttpClientSlice (wraps pragmatica-lite HttpOperations)
 ├── lock/            # DistributedLock
 ├── pubsub/          # PubSub messaging
 ├── ratelimit/       # RateLimiter
+├── scheduler/       # Scheduler with fixed-rate and fixed-delay tasks
 └── InfraSliceError.java  # Shared error type
 ```
 
@@ -127,6 +128,15 @@ import org.pragmatica.lang.Functions.Fn0;
 - Use `ConcurrentHashMap` + `CopyOnWriteArrayList` for collections
 - Avoid complex atomic operations (race conditions are subtle)
 
+### pragmatica-lite Integrations Used
+
+| Integration | Usage |
+|-------------|-------|
+| `http-client` | `HttpOperations`, `JdkHttpOperations`, `HttpResult`, `HttpError` for HttpClientSlice |
+| `toml` | `TomlParser`, `TomlDocument` for ConfigService TOML parsing |
+| `micrometer` | `PromiseMetrics` for MetricsAspectFactory |
+| `core` | `Promise<T>`, `Result<T>`, `Option<T>`, `Cause`, `Retry`, `CircuitBreaker` |
+
 ---
 
 ## Testing Patterns
@@ -195,6 +205,9 @@ Commits (chronological):
 8. `feat(infra): add RateLimiter with fixed/sliding window strategies`
 9. `feat(infra): add PubSub with topic-based messaging`
 10. `feat(infra): add FeatureFlags with context-based evaluation`
+11. `feat(infra): add HttpClientSlice wrapping pragmatica-lite HttpOperations`
+12. `feat(infra): add ConfigService with hierarchical GLOBAL/NODE/SLICE scopes`
+13. `feat(infra): add Scheduler with fixed-rate and fixed-delay tasks`
 
 ---
 

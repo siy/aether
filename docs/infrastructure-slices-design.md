@@ -1,6 +1,6 @@
 # Infrastructure Slices Design
 
-Status: **PLANNED**
+Status: **IN PROGRESS** (10/21 complete - see [infra-slices-progress.md](infra-slices-progress.md))
 
 ## Overview
 

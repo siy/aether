@@ -612,5 +612,5 @@ public record UserService(
 
 ## See Also
 
-- [Slice Lifecycle](slice-lifecycle.md) - Runtime perspective
-- [Architecture Overview](architecture-overview.md) - System design
+- [Slice Lifecycle](../contributors/slice-lifecycle.md) - Runtime perspective
+- [Architecture Overview](../contributors/architecture.md) - System design

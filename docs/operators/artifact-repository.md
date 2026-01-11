@@ -369,6 +369,6 @@ Creates `Repository` instances from configuration:
 
 ## Related Documentation
 
-- [Infrastructure Services](infrastructure-services.md) - Overview of built-in services
-- [Slice Developer Guide](slice-developer-guide.md) - How to write slices
-- [CLI Reference](guide/cli-reference.md) - Complete CLI documentation
+- [Infrastructure Services](../slice-developers/infra-services.md) - Overview of built-in services
+- [Slice Developer Guide](../slice-developers/slice-patterns.md) - How to write slices
+- [CLI Reference](../reference/cli.md) - Complete CLI documentation

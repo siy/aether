@@ -214,8 +214,8 @@ See [Demos Guide](../demos.md#real-cluster-demo) for detailed walkthrough.
 
 ## Next Steps
 
-- [CLI Reference](cli-reference.md) - All CLI commands
+- [CLI Reference](../reference/cli.md) - All CLI commands
 - [Forge Guide](forge-guide.md) - Load and chaos testing
-- [Slice Developer Guide](../slice-developer-guide.md) - Writing slices
-- [Scaling Guide](scaling.md) - Auto-scaling configuration
-- [Architecture Overview](../architecture-overview.md) - How it works
+- [Slice Developer Guide](../slice-developers/slice-patterns.md) - Writing slices
+- [Scaling Guide](../operators/scaling.md) - Auto-scaling configuration
+- [Architecture Overview](../contributors/architecture.md) - How it works

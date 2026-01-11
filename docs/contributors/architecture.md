@@ -2,7 +2,7 @@
 
 This document provides a comprehensive technical overview of the Aether AI-driven distributed runtime architecture.
 
-**See [vision-and-goals.md](vision-and-goals.md) for the complete vision and design principles.**
+**See [vision-and-goals.md](../archive/vision-and-goals.md) for the complete vision and design principles.**
 
 ## Core Concepts
 
@@ -39,7 +39,7 @@ Observes metrics + events, produces blueprint changes and node actions:
 - Second-level scaling (start/stop nodes)
 - Complex deployments (rolling, canary, blue/green, multi-cloud migration)
 
-**See [metrics-and-control.md](metrics-and-control.md) for complete specification.**
+**See [metrics-and-control.md](metrics-control.md) for complete specification.**
 
 ## Component Architecture
 
@@ -75,7 +75,7 @@ Observes metrics + events, produces blueprint changes and node actions:
 
 ## Core Components
 
-**See [metrics-and-control.md](metrics-and-control.md) for detailed specifications of metrics and controller components.
+**See [metrics-and-control.md](metrics-control.md) for detailed specifications of metrics and controller components.
 **
 
 ### Cluster Controller
@@ -337,14 +337,14 @@ rolling-update/{update-id} → {
 
 **Metrics flow via MessageRouter only, never touch KV-Store.**
 
-See [metrics-and-control.md](metrics-and-control.md) for message definitions:
+See [metrics-and-control.md](metrics-control.md) for message definitions:
 
 - `MetricsPing` (leader → all nodes, every 1 sec)
 - `MetricsPong` (nodes → leader, every 1 sec)
 
 ## AI Integration Architecture
 
-**See [metrics-and-control.md](metrics-and-control.md) for the controller specification.**
+**See [metrics-and-control.md](metrics-control.md) for the controller specification.**
 
 ### Layered Autonomy
 

@@ -539,6 +539,6 @@ curl -X POST http://localhost:8888/api/load/rate/500
 
 ## See Also
 
-- [Getting Started](getting-started.md) - First steps with Aether
-- [Forge Guide](forge-guide.md) - Detailed Forge documentation
-- [Scaling Guide](scaling.md) - Scaling configuration
+- [Getting Started](../slice-developers/getting-started.md) - First steps with Aether
+- [Forge Guide](../slice-developers/forge-guide.md) - Detailed Forge documentation
+- [Scaling Guide](../operators/scaling.md) - Scaling configuration

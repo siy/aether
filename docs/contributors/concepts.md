@@ -213,9 +213,9 @@ Aether is a **runtime** - it runs your slices and handles distribution transpare
 
 ## Next Steps
 
-- [Getting Started](getting-started.md) - Set up your first Aether project
-- [Architecture](../architecture-overview.md) - Deep dive into how Aether works
-- [Migration Guide](migration-guide.md) - Extract slices from existing code
-- [Scaling Guide](scaling.md) - Understand scaling behavior
-- [CLI Reference](cli-reference.md) - Command-line tools
-- [Forge Testing](forge-guide.md) - Continuous testing with chaos engineering
+- [Getting Started](../slice-developers/getting-started.md) - Set up your first Aether project
+- [Architecture](../contributors/architecture.md) - Deep dive into how Aether works
+- [Migration Guide](../slice-developers/migration-guide.md) - Extract slices from existing code
+- [Scaling Guide](../operators/scaling.md) - Understand scaling behavior
+- [CLI Reference](../reference/cli.md) - Command-line tools
+- [Forge Testing](../slice-developers/forge-guide.md) - Continuous testing with chaos engineering

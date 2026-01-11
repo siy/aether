@@ -284,6 +284,6 @@ Building on Aether's DHT provides:
 
 ## Related Documents
 
-- [CLI Reference](guide/cli-reference.md) - Artifact CLI commands
-- [architecture-overview.md](architecture-overview.md) - Core Aether architecture
-- [Forge Guide](guide/forge-guide.md) - Testing with artifact deployment
+- [CLI Reference](../reference/cli.md) - Artifact CLI commands
+- [architecture-overview.md](../contributors/architecture.md) - Core Aether architecture
+- [Forge Guide](forge-guide.md) - Testing with artifact deployment

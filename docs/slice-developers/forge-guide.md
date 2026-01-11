@@ -376,5 +376,5 @@ The following features are planned but not yet implemented:
 
 ## Next Steps
 
-- [Scaling Guide](scaling.md) - Understand what Forge tests
-- [Architecture](../architecture-overview.md) - How Aether handles failures
+- [Scaling Guide](../operators/scaling.md) - Understand what Forge tests
+- [Architecture](../contributors/architecture.md) - How Aether handles failures

@@ -74,7 +74,7 @@ Release 0.7.2 focuses on **production readiness** with comprehensive E2E testing
 
 ### FUTURE (Infrastructure Services)
 
-See [infrastructure-services.md](infrastructure-services.md) for full vision.
+See [infrastructure-services.md](../slice-developers/infra-services.md) for full vision.
 
 5. **Distributed Hash Map Foundation**
    - Consistent hashing implementation
@@ -100,7 +100,7 @@ See [infrastructure-services.md](infrastructure-services.md) for full vision.
 
 ## Deprecated
 
-- **MCP Server** - Replaced by direct agent API (see [metrics-and-control.md](metrics-and-control.md))
+- **MCP Server** - Replaced by direct agent API (see [metrics-and-control.md](../contributors/metrics-control.md))
 
 ## Implementation Approach
 
@@ -112,7 +112,7 @@ Focus on stability and production readiness:
 4. Decision tree must handle all common cases
 5. Only then add SLM/LLM layers
 
-See [metrics-and-control.md](metrics-and-control.md) for controller architecture.
+See [metrics-and-control.md](../contributors/metrics-control.md) for controller architecture.
 
 ## Test Coverage Summary
 

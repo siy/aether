@@ -2,7 +2,7 @@
 
 This document defines the metrics collection strategy and cluster controller architecture for Aether.
 
-**See [vision-and-goals.md](vision-and-goals.md) for overall vision.**
+**See [vision-and-goals.md](../archive/vision-and-goals.md) for overall vision.**
 
 ## Overview
 

@@ -321,7 +321,7 @@ var config = AetherNodeConfig.testConfig(nodeId, port, coreNodes);
 
 ## See Also
 
-- [Architecture Overview](architecture-overview.md) - Complete system architecture
+- [Architecture Overview](architecture.md) - Complete system architecture
 - [Slice Lifecycle](slice-lifecycle.md) - Slice state machine
-- [Metrics and Control](metrics-and-control.md) - Metrics and controller details
+- [Metrics and Control](metrics-control.md) - Metrics and controller details
 - [KV Schema](archive/kv-schema-simplified.md) - KV-store key/value formats

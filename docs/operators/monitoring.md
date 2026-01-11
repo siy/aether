@@ -268,7 +268,7 @@ aether alerts clear
 | GET | `/alerts/history` | Get alert history |
 | POST | `/alerts/clear` | Clear active alerts |
 
-See [Management API Reference](../api/management-api.md) for complete details.
+See [Management API Reference](../reference/management-api.md) for complete details.
 
 ## Integration with Controller
 

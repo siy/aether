@@ -17,6 +17,7 @@ public record BlobStorageConfig(String name,
                                 String defaultBucket) {
     private static final String DEFAULT_NAME = "default";
     private static final long DEFAULT_MAX_BLOB_SIZE = 100 * 1024 * 1024;
+
     // 100 MB
     private static final String DEFAULT_BUCKET = "default";
 

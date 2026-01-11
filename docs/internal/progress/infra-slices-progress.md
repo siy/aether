@@ -22,11 +22,9 @@ Status: **IN PROGRESS**
 | 14 | HttpServerSlice | `infra-slices/.../server` | `HttpServerSliceConfig`, `HttpServerSliceError`, `HttpServerSlice`, `DefaultHttpServerSlice` | `HttpServerSliceTest` |
 | 15 | CacheService Extensions | `infra-slices/.../cache` | Batch ops, counters, patterns, stats | `CacheServiceTest` |
 | 16 | StreamingService | `infra-slices/.../streaming` | `StreamingConfig`, `StreamingError`, `StreamMessage`, `TopicInfo`, `ConsumerGroupInfo`, `StreamingService`, `InMemoryStreamingService` | `StreamingServiceTest` |
+| 17 | SecretsManager | `infra-slices/.../secrets` | `SecretsConfig`, `SecretsError`, `SecretMetadata`, `SecretValue`, `SecretsManager`, `InMemorySecretsManager` | `SecretsManagerTest` |
 
-## Remaining (5)
-
-### Phase 4: Configuration
-- [ ] **SecretsManager** - Encrypted storage, rotation, metadata-only listing
+## Remaining (4)
 
 ### Phase 5: Data
 - [ ] **DatabaseService** - JDBC adapter with RowMapper, batch operations

@@ -39,4 +39,17 @@ public sealed interface InfraSliceError extends Cause {
                                                 : "");
         }
     }
+
+    record CircuitBreakerError(String detail, Throwable cause) implements InfraSliceError {
+        public static CircuitBreakerError circuitBreakerError(String detail, Throwable cause) {
+            return new CircuitBreakerError(detail, cause);
+        }
+
+        @Override
+        public String message() {
+            return "Circuit breaker error: " + detail + (cause != null
+                                                         ? " - " + cause.getMessage()
+                                                         : "");
+        }
+    }
 }

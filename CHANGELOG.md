@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **infra-slices module split** - Split into 16 independent modules for granular dependencies
+  - infra-cache, infra-database, infra-blob, infra-secrets, infra-outbox
+  - infra-statemachine, infra-aspect, infra-config, infra-streaming
+  - infra-http, infra-server, infra-feature, infra-lock
+  - infra-pubsub, infra-ratelimit, infra-scheduler
+
 ### Added
 - **HttpServerSlice** - HTTP server infrastructure slice
   - Wraps pragmatica-lite's NettyHttpServer with Slice lifecycle

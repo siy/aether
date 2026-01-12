@@ -156,7 +156,7 @@ public record CancelOrderSlice() implements Slice {
 
     private Promise<StockReleased> releaseStock(String reservationId) {
         return invoker()
-                      .flatMap(inv -> inv.invokeAndWait(INVENTORY,
+                      .flatMap(inv -> inv.invoke(INVENTORY,
                                                         "releaseStock",
                                                         new ReleaseStockRequest(reservationId),
                                                         StockReleased.class));

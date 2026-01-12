@@ -25,7 +25,7 @@ In the current Aether runtime, inter-slice communication relies on string-based 
 // Current approach - no compile-time type safety
 SliceRuntime.getSliceInvoker()
     .async()
-    .flatMap(inv -> inv.invokeAndWait(
+    .flatMap(inv -> inv.invoke(
         "org.example:inventory-service:1.0.0",  // artifact as string
         "checkStock",                            // method name as string
         request,                                 // untyped request
@@ -153,7 +153,7 @@ sequenceDiagram
 
     Note over SI: Inter-slice call
     SI->>SI: Proxy.checkStock(req)
-    SI->>SI: invokeAndWait(artifact, method, req, type)
+    SI->>SI: invoke(artifact, method, req, type)
     SI-->>SI: Response
 ```
 
@@ -790,7 +790,7 @@ public final class InventoryServiceProxy implements InventoryService {
 
     @Override
     public Promise<StockAvailability> checkStock(CheckStockRequest request) {
-        return invoker.invokeAndWait(
+        return invoker.invoke(
             artifact,
             "checkStock",
             request,
@@ -800,7 +800,7 @@ public final class InventoryServiceProxy implements InventoryService {
 
     @Override
     public Promise<StockReservation> reserveStock(ReserveStockRequest request) {
-        return invoker.invokeAndWait(
+        return invoker.invoke(
             artifact,
             "reserveStock",
             request,
@@ -810,7 +810,7 @@ public final class InventoryServiceProxy implements InventoryService {
 
     @Override
     public Promise<LegacyResponse> legacyMethod(LegacyRequest request) {
-        return invoker.invokeAndWait(
+        return invoker.invoke(
             artifact,
             "legacyMethod",
             request,
@@ -1014,7 +1014,7 @@ sequenceDiagram
     participant Target as Target Slice
 
     Caller->>Proxy: checkStock(request)
-    Proxy->>SI: invokeAndWait(artifact, method, request, type)
+    Proxy->>SI: invoke(artifact, method, request, type)
 
     SI->>ER: selectEndpoint(artifact, method)
     ER-->>SI: Endpoint(nodeId)
@@ -1185,7 +1185,7 @@ public record PlaceOrderSlice() implements Slice {
     }
 
     public Promise<OrderResult> placeOrder(PlaceOrderRequest request) {
-        return invoker().flatMap(inv -> inv.invokeAndWait(
+        return invoker().flatMap(inv -> inv.invoke(
             INVENTORY,
             "checkStock",
             new CheckStockRequest(request.productId(), request.quantity()),

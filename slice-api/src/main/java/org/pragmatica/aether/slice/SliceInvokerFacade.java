@@ -20,8 +20,8 @@ public interface SliceInvokerFacade {
      * @param <R>            Response type
      * @return Promise resolving to the response
      */
-    <R> Promise<R> invokeAndWait(String sliceArtifact,
-                                 String methodName,
-                                 Object request,
-                                 Class<R> responseType);
+    <R> Promise<R> invoke(String sliceArtifact,
+                          String methodName,
+                          Object request,
+                          Class<R> responseType);
 }

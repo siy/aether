@@ -624,7 +624,7 @@ public static Result<ValidPlaceOrderRequest> validPlaceOrderRequest(PlaceOrderRe
 **2. Inter-Slice Invocation**:
 
 ```java
-invoker.invokeAndWait(
+invoker.invoke(
     INVENTORY,
     MethodName.methodName("checkStock").unwrap(),
     new CheckStockRequest(item.productId(), item.quantity()),
@@ -643,7 +643,7 @@ private record ValidWithPrice(ValidPlaceOrderRequest request, OrderTotal total) 
 
 ```java
 var stockChecks = request.items().stream()
-    .map(item -> invoker.invokeAndWait(...))
+    .map(item -> invoker.invoke(...))
     .toList();
 return Promise.allOf(stockChecks)...
 ```

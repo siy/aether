@@ -20,7 +20,7 @@ HTTP Request → HttpRouterHandler
   → RequestExtractor.extract(request, bindings)
   → RequestBuilder.buildRequest(params, route)
   → SliceDispatcher.dispatch(route, request)
-     → InternalSlice.call() [local] OR SliceInvoker.invokeAndWait() [remote]
+     → InternalSlice.call() [local] OR SliceInvoker.invoke() [remote]
   → JsonMapper.toJson(response)
   → HTTP Response
 ```
@@ -579,7 +579,7 @@ class SliceDispatcherImpl implements SliceDispatcher {
         }
 
         // Remote invocation
-        return invoker.invokeAndWait(artifact,
+        return invoker.invoke(artifact,
                                      MethodName.methodName(methodName).unwrap(),
                                      request,
                                      responseType)
@@ -1559,7 +1559,7 @@ public record PlaceOrderSlice(SliceInvoker invoker) implements Slice {
 
     private Promise<ValidWithStockCheck> checkAllStock(ValidPlaceOrderRequest request) {
         var stockChecks = request.items().stream()
-            .map(item -> invoker.invokeAndWait(
+            .map(item -> invoker.invoke(
                 INVENTORY,
                 MethodName.methodName("checkStock").unwrap(),
                 new CheckStockRequest(item.productId(), item.quantity()),
@@ -1586,7 +1586,7 @@ public record PlaceOrderSlice(SliceInvoker invoker) implements Slice {
             .map(item -> new CalculateTotalRequest.LineItem(item.productId(), item.quantity()))
             .toList();
 
-        return invoker.invokeAndWait(
+        return invoker.invoke(
             PRICING,
             MethodName.methodName("calculateTotal").unwrap(),
             new CalculateTotalRequest(lineItems, context.request().discountCode()),
@@ -1599,7 +1599,7 @@ public record PlaceOrderSlice(SliceInvoker invoker) implements Slice {
         var orderId = OrderId.generate();
 
         var reservations = context.request().items().stream()
-            .map(item -> invoker.invokeAndWait(
+            .map(item -> invoker.invoke(
                 INVENTORY,
                 MethodName.methodName("reserveStock").unwrap(),
                 new ReserveStockRequest(item.productId(), item.quantity(), orderId.value()),

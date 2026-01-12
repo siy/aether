@@ -73,7 +73,32 @@
                             <version>${jbct.version}</version>
                         </path>
                     </annotationProcessorPaths>
+                    <compilerArgs>
+                        <arg>-Aslice.groupId=${project.groupId}</arg>
+                        <arg>-Aslice.artifactId=${project.artifactId}</arg>
+                    </compilerArgs>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.pragmatica-lite</groupId>
+                <artifactId>jbct-maven-plugin</artifactId>
+                <version>${jbct.version}</version>
+                <executions>
+                    <execution>
+                        <id>collect-deps</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>collect-slice-deps</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>generate-blueprint</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>generate-blueprint</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

@@ -150,7 +150,7 @@ public record PlaceOrderSlice() implements Slice {
 
     private Promise<StockAvailability> checkStock(ValidPlaceOrderRequest.ValidOrderItem item) {
         return invoker()
-                      .flatMap(inv -> inv.invokeAndWait(INVENTORY,
+                      .flatMap(inv -> inv.invoke(INVENTORY,
                                                         "checkStock",
                                                         new CheckStockRequest(item.productId(),
                                                                               item.quantity()),
@@ -176,7 +176,7 @@ public record PlaceOrderSlice() implements Slice {
                                                                                item.quantity()))
                                .toList();
         return invoker()
-                      .flatMap(inv -> inv.invokeAndWait(PRICING,
+                      .flatMap(inv -> inv.invoke(PRICING,
                                                         "calculateTotal",
                                                         new CalculateTotalRequest(lineItems,
                                                                                   context.request()
@@ -200,7 +200,7 @@ public record PlaceOrderSlice() implements Slice {
 
     private Promise<StockReservation> reserveStock(ValidPlaceOrderRequest.ValidOrderItem item, OrderId orderId) {
         return invoker()
-                      .flatMap(inv -> inv.invokeAndWait(INVENTORY,
+                      .flatMap(inv -> inv.invoke(INVENTORY,
                                                         "reserveStock",
                                                         new ReserveStockRequest(item.productId(),
                                                                                 item.quantity(),

@@ -265,7 +265,7 @@ Controllers operate in layers (see `docs/metrics-and-control.md`):
 ```java
 // Invoke a method on another slice
 node.sliceInvoker()
-    .invokeAndWait(
+    .invoke(
         Artifact.artifact("org.example:service:1.0.0").unwrap(),
         MethodName.methodName("processOrder").unwrap(),
         request,

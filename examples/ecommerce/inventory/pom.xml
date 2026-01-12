@@ -48,6 +48,10 @@
                             <version>${jbct.version}</version>
                         </path>
                     </annotationProcessorPaths>
+                    <compilerArgs>
+                        <arg>-Aslice.groupId=${project.groupId}</arg>
+                        <arg>-Aslice.artifactId=${project.artifactId}</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
         </plugins>

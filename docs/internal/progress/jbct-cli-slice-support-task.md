@@ -561,7 +561,7 @@ public class ProxyClassGenerator {
             .addModifiers(Modifier.PUBLIC)
             .returns(TypeName.get(returnType))
             .addParameter(TypeName.get(paramType), paramName)
-            .addStatement("return invoker.invokeAndWait(artifact, $S, $L, $T.class)",
+            .addStatement("return invoker.invoke(artifact, $S, $L, $T.class)",
                 methodName, paramName, responseType)
             .build();
     }
@@ -585,7 +585,7 @@ public class ProxyClassGenerator {
 2. **Package**: Same as API interface (caller's api package)
 3. **Fields**: `invoker` (SliceInvokerFacade), `artifact` (String)
 4. **Constructor**: Takes invoker and artifact
-5. **Methods**: Each method delegates to `invoker.invokeAndWait(...)`
+5. **Methods**: Each method delegates to `invoker.invoke(...)`
 
 ### 2.6 Factory Class Generation Algorithm
 
@@ -1388,7 +1388,7 @@ class SliceProcessorTest {
 
         // Then
         assertThat(compilation).generatedSourceFile("test.api.InventoryServiceProxy")
-            .containsText("invoker.invokeAndWait");
+            .containsText("invoker.invoke");
     }
 
     @Test

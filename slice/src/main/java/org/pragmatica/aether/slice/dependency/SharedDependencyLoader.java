@@ -91,6 +91,71 @@ public interface SharedDependencyLoader {
     }
 
     /**
+     * Process infrastructure dependencies from [infra] section.
+     * <p>
+     * Infrastructure JARs are loaded into SharedLibraryClassLoader like [shared] dependencies.
+     * Instance sharing is managed by infra services themselves via InfraStore at runtime.
+     *
+     * @param dependencies        List of infra dependencies from [infra] section
+     * @param sharedLibraryLoader The shared library classloader
+     * @param repository          Repository to locate artifacts
+     * @return Promise that completes when all infra JARs are loaded
+     */
+    static Promise<Unit> processInfraDependencies(List<ArtifactDependency> dependencies,
+                                                  SharedLibraryClassLoader sharedLibraryLoader,
+                                                  Repository repository) {
+        if (dependencies.isEmpty()) {
+            return Promise.success(unit());
+        }
+        return processInfraSequentially(dependencies, sharedLibraryLoader, repository);
+    }
+
+    private static Promise<Unit> processInfraSequentially(List<ArtifactDependency> dependencies,
+                                                          SharedLibraryClassLoader sharedLibraryLoader,
+                                                          Repository repository) {
+        if (dependencies.isEmpty()) {
+            return Promise.success(unit());
+        }
+        var dependency = dependencies.getFirst();
+        var remaining = dependencies.subList(1, dependencies.size());
+        return loadInfraIntoShared(dependency, sharedLibraryLoader, repository)
+                                  .flatMap(_ -> processInfraSequentially(remaining, sharedLibraryLoader, repository));
+    }
+
+    private static Promise<Unit> loadInfraIntoShared(ArtifactDependency dependency,
+                                                     SharedLibraryClassLoader sharedLibraryLoader,
+                                                     Repository repository) {
+        return sharedLibraryLoader.checkCompatibility(dependency)
+                                  .fold(() -> loadInfraArtifact(dependency, sharedLibraryLoader, repository),
+                                        _ -> logInfraAlreadyLoaded(dependency));
+    }
+
+    private static Promise<Unit> loadInfraArtifact(ArtifactDependency dependency,
+                                                   SharedLibraryClassLoader sharedLibraryLoader,
+                                                   Repository repository) {
+        return toArtifact(dependency)
+                         .async()
+                         .flatMap(repository::locate)
+                         .map(location -> addInfraToSharedLoader(dependency,
+                                                                 sharedLibraryLoader,
+                                                                 location.url()));
+    }
+
+    private static Unit addInfraToSharedLoader(ArtifactDependency dependency,
+                                               SharedLibraryClassLoader sharedLibraryLoader,
+                                               URL url) {
+        var version = extractVersion(dependency.versionPattern());
+        sharedLibraryLoader.addArtifact(dependency.groupId(), dependency.artifactId(), version, url);
+        log.debug("Loaded infra dependency {} into SharedLibraryClassLoader", dependency.asString());
+        return unit();
+    }
+
+    private static Promise<Unit> logInfraAlreadyLoaded(ArtifactDependency dependency) {
+        log.debug("Infra dependency {} already loaded", dependency.asString());
+        return Promise.success(unit());
+    }
+
+    /**
      * Result of processing shared dependencies for a slice.
      *
      * @param sliceClassLoader   The ClassLoader to use for loading the slice

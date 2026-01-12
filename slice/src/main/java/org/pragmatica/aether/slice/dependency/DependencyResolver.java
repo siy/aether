@@ -199,6 +199,12 @@ public interface DependencyResolver {
                                                                                                     sharedLibraryLoader,
                                                                                                     repository,
                                                                                                     location.url()))
+                                     // Process infra dependencies (loaded into SharedLibraryClassLoader)
+                                     // Instance sharing is managed by infra services via InfraStore
+                                     .flatMap(sharedResult -> SharedDependencyLoader.processInfraDependencies(depFile.infra(),
+                                                                                                              sharedLibraryLoader,
+                                                                                                              repository)
+                                                                                    .map(_ -> sharedResult))
                                      .flatMap(sharedResult -> loadSliceClassAndResolveDeps(manifest,
                                                                                            depFile,
                                                                                            sharedResult,

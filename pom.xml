@@ -25,6 +25,7 @@
         <module>dashboard</module>
         <module>node</module>
         <module>slice-api</module>
+        <module>infra-api</module>
         <module>slice</module>
         <module>cluster</module>
         <module>cli</module>

@@ -29,6 +29,7 @@ class DependencyFileTest {
                       .onSuccess(file -> {
                           assertThat(file.api()).hasSize(2);
                           assertThat(file.shared()).hasSize(2);
+                          assertThat(file.infra()).isEmpty();
                           assertThat(file.slices()).hasSize(1);
 
                           assertThat(file.api().get(0).groupId()).isEqualTo("org.example");
@@ -36,6 +37,7 @@ class DependencyFileTest {
 
                           assertThat(file.hasApiDependencies()).isTrue();
                           assertThat(file.hasSharedDependencies()).isTrue();
+                          assertThat(file.hasInfraDependencies()).isFalse();
                           assertThat(file.hasSliceDependencies()).isTrue();
                       });
     }
@@ -156,6 +158,7 @@ class DependencyFileTest {
                           assertThat(file.isEmpty()).isTrue();
                           assertThat(file.api()).isEmpty();
                           assertThat(file.shared()).isEmpty();
+                          assertThat(file.infra()).isEmpty();
                           assertThat(file.slices()).isEmpty();
                       });
     }
@@ -234,6 +237,60 @@ class DependencyFileTest {
                       .onSuccess(file -> {
                           assertThat(file.shared()).hasSize(1);
                           assertThat(file.slices()).hasSize(1);
+                      });
+    }
+
+    @Test
+    void parse_infra_section() {
+        var content = """
+                [infra]
+                org.pragmatica-lite.aether:infra-cache:^0.7.0
+                org.pragmatica-lite.aether:infra-database:^0.7.0
+                """;
+
+        DependencyFile.dependencyFile(content)
+                      .onFailureRun(Assertions::fail)
+                      .onSuccess(file -> {
+                          assertThat(file.api()).isEmpty();
+                          assertThat(file.shared()).isEmpty();
+                          assertThat(file.infra()).hasSize(2);
+                          assertThat(file.slices()).isEmpty();
+                          assertThat(file.hasInfraDependencies()).isTrue();
+
+                          assertThat(file.infra().get(0).groupId()).isEqualTo("org.pragmatica-lite.aether");
+                          assertThat(file.infra().get(0).artifactId()).isEqualTo("infra-cache");
+                          assertThat(file.infra().get(1).artifactId()).isEqualTo("infra-database");
+                      });
+    }
+
+    @Test
+    void parse_full_file_with_infra_section() {
+        var content = """
+                [api]
+                org.example:inventory-service-api:^1.0.0
+
+                [shared]
+                org.pragmatica-lite:core:^0.8.0
+
+                [infra]
+                org.pragmatica-lite.aether:infra-cache:^0.7.0
+
+                [slices]
+                org.example:notification-service:^1.0.0
+                """;
+
+        DependencyFile.dependencyFile(content)
+                      .onFailureRun(Assertions::fail)
+                      .onSuccess(file -> {
+                          assertThat(file.api()).hasSize(1);
+                          assertThat(file.shared()).hasSize(1);
+                          assertThat(file.infra()).hasSize(1);
+                          assertThat(file.slices()).hasSize(1);
+                          assertThat(file.isEmpty()).isFalse();
+                          assertThat(file.hasApiDependencies()).isTrue();
+                          assertThat(file.hasSharedDependencies()).isTrue();
+                          assertThat(file.hasInfraDependencies()).isTrue();
+                          assertThat(file.hasSliceDependencies()).isTrue();
                       });
     }
 

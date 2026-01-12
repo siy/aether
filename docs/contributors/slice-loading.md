@@ -61,7 +61,7 @@ Slice loading is triggered by KV-Store events and involves:
 │  Step 5: Load Dependency File (META-INF/dependencies/{className})           │
 │  ─────────────────────────────────────────────────────────────────────────  │
 │  • DependencyFile.load(sliceClassName, tempClassLoader)                     │
-│  • Parse sections: [api], [shared], [slices]                                │
+│  • Parse sections: [api], [shared], [infra], [slices]                       │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
@@ -87,7 +87,19 @@ Slice loading is triggered by KV-Store events and involves:
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Step 8: Resolve Slice Dependencies (Recursive)                             │
+│  Step 8: Process Infra Dependencies                                         │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  • SharedDependencyLoader.processInfraDependencies()                        │
+│  For each [infra] dependency:                                               │
+│    • Not loaded → load JAR into SharedLibraryClassLoader                    │
+│    • Already loaded → check version compatibility                           │
+│  Note: Instance creation deferred to slice code via InfraStore              │
+│  Note: Infra services control their own sharing strategy (singleton, etc.)  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Step 9: Resolve Slice Dependencies (Recursive)                             │
 │  ─────────────────────────────────────────────────────────────────────────  │
 │  • resolveSliceDependencies(sliceDeps)                                      │
 │  For each slice dependency:                                                 │
@@ -98,7 +110,7 @@ Slice loading is triggered by KV-Store events and involves:
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Step 9: Instantiate Slice via Factory Method                               │
+│  Step 10: Instantiate Slice via Factory Method                              │
 │  ─────────────────────────────────────────────────────────────────────────  │
 │  • SliceFactory.createSlice(sliceClass, dependencies, descriptors)          │
 │  • Find static factory: ClassName.className(deps...)                        │
@@ -108,7 +120,7 @@ Slice loading is triggered by KV-Store events and involves:
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Step 10: Register in SliceRegistry                                         │
+│  Step 11: Register in SliceRegistry                                         │
 │  ─────────────────────────────────────────────────────────────────────────  │
 │  • registry.register(artifact, slice)                                       │
 │  • Makes slice available for other slices' dependencies                     │
@@ -116,7 +128,7 @@ Slice loading is triggered by KV-Store events and involves:
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Step 11: Store Entry and Update State                                      │
+│  Step 12: Store Entry and Update State                                      │
 │  ─────────────────────────────────────────────────────────────────────────  │
 │  • SliceStore: entries.put(artifact, LoadedSliceEntry)                      │
 │  • NodeDeploymentManager: transitionTo(LOADED)                              │
@@ -130,7 +142,7 @@ Slice loading is triggered by KV-Store events and involves:
                                       │
                                       ▼ (auto-activate)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Step 12: Activation (ACTIVATE → ACTIVATING → ACTIVE)                       │
+│  Step 13: Activation (ACTIVATE → ACTIVATING → ACTIVE)                       │
 │  ─────────────────────────────────────────────────────────────────────────  │
 │  • slice.start()                                                            │
 │  • Create SliceBridge for serialization boundary                            │
@@ -201,6 +213,12 @@ org.example:pricing-api:^1.0.0
 org.pragmatica-lite:core:^0.8.0
 org.example:order-domain:^1.0.0
 
+[infra]
+# Infrastructure services (caching, database, etc.)
+# JARs loaded into SharedLibraryClassLoader; instances shared via InfraStore
+org.pragmatica-lite.aether:infra-cache:^0.7.0
+org.pragmatica-lite.aether:infra-database:^0.7.0
+
 [slices]
 # Runtime slice dependencies (other slices this slice calls)
 # Resolved recursively
@@ -214,7 +232,35 @@ org.example:pricing-service:^1.0.0
 |---------|---------|-------------|
 | `[api]` | Typed interfaces for generated proxies | SharedLibraryClassLoader |
 | `[shared]` | Libraries used by multiple slices | SharedLibraryClassLoader (or SliceClassLoader on conflict) |
+| `[infra]` | Infrastructure services with instance sharing | SharedLibraryClassLoader (instances via InfraStore) |
 | `[slices]` | Other slices this slice depends on | Resolved recursively, passed to factory |
+
+### Infrastructure Services
+
+The `[infra]` section supports infrastructure services like caching, database connections, and configuration.
+Unlike `[shared]`, infra services share **instances** across slices via `InfraStore`:
+
+```java
+// In slice code - obtains shared instance
+var cache = CacheService.cacheService();
+
+// Inside CacheService factory - uses InfraStore
+static CacheService cacheService() {
+    return InfraStore.instance()
+        .map(store -> store.getOrCreate(
+            "org.pragmatica-lite.aether:infra-cache",
+            "0.7.0",
+            CacheService.class,
+            InMemoryCacheService::inMemoryCacheService))
+        .unwrap();
+}
+```
+
+**Three sharing patterns supported:**
+
+1. **Singleton**: All slices share same instance (default)
+2. **Shared Core + Adapter**: Core singleton wrapped with per-slice adapter
+3. **Factory**: Infra service is a factory, produces new instances per call
 
 ## JAR Manifest
 
@@ -275,11 +321,14 @@ public interface OrderService extends Slice {
 | `DependencyResolver` | `slice/.../DependencyResolver.java` | Orchestrates dependency resolution |
 | `SliceManifest` | `slice/.../SliceManifest.java` | Reads JAR manifest |
 | `DependencyFile` | `slice/.../DependencyFile.java` | Parses dependency file |
-| `SharedDependencyLoader` | `slice/.../SharedDependencyLoader.java` | Loads shared/API dependencies |
+| `SharedDependencyLoader` | `slice/.../SharedDependencyLoader.java` | Loads shared/API/infra dependencies |
 | `SliceFactory` | `slice/.../SliceFactory.java` | Instantiates slice via reflection |
 | `SliceClassLoader` | `slice/.../SliceClassLoader.java` | Child-first ClassLoader for isolation |
 | `SharedLibraryClassLoader` | `slice/.../SharedLibraryClassLoader.java` | Shared dependency ClassLoader |
 | `SliceRegistry` | `slice/.../SliceRegistry.java` | Tracks loaded slices |
+| `InfraStore` | `infra-api/.../InfraStore.java` | Per-node infra instance sharing |
+| `InfraStoreImpl` | `node/.../InfraStoreImpl.java` | Thread-safe infra store implementation |
+| `VersionedInstance` | `infra-api/.../VersionedInstance.java` | Version-tagged instances with compatibility |
 
 ## Error Handling
 

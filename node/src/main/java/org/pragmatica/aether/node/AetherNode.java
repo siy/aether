@@ -12,6 +12,8 @@ import org.pragmatica.aether.deployment.cluster.BlueprintServiceImpl;
 import org.pragmatica.aether.deployment.cluster.ClusterDeploymentManager;
 import org.pragmatica.aether.deployment.node.NodeDeploymentManager;
 import org.pragmatica.aether.endpoint.EndpointRegistry;
+import org.pragmatica.aether.infra.InfraStore;
+import org.pragmatica.aether.infra.InfraStoreImpl;
 import org.pragmatica.aether.infra.artifact.ArtifactStore;
 import org.pragmatica.aether.infra.artifact.MavenProtocolHandler;
 import org.pragmatica.aether.repository.RepositoryFactory;
@@ -286,6 +288,7 @@ public interface AetherNode {
                               BlueprintService blueprintService,
                               MavenProtocolHandler mavenProtocolHandler,
                               ArtifactStore artifactStore,
+                              InfraStoreImpl infraStore,
                               InvocationMetricsCollector invocationMetrics,
                               DecisionTreeController controller,
                               RollingUpdateManager rollingUpdateManager,
@@ -310,6 +313,7 @@ public interface AetherNode {
                 // Start comprehensive snapshot collection (feeds TTM pipeline)
                 snapshotCollector.start();
                 SliceRuntime.setSliceInvoker(sliceInvoker);
+                InfraStore.setInstance(infraStore);
                 return managementServer.map(ManagementServer::start)
                                        .or(Promise.unitPromise())
                                        .flatMap(_ -> startClusterAsync())
@@ -326,6 +330,7 @@ public interface AetherNode {
                 ttmManager.stop();
                 snapshotCollector.stop();
                 SliceRuntime.clear();
+                InfraStore.clear();
                 return managementServer.map(ManagementServer::stop)
                                        .or(Promise.unitPromise())
                                        .flatMap(_ -> sliceInvoker.stop())
@@ -450,6 +455,8 @@ public interface AetherNode {
                                                                                               minuteAggregator);
         // Create artifact metrics collector for storage and deployment tracking
         var artifactMetricsCollector = ArtifactMetricsCollector.artifactMetricsCollector(artifactStore);
+        // Create infrastructure store for infra service instance sharing
+        var infraStore = InfraStoreImpl.infraStoreImpl();
         // Create TTM manager (returns no-op if disabled in config)
         var ttmManager = TTMManager.ttmManager(config.ttm(),
                                                minuteAggregator,
@@ -514,6 +521,7 @@ public interface AetherNode {
                                       blueprintService,
                                       mavenProtocolHandler,
                                       artifactStore,
+                                      infraStore,
                                       invocationMetrics,
                                       controller,
                                       rollingUpdateManager,
@@ -553,6 +561,7 @@ public interface AetherNode {
                                                                blueprintService,
                                                                mavenProtocolHandler,
                                                                artifactStore,
+                                                               infraStore,
                                                                invocationMetrics,
                                                                controller,
                                                                rollingUpdateManager,

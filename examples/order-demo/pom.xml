@@ -66,6 +66,11 @@
             </dependency>
             <dependency>
                 <groupId>org.pragmatica-lite.aether</groupId>
+                <artifactId>infra-api</artifactId>
+                <version>${aether.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.pragmatica-lite.aether</groupId>
                 <artifactId>cluster</artifactId>
                 <version>${aether.version}</version>
             </dependency>

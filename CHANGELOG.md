@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-01-13
+
 ### Changed
 - **infra-slices module split** - Split into 16 independent modules for granular dependencies
   - infra-cache, infra-database, infra-blob, infra-secrets, infra-outbox

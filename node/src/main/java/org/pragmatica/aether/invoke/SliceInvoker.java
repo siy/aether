@@ -6,6 +6,7 @@ import org.pragmatica.aether.endpoint.EndpointRegistry;
 import org.pragmatica.aether.endpoint.EndpointRegistry.Endpoint;
 import org.pragmatica.aether.invoke.InvocationMessage.InvokeRequest;
 import org.pragmatica.aether.invoke.InvocationMessage.InvokeResponse;
+import org.pragmatica.aether.slice.MethodHandle;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.SliceBridge;
 import org.pragmatica.aether.slice.SliceInvokerFacade;
@@ -53,7 +54,10 @@ public interface SliceInvoker extends SliceInvokerFacade {
     /**
      * Implementation of SliceInvokerFacade for use by slices via SliceRuntime.
      * Parses string artifact/method and delegates to typed methods.
+     *
+     * @deprecated Use {@link #methodHandle(String, String, Class, Class)} for better performance.
      */
+    @Deprecated
     @Override
     default <R> Promise<R> invoke(String sliceArtifact,
                                   String methodName,
@@ -70,6 +74,59 @@ public interface SliceInvoker extends SliceInvokerFacade {
     }
 
     record ArtifactMethod(Artifact artifact, MethodName method) {}
+
+    /**
+     * Implementation of SliceInvokerFacade.methodHandle for creating reusable handles.
+     * Parses artifact and method once, returns a handle for repeated invocations.
+     */
+    @Override
+    default <Req, Resp> Result<MethodHandle<Req, Resp>> methodHandle(String sliceArtifact,
+                                                                     String methodName,
+                                                                     Class<Req> requestType,
+                                                                     Class<Resp> responseType) {
+        return Artifact.artifact(sliceArtifact)
+                       .flatMap(artifact -> MethodName.methodName(methodName)
+                                                      .map(method -> createMethodHandle(artifact,
+                                                                                        method,
+                                                                                        requestType,
+                                                                                        responseType)));
+    }
+
+    /**
+     * Create a method handle with pre-parsed artifact and method.
+     * Subclasses may override to provide custom implementations.
+     */
+    default <Req, Resp> MethodHandle<Req, Resp> createMethodHandle(Artifact artifact,
+                                                                   MethodName method,
+                                                                   Class<Req> requestType,
+                                                                   Class<Resp> responseType) {
+        return new MethodHandleImpl<>(artifact, method, requestType, responseType, this);
+    }
+
+    /**
+     * Internal record implementing MethodHandle with pre-parsed artifact/method.
+     * Delegates to typed invoke methods, avoiding repeated parsing.
+     */
+    record MethodHandleImpl<Req, Resp>(Artifact artifact,
+                                       MethodName methodName,
+                                       Class<Req> requestType,
+                                       Class<Resp> responseType,
+                                       SliceInvoker invoker) implements MethodHandle<Req, Resp> {
+        @Override
+        public Promise<Resp> invoke(Req request) {
+            return invoker.invoke(artifact, methodName, request, responseType);
+        }
+
+        @Override
+        public Promise<Unit> fireAndForget(Req request) {
+            return invoker.invoke(artifact, methodName, request);
+        }
+
+        @Override
+        public String artifactCoordinate() {
+            return artifact.asString();
+        }
+    }
 
     /**
      * Fire-and-forget invocation - sends request without waiting for response.

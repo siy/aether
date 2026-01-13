@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **MethodHandle API** - Performance optimization for repeated slice invocations
+  - New `MethodHandle<Req, Resp>` interface for pre-parsed artifact/method
+  - `SliceInvokerFacade.methodHandle()` factory method
+  - Eliminates per-call parsing overhead (4 regex + 5 allocations)
+  - Old `invoke(String, String, Object, Class)` method deprecated
+- **RFC 7807 Problem Details** - Standardized HTTP error responses
+  - `ProblemDetail` record with type, title, status, detail, instance fields
+  - Mandatory `requestId` extension for request tracing
+  - `application/problem+json` content type for all error responses
+  - Covers handler errors, HttpError failures, and 404 not found
+
 ## [0.7.4] - 2026-01-13
 
 ### Changed

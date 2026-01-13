@@ -4,9 +4,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.pragmatica.http.routing.HttpStatus;
 import org.pragmatica.http.routing.PathParameter;
 import org.pragmatica.http.routing.Route;
 import org.pragmatica.http.routing.RouteSource;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.io.TimeSpan;
 
@@ -472,8 +476,10 @@ class HttpServerSliceTest {
 
     @Nested
     class ErrorHandlingTests {
+        private final ObjectMapper objectMapper = new ObjectMapper();
+
         @Test
-        void server_handlesHandlerError() throws Exception {
+        void server_handlesHandlerError_withProblemDetail() throws Exception {
             var config = HttpServerSliceConfig.httpServerSliceConfig(TEST_PORT).unwrap();
 
             server = HttpServerSlice.httpServerSlice(config,
@@ -491,6 +497,104 @@ class HttpServerSliceTest {
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             assertThat(response.statusCode()).isEqualTo(500);
+            assertThat(response.headers().firstValue("Content-Type"))
+                    .isPresent()
+                    .hasValueSatisfying(ct -> assertThat(ct).contains("application/problem+json"));
+
+            var problemDetail = objectMapper.readTree(response.body());
+            assertThat(problemDetail.has("type")).isTrue();
+            assertThat(problemDetail.has("title")).isTrue();
+            assertThat(problemDetail.has("status")).isTrue();
+            assertThat(problemDetail.has("detail")).isTrue();
+            assertThat(problemDetail.has("instance")).isTrue();
+            assertThat(problemDetail.has("requestId")).isTrue();
+
+            assertThat(problemDetail.get("status").asInt()).isEqualTo(500);
+            assertThat(problemDetail.get("title").asText()).isEqualTo("Internal Server Error");
+            assertThat(problemDetail.get("instance").asText()).isEqualTo("/error");
+            assertThat(problemDetail.get("requestId").asText()).isNotBlank();
+        }
+
+        @Test
+        void server_handlesHttpError_withProblemDetail() throws Exception {
+            var config = HttpServerSliceConfig.httpServerSliceConfig(TEST_PORT).unwrap();
+
+            server = HttpServerSlice.httpServerSlice(config,
+                get("/bad-request").withoutParameters().to(_ ->
+                    HttpStatus.BAD_REQUEST.with("Invalid input provided").promise()
+                ).asJson()
+            );
+            server.start().await();
+
+            var request = HttpRequest.newBuilder()
+                                     .uri(URI.create("http://localhost:" + TEST_PORT + "/bad-request"))
+                                     .GET()
+                                     .build();
+
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(400);
+            assertThat(response.headers().firstValue("Content-Type"))
+                    .isPresent()
+                    .hasValueSatisfying(ct -> assertThat(ct).contains("application/problem+json"));
+
+            var problemDetail = objectMapper.readTree(response.body());
+            assertThat(problemDetail.get("status").asInt()).isEqualTo(400);
+            assertThat(problemDetail.get("title").asText()).isEqualTo("Bad Request");
+            assertThat(problemDetail.get("detail").asText()).isEqualTo("Invalid input provided");
+            assertThat(problemDetail.get("requestId").asText()).isNotBlank();
+        }
+
+        @Test
+        void server_handlesNotFound_withProblemDetail() throws Exception {
+            var config = HttpServerSliceConfig.httpServerSliceConfig(TEST_PORT).unwrap();
+
+            server = HttpServerSlice.httpServerSlice(config,
+                get("/existing").withoutParameters().to(_ -> Promise.success("OK")).asJson()
+            );
+            server.start().await();
+
+            var request = HttpRequest.newBuilder()
+                                     .uri(URI.create("http://localhost:" + TEST_PORT + "/nonexistent"))
+                                     .GET()
+                                     .build();
+
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(404);
+            assertThat(response.headers().firstValue("Content-Type"))
+                    .isPresent()
+                    .hasValueSatisfying(ct -> assertThat(ct).contains("application/problem+json"));
+
+            var problemDetail = objectMapper.readTree(response.body());
+            assertThat(problemDetail.get("status").asInt()).isEqualTo(404);
+            assertThat(problemDetail.get("title").asText()).isEqualTo("Not Found");
+            assertThat(problemDetail.get("detail").asText()).contains("/nonexistent");
+            assertThat(problemDetail.get("instance").asText()).isEqualTo("/nonexistent");
+            assertThat(problemDetail.get("requestId").asText()).isNotBlank();
+        }
+
+        @Test
+        void problemDetail_includesCorrectType() throws Exception {
+            var config = HttpServerSliceConfig.httpServerSliceConfig(TEST_PORT).unwrap();
+
+            server = HttpServerSlice.httpServerSlice(config,
+                get("/error").withoutParameters().to(_ ->
+                    HttpStatus.UNPROCESSABLE_ENTITY.with("Validation failed").promise()
+                ).asJson()
+            );
+            server.start().await();
+
+            var request = HttpRequest.newBuilder()
+                                     .uri(URI.create("http://localhost:" + TEST_PORT + "/error"))
+                                     .GET()
+                                     .build();
+
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            var problemDetail = objectMapper.readTree(response.body());
+            assertThat(problemDetail.get("type").asText()).isEqualTo("about:blank");
+            assertThat(problemDetail.get("status").asInt()).isEqualTo(422);
         }
     }
 }

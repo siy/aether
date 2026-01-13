@@ -304,7 +304,6 @@ public final class ForgeCluster {
                                           SliceActionConfig.defaultConfiguration(furySerializerFactoryProvider()),
                                           org.pragmatica.aether.config.SliceConfig.defaults(),
                                           mgmtPort,
-                                          Option.empty(),
                                           DHTConfig.FULL,
                                           Option.empty(),
                                           org.pragmatica.aether.config.TTMConfig.disabled(),

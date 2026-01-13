@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **infra-slices module split** - Split into 16 independent modules for granular dependencies
+  - infra-cache, infra-database, infra-blob, infra-secrets, infra-outbox
+  - infra-statemachine, infra-aspect, infra-config, infra-streaming
+  - infra-http, infra-server, infra-feature, infra-lock
+  - infra-pubsub, infra-ratelimit, infra-scheduler
+
+### Added
+- **Maven Central Publishing** - Publishing configuration for public modules
+  - Apache 2.0 license for: slice-api, slice-annotations, infra-api, and all 16 infra-* modules
+  - GPG signing and source/javadoc generation via release profile
+  - `scripts/publish.sh` for manual publishing workflow
+  - README.md documentation for each publishable module
+- **HttpServerSlice** - HTTP server infrastructure slice
+  - Wraps pragmatica-lite's NettyHttpServer with Slice lifecycle
+  - Route handling via http-routing module integration
+  - Configurable port, timeouts, content length
+  - JBCT-compliant sealed error hierarchy
+- **CacheService extensions** - Extended cache functionality
+  - Batch operations: getMulti, setMulti, deleteMulti
+  - Counter operations: increment, incrementBy, decrement
+  - Pattern operations: keys, deletePattern
+  - Statistics: CacheStats with hit/miss tracking
+  - Configuration: CacheConfig with eviction policies
+  - JBCT-compliant error types (CacheServiceError)
+
+## [0.7.3] - 2026-01-10
+
 ### Added
 - **Production Readiness Features**
   - Request ID propagation through inter-slice invocations (KSUID-based)

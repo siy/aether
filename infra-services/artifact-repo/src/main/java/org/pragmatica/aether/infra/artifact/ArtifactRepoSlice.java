@@ -3,7 +3,6 @@ package org.pragmatica.aether.infra.artifact;
 import org.pragmatica.aether.slice.MethodName;
 import org.pragmatica.aether.slice.Slice;
 import org.pragmatica.aether.slice.SliceMethod;
-import org.pragmatica.aether.slice.SliceRoute;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.type.TypeToken;
 
@@ -35,17 +34,6 @@ public record ArtifactRepoSlice(MavenProtocolHandler mavenHandler) implements Sl
                                          this::handlePut,
                                          new TypeToken<MavenProtocolHandler.MavenResponse>() {},
                                          new TypeToken<RepositoryRequest>() {}));
-    }
-
-    @Override
-    public List<SliceRoute> routes() {
-        return List.of(SliceRoute.get("/repository/{path}", "get")
-                                 .withPathVar("path")
-                                 .build(),
-                       SliceRoute.put("/repository/{path}", "put")
-                                 .withPathVar("path")
-                                 .withBody()
-                                 .build());
     }
 
     private Promise<MavenProtocolHandler.MavenResponse> handleGet(RepositoryRequest request) {

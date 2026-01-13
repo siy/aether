@@ -43,7 +43,7 @@ import static org.pragmatica.lang.io.TimeSpan.timeSpan;
  * <p>Supports two invocation patterns:
  * <ul>
  *   <li>Fire-and-forget: {@link #invoke(Artifact, MethodName, Object)}</li>
- *   <li>Request-response: {@link #invokeAndWait(Artifact, MethodName, Object, Class)}</li>
+ *   <li>Request-response: {@link #invoke(Artifact, MethodName, Object, Class)}</li>
  * </ul>
  *
  * <p>Uses the EndpointRegistry to find the target node for a slice,
@@ -55,18 +55,18 @@ public interface SliceInvoker extends SliceInvokerFacade {
      * Parses string artifact/method and delegates to typed methods.
      */
     @Override
-    default <R> Promise<R> invokeAndWait(String sliceArtifact,
-                                         String methodName,
-                                         Object request,
-                                         Class<R> responseType) {
+    default <R> Promise<R> invoke(String sliceArtifact,
+                                  String methodName,
+                                  Object request,
+                                  Class<R> responseType) {
         return Artifact.artifact(sliceArtifact)
                        .flatMap(artifact -> MethodName.methodName(methodName)
                                                       .map(method -> new ArtifactMethod(artifact, method)))
                        .async()
-                       .flatMap(am -> invokeAndWait(am.artifact(),
-                                                    am.method(),
-                                                    request,
-                                                    responseType));
+                       .flatMap(am -> invoke(am.artifact(),
+                                             am.method(),
+                                             request,
+                                             responseType));
     }
 
     record ArtifactMethod(Artifact artifact, MethodName method) {}
@@ -91,7 +91,7 @@ public interface SliceInvoker extends SliceInvokerFacade {
      * @param <R>          Response type
      * @return Promise resolving to response
      */
-    <R> Promise<R> invokeAndWait(Artifact slice, MethodName method, Object request, Class<R> responseType);
+    <R> Promise<R> invoke(Artifact slice, MethodName method, Object request, Class<R> responseType);
 
     /**
      * Request-response invocation with retry for idempotent operations.
@@ -349,7 +349,7 @@ class SliceInvokerImpl implements SliceInvoker {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <R> Promise<R> invokeAndWait(Artifact slice, MethodName method, Object request, Class<R> responseType) {
+    public <R> Promise<R> invoke(Artifact slice, MethodName method, Object request, Class<R> responseType) {
         if (stopped) {
             return INVOKER_STOPPED.promise();
         }

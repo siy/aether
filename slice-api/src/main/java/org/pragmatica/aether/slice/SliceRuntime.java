@@ -13,7 +13,7 @@ import org.pragmatica.lang.Result;
  * <pre>{@code
  * SliceRuntime.getSliceInvoker()
  *     .async()
- *     .flatMap(invoker -> invoker.invokeAndWait(targetSlice, method, request, ResponseType.class));
+ *     .flatMap(invoker -> invoker.invoke(targetSlice, method, request, ResponseType.class));
  * }</pre>
  * <p>
  * This approach allows slices to remain records (immutable) while still

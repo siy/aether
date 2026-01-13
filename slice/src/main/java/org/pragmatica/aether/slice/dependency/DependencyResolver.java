@@ -199,6 +199,10 @@ public interface DependencyResolver {
                                                                                                     sharedLibraryLoader,
                                                                                                     repository,
                                                                                                     location.url()))
+                                     .flatMap(sharedResult -> SharedDependencyLoader.processInfraDependencies(depFile.infra(),
+                                                                                                              sharedLibraryLoader,
+                                                                                                              repository)
+                                                                                    .map(_ -> sharedResult))
                                      .flatMap(sharedResult -> loadSliceClassAndResolveDeps(manifest,
                                                                                            depFile,
                                                                                            sharedResult,

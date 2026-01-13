@@ -148,9 +148,9 @@ public record CancelOrderSlice() implements Slice {
     private Promise<StockReleased> releaseStock(String reservationId) {
         return invoker()
                       .flatMap(inv -> inv.invoke(INVENTORY,
-                                                        "releaseStock",
-                                                        new ReleaseStockRequest(reservationId),
-                                                        StockReleased.class));
+                                                 "releaseStock",
+                                                 new ReleaseStockRequest(reservationId),
+                                                 StockReleased.class));
     }
 
     private Promise<OrderWithReleases> validateReleases(List<Result<StockReleased>> results, OrderWithContext context) {

@@ -10,7 +10,16 @@
     </parent>
 
     <artifactId>infra-api</artifactId>
-    <description>Minimal API for infrastructure services</description>
+    <name>Aether Infrastructure API</name>
+    <description>Minimal API for infrastructure services. Provides InfraStore for instance sharing across slices.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

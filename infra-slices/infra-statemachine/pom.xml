@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-statemachine</artifactId>
-    <description>State machine infrastructure slice</description>
+    <name>Aether Infrastructure: State Machine</name>
+    <description>Generic state machine with type-safe states, events, transitions, and instance management.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

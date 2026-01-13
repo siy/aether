@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-config</artifactId>
-    <description>Configuration service infrastructure slice</description>
+    <name>Aether Infrastructure: Configuration</name>
+    <description>Hierarchical configuration with scopes (global/node/slice), TOML support, and change watchers.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

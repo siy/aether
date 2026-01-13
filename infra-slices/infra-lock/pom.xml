@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-lock</artifactId>
-    <description>Distributed lock infrastructure slice</description>
+    <name>Aether Infrastructure: Distributed Lock</name>
+    <description>Distributed locking for resource coordination with acquire, tryAcquire, and withLock helpers.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

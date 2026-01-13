@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-ratelimit</artifactId>
-    <description>Rate limiting infrastructure slice</description>
+    <name>Aether Infrastructure: Rate Limiter</name>
+    <description>Distributed rate limiting with per-key configuration and permit tracking.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

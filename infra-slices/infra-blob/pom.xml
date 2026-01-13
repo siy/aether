@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-blob</artifactId>
-    <description>Blob storage service infrastructure slice</description>
+    <name>Aether Infrastructure: Blob Storage</name>
+    <description>S3-like object storage with buckets, blob upload/download, metadata, and prefix listing.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

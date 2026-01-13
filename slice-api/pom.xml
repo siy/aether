@@ -10,6 +10,16 @@
     </parent>
 
     <artifactId>slice-api</artifactId>
+    <name>Aether Slice API</name>
+    <description>Core slice interface definitions for Aether runtime. Provides Slice, SliceMethod, and runtime contracts.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

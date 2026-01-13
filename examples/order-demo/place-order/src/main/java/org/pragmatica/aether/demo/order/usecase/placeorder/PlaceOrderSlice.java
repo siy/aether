@@ -143,10 +143,10 @@ public record PlaceOrderSlice() implements Slice {
     private Promise<StockAvailability> checkStock(ValidPlaceOrderRequest.ValidOrderItem item) {
         return invoker()
                       .flatMap(inv -> inv.invoke(INVENTORY,
-                                                        "checkStock",
-                                                        new CheckStockRequest(item.productId(),
-                                                                              item.quantity()),
-                                                        StockAvailability.class));
+                                                 "checkStock",
+                                                 new CheckStockRequest(item.productId(),
+                                                                       item.quantity()),
+                                                 StockAvailability.class));
     }
 
     private Promise<ValidWithStockCheck> validateStockResults(List<Result<StockAvailability>> results,
@@ -169,11 +169,11 @@ public record PlaceOrderSlice() implements Slice {
                                .toList();
         return invoker()
                       .flatMap(inv -> inv.invoke(PRICING,
-                                                        "calculateTotal",
-                                                        new CalculateTotalRequest(lineItems,
-                                                                                  context.request()
-                                                                                         .discountCode()),
-                                                        OrderTotal.class))
+                                                 "calculateTotal",
+                                                 new CalculateTotalRequest(lineItems,
+                                                                           context.request()
+                                                                                  .discountCode()),
+                                                 OrderTotal.class))
                       .map(total -> new ValidWithPrice(context.request(),
                                                        total))
                       .mapError(PlaceOrderError.PricingFailed::new);
@@ -193,11 +193,11 @@ public record PlaceOrderSlice() implements Slice {
     private Promise<StockReservation> reserveStock(ValidPlaceOrderRequest.ValidOrderItem item, OrderId orderId) {
         return invoker()
                       .flatMap(inv -> inv.invoke(INVENTORY,
-                                                        "reserveStock",
-                                                        new ReserveStockRequest(item.productId(),
-                                                                                item.quantity(),
-                                                                                orderId.value()),
-                                                        StockReservation.class));
+                                                 "reserveStock",
+                                                 new ReserveStockRequest(item.productId(),
+                                                                         item.quantity(),
+                                                                         orderId.value()),
+                                                 StockReservation.class));
     }
 
     private Promise<ValidWithReservations> validateReservationResults(List<Result<StockReservation>> results,

@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - infra-pubsub, infra-ratelimit, infra-scheduler
 
 ### Added
+- **Maven Central Publishing** - Publishing configuration for public modules
+  - Apache 2.0 license for: slice-api, slice-annotations, infra-api, and all 16 infra-* modules
+  - GPG signing and source/javadoc generation via release profile
+  - `scripts/publish.sh` for manual publishing workflow
+  - README.md documentation for each publishable module
 - **HttpServerSlice** - HTTP server infrastructure slice
   - Wraps pragmatica-lite's NettyHttpServer with Slice lifecycle
   - Route handling via http-routing module integration

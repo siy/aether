@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-http</artifactId>
-    <description>HTTP client infrastructure slice</description>
+    <name>Aether Infrastructure: HTTP Client</name>
+    <description>HTTP client wrapper with GET/POST/PUT/DELETE/PATCH support.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

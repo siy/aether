@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-feature</artifactId>
-    <description>Feature flags infrastructure slice</description>
+    <name>Aether Infrastructure: Feature Flags</name>
+    <description>Runtime feature toggles with targeting support and variants for A/B testing.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

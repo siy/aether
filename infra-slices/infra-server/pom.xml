@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-server</artifactId>
-    <description>HTTP server infrastructure slice</description>
+    <name>Aether Infrastructure: HTTP Server</name>
+    <description>HTTP server with Netty, route registration, and JSON codec support.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

@@ -11,7 +11,16 @@
     </parent>
 
     <artifactId>infra-aspect</artifactId>
-    <description>Transaction and metrics aspects infrastructure slice</description>
+    <name>Aether Infrastructure: Aspect</name>
+    <description>Declarative aspect support: transactions, retries, circuit breakers, logging, and metrics collection.</description>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <dependencies>
         <dependency>

@@ -9,10 +9,11 @@ import org.pragmatica.http.routing.PathParameter;
 import org.pragmatica.http.routing.Route;
 import org.pragmatica.http.routing.RouteSource;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.pragmatica.json.JsonMapper;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.io.TimeSpan;
+
+import org.pragmatica.lang.type.TypeToken;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -476,7 +477,7 @@ class HttpServerSliceTest {
 
     @Nested
     class ErrorHandlingTests {
-        private final ObjectMapper objectMapper = new ObjectMapper();
+        private final JsonMapper jsonMapper = JsonMapper.defaultJsonMapper();
 
         @Test
         void server_handlesHandlerError_withProblemDetail() throws Exception {
@@ -501,18 +502,18 @@ class HttpServerSliceTest {
                     .isPresent()
                     .hasValueSatisfying(ct -> assertThat(ct).contains("application/problem+json"));
 
-            var problemDetail = objectMapper.readTree(response.body());
-            assertThat(problemDetail.has("type")).isTrue();
-            assertThat(problemDetail.has("title")).isTrue();
-            assertThat(problemDetail.has("status")).isTrue();
-            assertThat(problemDetail.has("detail")).isTrue();
-            assertThat(problemDetail.has("instance")).isTrue();
-            assertThat(problemDetail.has("requestId")).isTrue();
+            var problemDetail = parseProblemDetail(response.body());
+            assertThat(problemDetail.containsKey("type")).isTrue();
+            assertThat(problemDetail.containsKey("title")).isTrue();
+            assertThat(problemDetail.containsKey("status")).isTrue();
+            assertThat(problemDetail.containsKey("detail")).isTrue();
+            assertThat(problemDetail.containsKey("instance")).isTrue();
+            assertThat(problemDetail.containsKey("requestId")).isTrue();
 
-            assertThat(problemDetail.get("status").asInt()).isEqualTo(500);
-            assertThat(problemDetail.get("title").asText()).isEqualTo("Internal Server Error");
-            assertThat(problemDetail.get("instance").asText()).isEqualTo("/error");
-            assertThat(problemDetail.get("requestId").asText()).isNotBlank();
+            assertThat(((Number) problemDetail.get("status")).intValue()).isEqualTo(500);
+            assertThat(problemDetail.get("title")).isEqualTo("Internal Server Error");
+            assertThat(problemDetail.get("instance")).isEqualTo("/error");
+            assertThat((String) problemDetail.get("requestId")).isNotBlank();
         }
 
         @Test
@@ -538,11 +539,11 @@ class HttpServerSliceTest {
                     .isPresent()
                     .hasValueSatisfying(ct -> assertThat(ct).contains("application/problem+json"));
 
-            var problemDetail = objectMapper.readTree(response.body());
-            assertThat(problemDetail.get("status").asInt()).isEqualTo(400);
-            assertThat(problemDetail.get("title").asText()).isEqualTo("Bad Request");
-            assertThat(problemDetail.get("detail").asText()).isEqualTo("Invalid input provided");
-            assertThat(problemDetail.get("requestId").asText()).isNotBlank();
+            var problemDetail = parseProblemDetail(response.body());
+            assertThat(((Number) problemDetail.get("status")).intValue()).isEqualTo(400);
+            assertThat(problemDetail.get("title")).isEqualTo("Bad Request");
+            assertThat(problemDetail.get("detail")).isEqualTo("Invalid input provided");
+            assertThat((String) problemDetail.get("requestId")).isNotBlank();
         }
 
         @Test
@@ -566,12 +567,12 @@ class HttpServerSliceTest {
                     .isPresent()
                     .hasValueSatisfying(ct -> assertThat(ct).contains("application/problem+json"));
 
-            var problemDetail = objectMapper.readTree(response.body());
-            assertThat(problemDetail.get("status").asInt()).isEqualTo(404);
-            assertThat(problemDetail.get("title").asText()).isEqualTo("Not Found");
-            assertThat(problemDetail.get("detail").asText()).contains("/nonexistent");
-            assertThat(problemDetail.get("instance").asText()).isEqualTo("/nonexistent");
-            assertThat(problemDetail.get("requestId").asText()).isNotBlank();
+            var problemDetail = parseProblemDetail(response.body());
+            assertThat(((Number) problemDetail.get("status")).intValue()).isEqualTo(404);
+            assertThat(problemDetail.get("title")).isEqualTo("Not Found");
+            assertThat((String) problemDetail.get("detail")).contains("/nonexistent");
+            assertThat(problemDetail.get("instance")).isEqualTo("/nonexistent");
+            assertThat((String) problemDetail.get("requestId")).isNotBlank();
         }
 
         @Test
@@ -592,9 +593,15 @@ class HttpServerSliceTest {
 
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-            var problemDetail = objectMapper.readTree(response.body());
-            assertThat(problemDetail.get("type").asText()).isEqualTo("about:blank");
-            assertThat(problemDetail.get("status").asInt()).isEqualTo(422);
+            var problemDetail = parseProblemDetail(response.body());
+            assertThat(problemDetail.get("type")).isEqualTo("about:blank");
+            assertThat(((Number) problemDetail.get("status")).intValue()).isEqualTo(422);
+        }
+
+        private static final TypeToken<Map<String, Object>> MAP_TYPE = new TypeToken<>() {};
+
+        private Map<String, Object> parseProblemDetail(String json) {
+            return jsonMapper.readString(json, MAP_TYPE).unwrap();
         }
     }
 }

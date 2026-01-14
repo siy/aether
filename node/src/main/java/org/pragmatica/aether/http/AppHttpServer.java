@@ -18,6 +18,7 @@ import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.net.tcp.TlsConfig;
 import org.pragmatica.net.tcp.TlsContextFactory;
+import org.pragmatica.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,7 +28,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -197,7 +197,7 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private static final Logger log = LoggerFactory.getLogger(AppHttpRequestHandler.class);
     private static final String CONTENT_TYPE_JSON = "application/json";
     private static final String CONTENT_TYPE_PROBLEM = "application/problem+json";
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = JsonMapper.defaultJsonMapper();
 
     private final HttpRouteRegistry routeRegistry;
     private final Option<SliceInvoker> sliceInvoker;
@@ -392,23 +392,25 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                              String instance,
                              String requestId) {
         var problem = ProblemDetail.problemDetail(status, detail, instance, requestId);
-        try{
-            var json = OBJECT_MAPPER.writeValueAsString(problem);
-            var buf = Unpooled.copiedBuffer(json, CharsetUtil.UTF_8);
-            var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
-                                                       HttpResponseStatus.valueOf(status.code()),
-                                                       buf);
-            response.headers()
-                    .set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_PROBLEM);
-            response.headers()
-                    .setInt(HttpHeaderNames.CONTENT_LENGTH,
-                            buf.readableBytes());
-            ctx.writeAndFlush(response)
-               .addListener(ChannelFutureListener.CLOSE);
-        } catch (Exception e) {
-            log.error("Failed to serialize ProblemDetail", e);
-            sendPlainError(ctx, status);
-        }
+        JSON_MAPPER.writeAsString(problem)
+                   .onSuccess(json -> {
+                                  var buf = Unpooled.copiedBuffer(json, CharsetUtil.UTF_8);
+                                  var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
+                                                                             HttpResponseStatus.valueOf(status.code()),
+                                                                             buf);
+                                  response.headers()
+                                          .set(HttpHeaderNames.CONTENT_TYPE, CONTENT_TYPE_PROBLEM);
+                                  response.headers()
+                                          .setInt(HttpHeaderNames.CONTENT_LENGTH,
+                                                  buf.readableBytes());
+                                  ctx.writeAndFlush(response)
+                                     .addListener(ChannelFutureListener.CLOSE);
+                              })
+                   .onFailure(cause -> {
+                                  log.error("Failed to serialize ProblemDetail: {}",
+                                            cause.message());
+                                  sendPlainError(ctx, status);
+                              });
     }
 
     private void sendResponse(ChannelHandlerContext ctx, HttpResponseData responseData, String requestId) {

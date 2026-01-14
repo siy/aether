@@ -54,6 +54,7 @@
         <module>e2e-tests</module>
         <module>aether-ttm</module>
         <module>http-handler-api</module>
+        <module>http-routing-adapter</module>
         <module>infra-slices</module>
     </modules>
 

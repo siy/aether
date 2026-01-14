@@ -6,7 +6,7 @@ import org.pragmatica.http.ContentType;
 import org.pragmatica.http.routing.CommonContentTypes;
 import org.pragmatica.http.routing.HttpMethod;
 import org.pragmatica.http.routing.HttpStatus;
-import org.pragmatica.http.routing.JacksonJsonCodec;
+import org.pragmatica.http.routing.JsonCodecAdapter;
 import org.pragmatica.http.routing.JsonCodec;
 import org.pragmatica.http.routing.ProblemDetail;
 import org.pragmatica.http.routing.RequestContextImpl;
@@ -62,7 +62,7 @@ final class DefaultHttpServerSlice implements HttpServerSlice {
     }
 
     static DefaultHttpServerSlice defaultHttpServerSlice(HttpServerSliceConfig config, Stream<RouteSource> routes) {
-        return defaultHttpServerSlice(config, routes, JacksonJsonCodec.defaultCodec());
+        return defaultHttpServerSlice(config, routes, JsonCodecAdapter.defaultCodec());
     }
 
     static DefaultHttpServerSlice defaultHttpServerSlice(HttpServerSliceConfig config,

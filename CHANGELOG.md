@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **MethodHandle API** - Performance optimization for repeated slice invocations
-  - New `MethodHandle<Req, Resp>` interface for pre-parsed artifact/method
+  - New `MethodHandle<R, T>` interface for pre-parsed artifact/method (response type first per convention)
   - `SliceInvokerFacade.methodHandle()` factory method
   - Eliminates per-call parsing overhead (4 regex + 5 allocations)
   - Old `invoke(String, String, Object, Class)` method deprecated

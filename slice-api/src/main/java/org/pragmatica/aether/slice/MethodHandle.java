@@ -11,17 +11,17 @@ import org.pragmatica.lang.Unit;
  * Using a MethodHandle avoids repeated parsing of artifact coordinates and method names,
  * significantly improving performance for repeated invocations.
  *
- * @param <Req>  Request type
- * @param <Resp> Response type
+ * @param <R> Response/return type (first, per pragmatica-lite convention)
+ * @param <T> Request/parameter type (last, per pragmatica-lite convention)
  */
-public interface MethodHandle<Req, Resp> {
+public interface MethodHandle<R, T> {
     /**
      * Invoke the method and wait for response.
      *
      * @param request Request object
      * @return Promise resolving to the response
      */
-    Promise<Resp> invoke(Req request);
+    Promise<R> invoke(T request);
 
     /**
      * Invoke the method without waiting for response (fire-and-forget).
@@ -29,7 +29,7 @@ public interface MethodHandle<Req, Resp> {
      * @param request Request object
      * @return Promise resolving when request is sent
      */
-    Promise<Unit> fireAndForget(Req request);
+    Promise<Unit> fireAndForget(T request);
 
     /**
      * Get the target slice artifact coordinate (e.g., "org.example:my-slice:1.0.0").

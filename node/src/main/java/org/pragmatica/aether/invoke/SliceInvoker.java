@@ -80,10 +80,10 @@ public interface SliceInvoker extends SliceInvokerFacade {
      * Parses artifact and method once, returns a handle for repeated invocations.
      */
     @Override
-    default <Req, Resp> Result<MethodHandle<Req, Resp>> methodHandle(String sliceArtifact,
-                                                                     String methodName,
-                                                                     Class<Req> requestType,
-                                                                     Class<Resp> responseType) {
+    default <R, T> Result<MethodHandle<R, T>> methodHandle(String sliceArtifact,
+                                                           String methodName,
+                                                           Class<T> requestType,
+                                                           Class<R> responseType) {
         return Artifact.artifact(sliceArtifact)
                        .flatMap(artifact -> MethodName.methodName(methodName)
                                                       .map(method -> createMethodHandle(artifact,
@@ -96,10 +96,10 @@ public interface SliceInvoker extends SliceInvokerFacade {
      * Create a method handle with pre-parsed artifact and method.
      * Subclasses may override to provide custom implementations.
      */
-    default <Req, Resp> MethodHandle<Req, Resp> createMethodHandle(Artifact artifact,
-                                                                   MethodName method,
-                                                                   Class<Req> requestType,
-                                                                   Class<Resp> responseType) {
+    default <R, T> MethodHandle<R, T> createMethodHandle(Artifact artifact,
+                                                         MethodName method,
+                                                         Class<T> requestType,
+                                                         Class<R> responseType) {
         return new MethodHandleImpl<>(artifact, method, requestType, responseType, this);
     }
 
@@ -107,18 +107,18 @@ public interface SliceInvoker extends SliceInvokerFacade {
      * Internal record implementing MethodHandle with pre-parsed artifact/method.
      * Delegates to typed invoke methods, avoiding repeated parsing.
      */
-    record MethodHandleImpl<Req, Resp>(Artifact artifact,
-                                       MethodName methodName,
-                                       Class<Req> requestType,
-                                       Class<Resp> responseType,
-                                       SliceInvoker invoker) implements MethodHandle<Req, Resp> {
+    record MethodHandleImpl<R, T>(Artifact artifact,
+                                  MethodName methodName,
+                                  Class<T> requestType,
+                                  Class<R> responseType,
+                                  SliceInvoker invoker) implements MethodHandle<R, T> {
         @Override
-        public Promise<Resp> invoke(Req request) {
+        public Promise<R> invoke(T request) {
             return invoker.invoke(artifact, methodName, request, responseType);
         }
 
         @Override
-        public Promise<Unit> fireAndForget(Req request) {
+        public Promise<Unit> fireAndForget(T request) {
             return invoker.invoke(artifact, methodName, request);
         }
 

@@ -194,7 +194,7 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
     private final HttpRouteRegistry routeRegistry;
     private final Option<SliceInvoker> sliceInvoker;
-    private final ConcurrentHashMap<String, MethodHandle<HttpRequestContext, HttpResponseData>> methodHandleCache;
+    private final ConcurrentHashMap<String, MethodHandle<HttpResponseData, HttpRequestContext>> methodHandleCache;
 
     AppHttpRequestHandler(HttpRouteRegistry routeRegistry, Option<SliceInvoker> sliceInvoker) {
         this.routeRegistry = routeRegistry;
@@ -302,7 +302,7 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         sendProblem(ctx, status, "Slice invocation failed: " + cause.message(), path, requestId);
     }
 
-    private Option<MethodHandle<HttpRequestContext, HttpResponseData>> getOrCreateMethodHandle(String cacheKey,
+    private Option<MethodHandle<HttpResponseData, HttpRequestContext>> getOrCreateMethodHandle(String cacheKey,
                                                                                                HttpRouteRegistry.RouteInfo route) {
         var cached = methodHandleCache.get(cacheKey);
         if (cached != null) {

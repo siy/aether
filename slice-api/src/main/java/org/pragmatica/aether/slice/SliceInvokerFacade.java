@@ -42,12 +42,12 @@ public interface SliceInvokerFacade {
      * @param methodName     Name of the method to invoke
      * @param requestType    Request type class
      * @param responseType   Expected response type class
-     * @param <Req>          Request type
-     * @param <Resp>         Response type
+     * @param <R>            Response type (first, per pragmatica-lite convention)
+     * @param <T>            Request type (last, per pragmatica-lite convention)
      * @return Result containing the method handle, or failure if artifact/method parsing fails
      */
-    <Req, Resp> Result<MethodHandle<Req, Resp>> methodHandle(String sliceArtifact,
-                                                             String methodName,
-                                                             Class<Req> requestType,
-                                                             Class<Resp> responseType);
+    <R, T> Result<MethodHandle<R, T>> methodHandle(String sliceArtifact,
+                                                   String methodName,
+                                                   Class<T> requestType,
+                                                   Class<R> responseType);
 }

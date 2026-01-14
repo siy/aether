@@ -3,6 +3,9 @@ package org.pragmatica.aether.http;
 import org.pragmatica.aether.config.AppHttpConfig;
 import org.pragmatica.aether.http.handler.HttpRequestContext;
 import org.pragmatica.aether.http.handler.HttpResponseData;
+import org.pragmatica.aether.http.handler.security.SecurityContext;
+import org.pragmatica.aether.http.security.SecurityError;
+import org.pragmatica.aether.http.security.SecurityValidator;
 import org.pragmatica.aether.invoke.SliceInvoker;
 import org.pragmatica.aether.invoke.SliceInvoker.SliceInvokerError;
 import org.pragmatica.aether.slice.MethodHandle;
@@ -92,6 +95,7 @@ class AppHttpServerImpl implements AppHttpServer {
     private final AppHttpConfig config;
     private final HttpRouteRegistry routeRegistry;
     private final Option<SliceInvoker> sliceInvoker;
+    private final SecurityValidator securityValidator;
     private final MultiThreadIoEventLoopGroup bossGroup;
     private final MultiThreadIoEventLoopGroup workerGroup;
     private final Option<SslContext> sslContext;
@@ -105,6 +109,9 @@ class AppHttpServerImpl implements AppHttpServer {
         this.config = config;
         this.routeRegistry = routeRegistry;
         this.sliceInvoker = sliceInvoker;
+        this.securityValidator = config.securityEnabled()
+                                 ? SecurityValidator.apiKeyValidator(config.apiKeys())
+                                 : SecurityValidator.noOpValidator();
         this.bossGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
         this.workerGroup = new MultiThreadIoEventLoopGroup(NioIoHandler.newFactory());
         this.sslContext = tls.map(TlsContextFactory::create)
@@ -136,7 +143,7 @@ class AppHttpServerImpl implements AppHttpServer {
                 sslContext.onPresent(ctx -> pipeline.addLast(ctx.newHandler(ch.alloc())));
                 pipeline.addLast(new HttpServerCodec());
                 pipeline.addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
-                pipeline.addLast(new AppHttpRequestHandler(routeRegistry, sliceInvoker));
+                pipeline.addLast(new AppHttpRequestHandler(routeRegistry, sliceInvoker, securityValidator));
             }
         };
     }
@@ -194,11 +201,15 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
     private final HttpRouteRegistry routeRegistry;
     private final Option<SliceInvoker> sliceInvoker;
+    private final SecurityValidator securityValidator;
     private final ConcurrentHashMap<String, MethodHandle<HttpResponseData, HttpRequestContext>> methodHandleCache;
 
-    AppHttpRequestHandler(HttpRouteRegistry routeRegistry, Option<SliceInvoker> sliceInvoker) {
+    AppHttpRequestHandler(HttpRouteRegistry routeRegistry,
+                          Option<SliceInvoker> sliceInvoker,
+                          SecurityValidator securityValidator) {
         this.routeRegistry = routeRegistry;
         this.sliceInvoker = sliceInvoker;
+        this.securityValidator = securityValidator;
         this.methodHandleCache = new ConcurrentHashMap<>();
     }
 
@@ -246,25 +257,49 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             sendProblem(ctx, HttpStatus.SERVICE_UNAVAILABLE, "Slice invoker not initialized", path, requestId);
             return;
         }
-        // Build HttpRequestContext
+        // Build initial HttpRequestContext (with anonymous security for validation)
         var headers = convertHeaders(request.headers());
         var body = new byte[request.content()
                                    .readableBytes()];
         request.content()
                .readBytes(body);
-        var httpRequestContext = new HttpRequestContext(path,
-                                                        request.method()
-                                                               .name(),
-                                                        queryParams,
-                                                        headers,
-                                                        body,
-                                                        requestId);
-        log.debug("Route found: {} {} -> {}:{} [{}]",
+        var initialContext = HttpRequestContext.httpRequestContext(path,
+                                                                   request.method()
+                                                                          .name(),
+                                                                   queryParams,
+                                                                   headers,
+                                                                   body,
+                                                                   requestId);
+        // Validate security and proceed
+        securityValidator.validate(initialContext,
+                                   route.securityPolicy())
+                         .fold(cause -> {
+                                   sendSecurityError(ctx, cause, path, requestId);
+                                   return null;
+                               },
+                               securityContext -> {
+                                   invokeSecuredRoute(ctx, initialContext, securityContext, route, path, requestId);
+                                   return null;
+                               });
+    }
+
+    private void invokeSecuredRoute(ChannelHandlerContext ctx,
+                                    HttpRequestContext initialContext,
+                                    SecurityContext securityContext,
+                                    HttpRouteRegistry.RouteInfo route,
+                                    String path,
+                                    String requestId) {
+        // Create final context with security info
+        var securedContext = initialContext.withSecurity(securityContext);
+        log.debug("Route found: {} {} -> {}:{} [{}] security={}",
                   route.httpMethod(),
                   route.pathPrefix(),
                   route.artifact(),
                   route.sliceMethod(),
-                  requestId);
+                  requestId,
+                  securedContext.security()
+                                .principal()
+                                .value());
         // Get or create MethodHandle for this route
         var cacheKey = route.artifact() + ":" + route.sliceMethod();
         var methodHandle = getOrCreateMethodHandle(cacheKey, route);
@@ -276,11 +311,21 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                         requestId);
             return;
         }
-        // Invoke the slice method
+        // Invoke the slice method with secured context
         methodHandle.unwrap()
-                    .invoke(httpRequestContext)
+                    .invoke(securedContext)
                     .onSuccess(responseData -> sendResponse(ctx, responseData, requestId))
                     .onFailure(cause -> handleInvocationError(ctx, cause, path, requestId));
+    }
+
+    private void sendSecurityError(ChannelHandlerContext ctx, Cause cause, String path, String requestId) {
+        log.debug("Security validation failed [{}]: {}", requestId, cause.message());
+        var status = switch (cause) {
+            case SecurityError.MissingCredentials _ -> HttpStatus.UNAUTHORIZED;
+            case SecurityError.InvalidCredentials _ -> HttpStatus.UNAUTHORIZED;
+            default -> HttpStatus.UNAUTHORIZED;
+        };
+        sendProblem(ctx, status, cause.message(), path, requestId);
     }
 
     private void handleInvocationError(ChannelHandlerContext ctx, Cause cause, String path, String requestId) {

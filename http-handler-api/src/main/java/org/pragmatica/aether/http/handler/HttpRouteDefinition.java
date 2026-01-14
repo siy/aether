@@ -1,5 +1,7 @@
 package org.pragmatica.aether.http.handler;
 
+import org.pragmatica.aether.http.handler.security.RouteSecurityPolicy;
+
 import java.util.Objects;
 
 /**
@@ -12,11 +14,13 @@ import java.util.Objects;
  * @param pathPrefix    path prefix for TreeMap matching (e.g., "/users/", "/api/orders/")
  * @param artifactCoord full artifact coordinate (e.g., "org.example:user-service:1.0.0")
  * @param sliceMethod   slice method name to invoke
+ * @param security      security policy for this route
  */
 public record HttpRouteDefinition(String httpMethod,
                                   String pathPrefix,
                                   String artifactCoord,
-                                  String sliceMethod) {
+                                  String sliceMethod,
+                                  RouteSecurityPolicy security) {
     /**
      * Canonical constructor with validation.
      */
@@ -25,16 +29,32 @@ public record HttpRouteDefinition(String httpMethod,
         Objects.requireNonNull(pathPrefix, "pathPrefix");
         Objects.requireNonNull(artifactCoord, "artifactCoord");
         Objects.requireNonNull(sliceMethod, "sliceMethod");
+        Objects.requireNonNull(security, "security");
     }
 
     /**
-     * Create route definition with path normalization.
+     * Create public route definition with path normalization.
      */
     public static HttpRouteDefinition httpRouteDefinition(String httpMethod,
                                                           String pathPrefix,
                                                           String artifactCoord,
                                                           String sliceMethod) {
-        return new HttpRouteDefinition(httpMethod, normalizePrefix(pathPrefix), artifactCoord, sliceMethod);
+        return new HttpRouteDefinition(httpMethod,
+                                       normalizePrefix(pathPrefix),
+                                       artifactCoord,
+                                       sliceMethod,
+                                       RouteSecurityPolicy.publicRoute());
+    }
+
+    /**
+     * Create route definition with path normalization and security policy.
+     */
+    public static HttpRouteDefinition httpRouteDefinition(String httpMethod,
+                                                          String pathPrefix,
+                                                          String artifactCoord,
+                                                          String sliceMethod,
+                                                          RouteSecurityPolicy security) {
+        return new HttpRouteDefinition(httpMethod, normalizePrefix(pathPrefix), artifactCoord, sliceMethod, security);
     }
 
     private static String normalizePrefix(String path) {

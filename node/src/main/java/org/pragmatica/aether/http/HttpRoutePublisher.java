@@ -139,7 +139,10 @@ class HttpRoutePublisherImpl implements HttpRoutePublisher {
 
     private KVCommand<AetherKey> createRoutePutCommand(HttpRouteDefinition route) {
         var key = HttpRouteKey.httpRouteKey(route.httpMethod(), route.pathPrefix());
-        var value = HttpRouteValue.httpRouteValue(route.artifactCoord(), route.sliceMethod());
+        var value = HttpRouteValue.httpRouteValue(route.artifactCoord(),
+                                                  route.sliceMethod(),
+                                                  route.security()
+                                                       .asString());
         return new KVCommand.Put<>(key, value);
     }
 

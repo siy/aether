@@ -217,5 +217,59 @@ class MethodHandleTest {
         public Unit setFailureListener(SliceFailureListener listener) {
             return unit();
         }
+
+        @Override
+        public <R, T> Result<MethodHandle<R, T>> methodHandle(String sliceArtifact,
+                                                               String methodName,
+                                                               Class<T> requestType,
+                                                               Class<R> responseType) {
+            // Validate artifact
+            var artifactResult = Artifact.artifact(sliceArtifact);
+            if (artifactResult.isFailure()) {
+                return artifactResult.map(_ -> null);
+            }
+            // Validate method name
+            var methodNameResult = MethodName.methodName(methodName);
+            if (methodNameResult.isFailure()) {
+                return methodNameResult.map(_ -> null);
+            }
+            // Return a stub method handle
+            return Result.success(new StubMethodHandle<>(artifactResult.unwrap(),
+                                                         methodNameResult.unwrap(),
+                                                         responseType,
+                                                         this));
+        }
+
+        private record StubMethodHandle<R, T>(Artifact artifact,
+                                              MethodName method,
+                                              Class<R> responseType,
+                                              StubSliceInvoker invoker) implements MethodHandle<R, T> {
+            @Override
+            public Promise<R> invoke(T request) {
+                invoker.lastArtifact = artifact;
+                invoker.lastMethodName = method;
+                invoker.lastRequest = request;
+                return invoker.invoke(artifact, method, request, responseType);
+            }
+
+            @Override
+            public Promise<Unit> fireAndForget(T request) {
+                invoker.lastArtifact = artifact;
+                invoker.lastMethodName = method;
+                invoker.lastRequest = request;
+                invoker.fireAndForgetCalled = true;
+                return invoker.invoke(artifact, method, request);
+            }
+
+            @Override
+            public String artifactCoordinate() {
+                return artifact.asString();
+            }
+
+            @Override
+            public MethodName methodName() {
+                return method;
+            }
+        }
     }
 }

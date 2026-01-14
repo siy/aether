@@ -116,10 +116,16 @@ public sealed interface AetherValue {
     ///
     /// @param artifact full artifact coordinate (e.g., "org.example:user-service:1.0.0")
     /// @param sliceMethod slice method name to invoke
-    record HttpRouteValue(String artifact, String sliceMethod) implements AetherValue {
-        /// Create HTTP route value.
+    /// @param securityPolicy security policy for this route ("PUBLIC", "API_KEY", etc.)
+    record HttpRouteValue(String artifact, String sliceMethod, String securityPolicy) implements AetherValue {
+        /// Create HTTP route value with public security.
         public static HttpRouteValue httpRouteValue(String artifact, String sliceMethod) {
-            return new HttpRouteValue(artifact, sliceMethod);
+            return new HttpRouteValue(artifact, sliceMethod, "PUBLIC");
+        }
+
+        /// Create HTTP route value with security policy.
+        public static HttpRouteValue httpRouteValue(String artifact, String sliceMethod, String securityPolicy) {
+            return new HttpRouteValue(artifact, sliceMethod, securityPolicy);
         }
     }
 

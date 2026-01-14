@@ -1,5 +1,6 @@
 package org.pragmatica.aether.http;
 
+import org.pragmatica.aether.http.handler.security.RouteSecurityPolicy;
 import org.pragmatica.aether.slice.kvstore.AetherKey;
 import org.pragmatica.aether.slice.kvstore.AetherKey.HttpRouteKey;
 import org.pragmatica.aether.slice.kvstore.AetherValue;
@@ -61,11 +62,13 @@ public interface HttpRouteRegistry {
      * @param pathPrefix path prefix that matched
      * @param artifact target artifact coordinate
      * @param sliceMethod slice method to invoke
+     * @param securityPolicy security policy for this route
      */
     record RouteInfo(String httpMethod,
                      String pathPrefix,
                      String artifact,
-                     String sliceMethod) {
+                     String sliceMethod,
+                     RouteSecurityPolicy securityPolicy) {
         public HttpRouteKey toKey() {
             return HttpRouteKey.httpRouteKey(httpMethod, pathPrefix);
         }
@@ -85,10 +88,12 @@ public interface HttpRouteRegistry {
                 var value = valuePut.cause()
                                     .value();
                 if (key instanceof HttpRouteKey httpRouteKey && value instanceof HttpRouteValue httpRouteValue) {
+                    var securityPolicy = RouteSecurityPolicy.fromString(httpRouteValue.securityPolicy());
                     var routeInfo = new RouteInfo(httpRouteKey.httpMethod(),
                                                   httpRouteKey.pathPrefix(),
                                                   httpRouteValue.artifact(),
-                                                  httpRouteValue.sliceMethod());
+                                                  httpRouteValue.sliceMethod(),
+                                                  securityPolicy);
                     var ref = routesByMethod.computeIfAbsent(httpRouteKey.httpMethod(),
                                                              _ -> new AtomicReference<>(new TreeMap<>()));
                     // Copy-on-write: copy current map, add entry, swap
@@ -96,11 +101,12 @@ public interface HttpRouteRegistry {
                     var updated = new TreeMap<>(current);
                     updated.put(httpRouteKey.pathPrefix(), routeInfo);
                     ref.set(updated);
-                    log.debug("Registered HTTP route: {} {} -> {}:{}",
+                    log.debug("Registered HTTP route: {} {} -> {}:{} [{}]",
                               httpRouteKey.httpMethod(),
                               httpRouteKey.pathPrefix(),
                               httpRouteValue.artifact(),
-                              httpRouteValue.sliceMethod());
+                              httpRouteValue.sliceMethod(),
+                              securityPolicy.asString());
                 }
             }
 

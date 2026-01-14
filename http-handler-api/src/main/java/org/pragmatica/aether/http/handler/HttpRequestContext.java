@@ -1,5 +1,8 @@
 package org.pragmatica.aether.http.handler;
 
+import org.pragmatica.aether.http.handler.security.Role;
+import org.pragmatica.aether.http.handler.security.SecurityContext;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,13 +21,15 @@ import java.util.Objects;
  * @param headers     HTTP headers as multi-value map
  * @param body        request body bytes (empty for GET)
  * @param requestId   unique request identifier for tracing
+ * @param security    security context with authentication info
  */
 public record HttpRequestContext(String path,
                                  String method,
                                  Map<String, List<String>> queryParams,
                                  Map<String, List<String>> headers,
                                  byte[] body,
-                                 String requestId) {
+                                 String requestId,
+                                 SecurityContext security) {
     private static final byte[] EMPTY_BODY = new byte[0];
 
     /**
@@ -36,6 +41,7 @@ public record HttpRequestContext(String path,
         Objects.requireNonNull(queryParams, "queryParams");
         Objects.requireNonNull(headers, "headers");
         Objects.requireNonNull(requestId, "requestId");
+        Objects.requireNonNull(security, "security");
         body = (body == null || body.length == 0)
                ? EMPTY_BODY
                : body.clone();
@@ -52,18 +58,24 @@ public record HttpRequestContext(String path,
     }
 
     /**
-     * Create context with empty body.
+     * Create context with empty body and anonymous security.
      */
     public static HttpRequestContext httpRequestContext(String path,
                                                         String method,
                                                         Map<String, List<String>> queryParams,
                                                         Map<String, List<String>> headers,
                                                         String requestId) {
-        return new HttpRequestContext(path, method, queryParams, headers, EMPTY_BODY, requestId);
+        return new HttpRequestContext(path,
+                                      method,
+                                      queryParams,
+                                      headers,
+                                      EMPTY_BODY,
+                                      requestId,
+                                      SecurityContext.anonymous());
     }
 
     /**
-     * Create context with body.
+     * Create context with body and anonymous security.
      */
     public static HttpRequestContext httpRequestContext(String path,
                                                         String method,
@@ -71,6 +83,47 @@ public record HttpRequestContext(String path,
                                                         Map<String, List<String>> headers,
                                                         byte[] body,
                                                         String requestId) {
-        return new HttpRequestContext(path, method, queryParams, headers, body, requestId);
+        return new HttpRequestContext(path, method, queryParams, headers, body, requestId, SecurityContext.anonymous());
+    }
+
+    /**
+     * Create context with body and security context.
+     */
+    public static HttpRequestContext httpRequestContext(String path,
+                                                        String method,
+                                                        Map<String, List<String>> queryParams,
+                                                        Map<String, List<String>> headers,
+                                                        byte[] body,
+                                                        String requestId,
+                                                        SecurityContext security) {
+        return new HttpRequestContext(path, method, queryParams, headers, body, requestId, security);
+    }
+
+    /**
+     * Create new context with updated security (immutable copy).
+     */
+    public HttpRequestContext withSecurity(SecurityContext newSecurity) {
+        return new HttpRequestContext(path, method, queryParams, headers, body, requestId, newSecurity);
+    }
+
+    /**
+     * Check if request is authenticated (not anonymous).
+     */
+    public boolean isAuthenticated() {
+        return security.isAuthenticated();
+    }
+
+    /**
+     * Check if request has specific role.
+     */
+    public boolean hasRole(Role role) {
+        return security.hasRole(role);
+    }
+
+    /**
+     * Check if request has role by name.
+     */
+    public boolean hasRole(String roleName) {
+        return security.hasRole(roleName);
     }
 }

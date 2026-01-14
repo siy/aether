@@ -1,0 +1,149 @@
+package org.pragmatica.aether.http;
+
+import org.pragmatica.aether.artifact.Artifact;
+import org.pragmatica.aether.http.handler.HttpRequestHandler;
+import org.pragmatica.aether.http.handler.HttpRequestHandlerFactory;
+import org.pragmatica.aether.http.handler.HttpRouteDefinition;
+import org.pragmatica.aether.slice.SliceInvokerFacade;
+import org.pragmatica.aether.slice.kvstore.AetherKey;
+import org.pragmatica.aether.slice.kvstore.AetherKey.HttpRouteKey;
+import org.pragmatica.aether.slice.kvstore.AetherValue.HttpRouteValue;
+import org.pragmatica.cluster.node.ClusterNode;
+import org.pragmatica.cluster.state.kvstore.KVCommand;
+import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Unit;
+
+import java.util.List;
+import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Publishes HTTP routes to KV-Store when slices become active.
+ *
+ * <p>Discovers {@link HttpRequestHandlerFactory} implementations via ServiceLoader,
+ * creates handlers, and publishes their route definitions to the cluster.
+ *
+ * <p>Routes are idempotent - same route from multiple nodes results in same KV entry.
+ */
+public interface HttpRoutePublisher {
+    /**
+     * Publish HTTP routes for a slice that just became active.
+     *
+     * @param artifact     The slice artifact
+     * @param classLoader  The slice's class loader for ServiceLoader discovery
+     * @param invokerFacade SliceInvokerFacade for creating handlers
+     * @return Promise completing when routes are published
+     */
+    Promise<Unit> publishRoutes(Artifact artifact, ClassLoader classLoader, SliceInvokerFacade invokerFacade);
+
+    /**
+     * Unpublish HTTP routes when a slice is deactivated.
+     *
+     * @param artifact The slice artifact
+     * @return Promise completing when routes are unpublished
+     */
+    Promise<Unit> unpublishRoutes(Artifact artifact);
+
+    /**
+     * Get the handler for a slice (for local invocation).
+     */
+    Option<HttpRequestHandler> getHandler(Artifact artifact);
+
+    static HttpRoutePublisher httpRoutePublisher(ClusterNode<KVCommand<AetherKey>> cluster) {
+        return new HttpRoutePublisherImpl(cluster);
+    }
+}
+
+class HttpRoutePublisherImpl implements HttpRoutePublisher {
+    private static final Logger log = LoggerFactory.getLogger(HttpRoutePublisherImpl.class);
+
+    private final ClusterNode<KVCommand<AetherKey>> cluster;
+    private final Map<Artifact, HttpRequestHandler> handlers = new ConcurrentHashMap<>();
+    private final Map<Artifact, List<HttpRouteDefinition>> publishedRoutes = new ConcurrentHashMap<>();
+
+    HttpRoutePublisherImpl(ClusterNode<KVCommand<AetherKey>> cluster) {
+        this.cluster = cluster;
+    }
+
+    @Override
+    public Promise<Unit> publishRoutes(Artifact artifact, ClassLoader classLoader, SliceInvokerFacade invokerFacade) {
+        // Discover HttpRequestHandlerFactory via ServiceLoader
+        var factories = ServiceLoader.load(HttpRequestHandlerFactory.class, classLoader);
+        var iterator = factories.iterator();
+        if (!iterator.hasNext()) {
+            log.debug("No HttpRequestHandlerFactory found for slice {}", artifact);
+            return Promise.success(Unit.unit());
+        }
+        // Use first factory found
+        var factory = iterator.next();
+        log.info("Found HttpRequestHandlerFactory for slice {}: {}",
+                 artifact,
+                 factory.getClass()
+                        .getName());
+        // Create handler
+        var handler = factory.create(invokerFacade);
+        handlers.put(artifact, handler);
+        // Get routes
+        var routes = handler.routes();
+        if (routes.isEmpty()) {
+            log.debug("No HTTP routes defined for slice {}", artifact);
+            return Promise.success(Unit.unit());
+        }
+        // Create KV commands for route publication
+        var commands = routes.stream()
+                             .map(route -> createRoutePutCommand(route))
+                             .toList();
+        // Store published routes for unpublishing later
+        publishedRoutes.put(artifact, routes);
+        // Submit to cluster
+        return cluster.apply(commands)
+                      .mapToUnit()
+                      .onSuccess(_ -> log.info("Published {} HTTP routes for slice {}",
+                                               routes.size(),
+                                               artifact))
+                      .onFailure(cause -> log.error("Failed to publish HTTP routes for {}: {}",
+                                                    artifact,
+                                                    cause.message()));
+    }
+
+    @Override
+    public Promise<Unit> unpublishRoutes(Artifact artifact) {
+        var routes = publishedRoutes.remove(artifact);
+        handlers.remove(artifact);
+        if (routes == null || routes.isEmpty()) {
+            return Promise.success(Unit.unit());
+        }
+        var commands = routes.stream()
+                             .map(route -> createRouteRemoveCommand(route))
+                             .toList();
+        return cluster.apply(commands)
+                      .mapToUnit()
+                      .onSuccess(_ -> log.info("Unpublished {} HTTP routes for slice {}",
+                                               routes.size(),
+                                               artifact))
+                      .onFailure(cause -> log.error("Failed to unpublish HTTP routes for {}: {}",
+                                                    artifact,
+                                                    cause.message()));
+    }
+
+    @Override
+    public Option<HttpRequestHandler> getHandler(Artifact artifact) {
+        return Option.option(handlers.get(artifact));
+    }
+
+    private KVCommand<AetherKey> createRoutePutCommand(HttpRouteDefinition route) {
+        var key = HttpRouteKey.httpRouteKey(route.httpMethod(), route.pathPrefix());
+        var value = HttpRouteValue.httpRouteValue(route.artifactCoord(), route.sliceMethod());
+        return new KVCommand.Put<>(key, value);
+    }
+
+    private KVCommand<AetherKey> createRouteRemoveCommand(HttpRouteDefinition route) {
+        var key = HttpRouteKey.httpRouteKey(route.httpMethod(), route.pathPrefix());
+        return new KVCommand.Remove<>(key);
+    }
+}

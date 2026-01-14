@@ -111,6 +111,18 @@ public sealed interface AetherValue {
         }
     }
 
+    /// HTTP route mapping stored in consensus.
+    /// Maps HTTP method + path prefix to artifact + slice method for cluster-wide HTTP routing.
+    ///
+    /// @param artifact full artifact coordinate (e.g., "org.example:user-service:1.0.0")
+    /// @param sliceMethod slice method name to invoke
+    record HttpRouteValue(String artifact, String sliceMethod) implements AetherValue {
+        /// Create HTTP route value.
+        public static HttpRouteValue httpRouteValue(String artifact, String sliceMethod) {
+            return new HttpRouteValue(artifact, sliceMethod);
+        }
+    }
+
     /// Alert threshold configuration stored in consensus.
     /// Allows thresholds to survive restarts and sync across cluster nodes.
     ///

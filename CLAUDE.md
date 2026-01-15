@@ -9,7 +9,7 @@ Do NOT write code directly - delegate to `jbct-coder` agent.
 
 ## Project Overview
 
-**Pragmatica Aether** (v0.7.3) - AI-driven distributed runtime for Java with predictive scaling and seamless multi-cloud deployment.
+**Pragmatica Aether** (v0.8.0) - AI-driven distributed runtime for Java with predictive scaling and seamless multi-cloud deployment.
 
 **Key Principle:** Every inter-slice call will **EVENTUALLY SUCCEED** if the cluster is alive. Slices are NOT prepared for communication errors - runtime handles retries, failover, recovery. Design slices to be idempotent.
 
@@ -32,15 +32,9 @@ Do NOT write code directly - delegate to `jbct-coder` agent.
 
 ### Slices
 
-```java
-public interface Slice {
-    Promise<Unit> start();
-    Promise<Unit> stop();
-    List<SliceMethod<?, ?>> methods();
-}
-```
-
 Two types: **Service Slices** (multiple methods) and **Lean Slices** (single use case). Both managed identically by runtime.
+
+Users write annotated interfaces; `jbct-cli` generates all boilerplate (Slice implementation, routing, factories).
 
 See [docs/contributors/slice-lifecycle.md](docs/contributors/slice-lifecycle.md) for lifecycle states.
 

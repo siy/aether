@@ -465,7 +465,8 @@ public interface AetherNode {
                                                                                               networkMetricsHandler,
                                                                                               rabiaMetricsCollector,
                                                                                               invocationMetrics,
-                                                                                              minuteAggregator);
+                                                                                              minuteAggregator,
+                                                                                              endpointRegistry);
         // Create artifact metrics collector for storage and deployment tracking
         var artifactMetricsCollector = ArtifactMetricsCollector.artifactMetricsCollector(artifactStore);
         // Create infrastructure store for infra service instance sharing

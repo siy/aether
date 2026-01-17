@@ -111,6 +111,32 @@ class ArtifactDeploymentTrackerTest {
             .isInstanceOf(UnsupportedOperationException.class);
     }
 
+    @Test
+    void instanceCounts_returnsEmpty_initially() {
+        assertThat(tracker.instanceCounts()).isEmpty();
+    }
+
+    @Test
+    void instanceCounts_returnsCorrectCounts() {
+        deployArtifact(artifact1, node1);
+        deployArtifact(artifact1, node2);
+        deployArtifact(artifact2, node1);
+
+        var counts = tracker.instanceCounts();
+        assertThat(counts).containsEntry(artifact1.asString(), 2);
+        assertThat(counts).containsEntry(artifact2.asString(), 1);
+    }
+
+    @Test
+    void instanceCounts_updatesAfterUndeploy() {
+        deployArtifact(artifact1, node1);
+        deployArtifact(artifact1, node2);
+        undeployArtifact(artifact1, node1);
+
+        var counts = tracker.instanceCounts();
+        assertThat(counts).containsEntry(artifact1.asString(), 1);
+    }
+
     @SuppressWarnings("unchecked")
     private void deployArtifact(Artifact artifact, NodeId nodeId) {
         var sliceNodeKey = new SliceNodeKey(artifact, nodeId);

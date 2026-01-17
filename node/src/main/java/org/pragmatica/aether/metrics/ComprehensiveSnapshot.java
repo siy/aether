@@ -29,11 +29,14 @@ import java.util.Map;
  * @param eventLoop            Event loop metrics snapshot
  * @param network              Network I/O metrics snapshot
  * @param consensus            Rabia consensus metrics snapshot
- * @param totalInvocations     Total method invocations
- * @param successfulInvocations Successful method invocations
- * @param failedInvocations    Failed method invocations
- * @param avgLatencyMs         Average invocation latency in milliseconds
- * @param custom               Custom metrics from slices
+ * @param totalInvocations         Total method invocations
+ * @param successfulInvocations    Successful method invocations
+ * @param failedInvocations        Failed method invocations
+ * @param avgLatencyMs             Average invocation latency in milliseconds
+ * @param activeSliceInstanceCount Currently running slice instances
+ * @param cacheMemoryUsed          Cache layer memory in bytes
+ * @param cacheHitRate             Cache hit rate (0.0-1.0)
+ * @param custom                   Custom metrics from slices
  */
 public record ComprehensiveSnapshot(long timestamp,
                                     // JVM
@@ -53,6 +56,11 @@ long totalInvocations,
                                     long successfulInvocations,
                                     long failedInvocations,
                                     double avgLatencyMs,
+                                    // Slice instances
+int activeSliceInstanceCount,
+                                    // Cache
+long cacheMemoryUsed,
+                                    double cacheHitRate,
                                     // Custom
 Map<String, Double> custom) {
     public static final ComprehensiveSnapshot EMPTY = new ComprehensiveSnapshot(0,
@@ -64,6 +72,9 @@ Map<String, Double> custom) {
                                                                                 NetworkMetrics.EMPTY,
                                                                                 RabiaMetrics.EMPTY,
                                                                                 0,
+                                                                                0,
+                                                                                0,
+                                                                                0.0,
                                                                                 0,
                                                                                 0,
                                                                                 0.0,

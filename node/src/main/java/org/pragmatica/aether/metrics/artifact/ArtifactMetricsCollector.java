@@ -22,6 +22,9 @@ import java.util.Set;
  *   <li>{@code artifact_deployed_count} - Number of artifacts deployed in cluster</li>
  * </ul>
  *
+ * <p>Per-artifact instance counts are available via {@link #instanceCounts()} for
+ * migration decisions and capacity planning.
+ *
  * <p>Combines storage metrics from {@link ArtifactStore} and deployment tracking
  * from {@link ArtifactDeploymentTracker}.
  */
@@ -68,6 +71,16 @@ public interface ArtifactMetricsCollector {
      * Get the deployment tracker for detailed queries.
      */
     ArtifactDeploymentTracker deploymentTracker();
+
+    /**
+     * Get per-artifact instance counts for migration decisions.
+     * <p>
+     * Returns a map from artifact coordinate (groupId:artifactId:version) to
+     * the number of instances currently deployed in the cluster.
+     *
+     * @return map of artifact coordinates to instance counts
+     */
+    Map<String, Integer> instanceCounts();
 
     /**
      * Create an artifact metrics collector.
@@ -130,5 +143,10 @@ class ArtifactMetricsCollectorImpl implements ArtifactMetricsCollector {
     @Override
     public ArtifactDeploymentTracker deploymentTracker() {
         return deploymentTracker;
+    }
+
+    @Override
+    public Map<String, Integer> instanceCounts() {
+        return deploymentTracker.instanceCounts();
     }
 }

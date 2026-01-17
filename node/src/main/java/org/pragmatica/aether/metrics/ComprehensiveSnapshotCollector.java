@@ -1,5 +1,6 @@
 package org.pragmatica.aether.metrics;
 
+import org.pragmatica.aether.endpoint.EndpointRegistry;
 import org.pragmatica.aether.metrics.consensus.RabiaMetrics;
 import org.pragmatica.aether.metrics.consensus.RabiaMetricsCollector;
 import org.pragmatica.aether.metrics.eventloop.EventLoopMetrics;
@@ -9,6 +10,7 @@ import org.pragmatica.aether.metrics.gc.GCMetricsCollector;
 import org.pragmatica.aether.metrics.invocation.InvocationMetricsCollector;
 import org.pragmatica.aether.metrics.network.NetworkMetrics;
 import org.pragmatica.aether.metrics.network.NetworkMetricsHandler;
+import org.pragmatica.lang.Option;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -47,6 +49,8 @@ public final class ComprehensiveSnapshotCollector {
     private final InvocationMetricsCollector invocationCollector;
     private final MinuteAggregator minuteAggregator;
     private final DerivedMetricsCalculator derivedCalculator;
+    private final EndpointRegistry endpointRegistry;
+    private final Option<CacheMetricsProvider> cacheMetricsProvider;
 
     private final OperatingSystemMXBean osMxBean;
     private final MemoryMXBean memoryMxBean;
@@ -61,7 +65,9 @@ public final class ComprehensiveSnapshotCollector {
                                            RabiaMetricsCollector rabiaCollector,
                                            InvocationMetricsCollector invocationCollector,
                                            MinuteAggregator minuteAggregator,
-                                           DerivedMetricsCalculator derivedCalculator) {
+                                           DerivedMetricsCalculator derivedCalculator,
+                                           EndpointRegistry endpointRegistry,
+                                           Option<CacheMetricsProvider> cacheMetricsProvider) {
         this.gcCollector = gcCollector;
         this.eventLoopCollector = eventLoopCollector;
         this.networkHandler = networkHandler;
@@ -69,6 +75,8 @@ public final class ComprehensiveSnapshotCollector {
         this.invocationCollector = invocationCollector;
         this.minuteAggregator = minuteAggregator;
         this.derivedCalculator = derivedCalculator;
+        this.endpointRegistry = endpointRegistry;
+        this.cacheMetricsProvider = cacheMetricsProvider;
         this.osMxBean = ManagementFactory.getOperatingSystemMXBean();
         this.memoryMxBean = ManagementFactory.getMemoryMXBean();
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -88,32 +96,39 @@ public final class ComprehensiveSnapshotCollector {
                                                                                 RabiaMetricsCollector rabiaCollector,
                                                                                 InvocationMetricsCollector invocationCollector,
                                                                                 MinuteAggregator minuteAggregator,
-                                                                                DerivedMetricsCalculator derivedCalculator) {
+                                                                                DerivedMetricsCalculator derivedCalculator,
+                                                                                EndpointRegistry endpointRegistry,
+                                                                                Option<CacheMetricsProvider> cacheMetricsProvider) {
         return new ComprehensiveSnapshotCollector(gcCollector,
                                                   eventLoopCollector,
                                                   networkHandler,
                                                   rabiaCollector,
                                                   invocationCollector,
                                                   minuteAggregator,
-                                                  derivedCalculator);
+                                                  derivedCalculator,
+                                                  endpointRegistry,
+                                                  cacheMetricsProvider);
     }
 
     /**
-     * Factory method with defaults for derived metrics calculator.
+     * Factory method with defaults for derived metrics calculator and no cache metrics.
      */
     public static ComprehensiveSnapshotCollector comprehensiveSnapshotCollector(GCMetricsCollector gcCollector,
                                                                                 EventLoopMetricsCollector eventLoopCollector,
                                                                                 NetworkMetricsHandler networkHandler,
                                                                                 RabiaMetricsCollector rabiaCollector,
                                                                                 InvocationMetricsCollector invocationCollector,
-                                                                                MinuteAggregator minuteAggregator) {
+                                                                                MinuteAggregator minuteAggregator,
+                                                                                EndpointRegistry endpointRegistry) {
         return new ComprehensiveSnapshotCollector(gcCollector,
                                                   eventLoopCollector,
                                                   networkHandler,
                                                   rabiaCollector,
                                                   invocationCollector,
                                                   minuteAggregator,
-                                                  DerivedMetricsCalculator.derivedMetricsCalculator());
+                                                  DerivedMetricsCalculator.derivedMetricsCalculator(),
+                                                  endpointRegistry,
+                                                  Option.none());
     }
 
     /**
@@ -220,6 +235,14 @@ public final class ComprehensiveSnapshotCollector {
         double avgLatencyMs = totalInvocations > 0
                               ? totalLatencyMs / totalInvocations
                               : 0.0;
+        // Active slice instance count from endpoint registry
+        int activeSliceInstanceCount = endpointRegistry.allEndpoints()
+                                                       .size();
+        // Cache metrics (optional)
+        long cacheMemoryUsed = cacheMetricsProvider.map(CacheMetricsProvider::memoryUsedBytes)
+                                                   .or(0L);
+        double cacheHitRate = cacheMetricsProvider.map(CacheMetricsProvider::hitRate)
+                                                  .or(0.0);
         return new ComprehensiveSnapshot(System.currentTimeMillis(),
                                          cpuUsage,
                                          heapUsage.getUsed(),
@@ -232,6 +255,9 @@ public final class ComprehensiveSnapshotCollector {
                                          successfulInvocations,
                                          failedInvocations,
                                          avgLatencyMs,
+                                         activeSliceInstanceCount,
+                                         cacheMemoryUsed,
+                                         cacheHitRate,
                                          Map.of());
     }
 

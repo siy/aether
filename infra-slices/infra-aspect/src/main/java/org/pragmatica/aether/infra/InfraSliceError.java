@@ -52,4 +52,17 @@ public sealed interface InfraSliceError extends Cause {
                                                          : "");
         }
     }
+
+    record CacheError(String detail, Throwable cause) implements InfraSliceError {
+        public static CacheError cacheError(String detail, Throwable cause) {
+            return new CacheError(detail, cause);
+        }
+
+        @Override
+        public String message() {
+            return "Cache error: " + detail + (cause != null
+                                               ? " - " + cause.getMessage()
+                                               : "");
+        }
+    }
 }

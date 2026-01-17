@@ -249,9 +249,17 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             handleRepositoryGet(ctx, node, uri);
             return;
         }
-        // Handle /health without /api prefix for Docker health checks and E2E tests
-        if (uri.equals("/health")) {
-            sendJson(ctx, buildHealthResponse(node));
+        // Handle common endpoints without /api prefix for Docker health checks and E2E tests
+        var directResponse = switch (uri) {
+            case "/health" -> buildHealthResponse(node);
+            case "/status" -> buildStatusResponse(node);
+            case "/nodes" -> buildNodesResponse(node);
+            case "/slices" -> buildSlicesResponse(node);
+            case "/metrics" -> buildMetricsResponse(node);
+            default -> (String) null;
+        };
+        if (directResponse != null) {
+            sendJson(ctx, directResponse);
             return;
         }
         sendError(ctx, HttpResponseStatus.NOT_FOUND);

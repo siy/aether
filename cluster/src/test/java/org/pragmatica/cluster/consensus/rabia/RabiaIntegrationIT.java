@@ -2,7 +2,7 @@ package org.pragmatica.consensus.rabia;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
-import org.pragmatica.consensus.ConsensusErrors;
+import org.pragmatica.consensus.ConsensusError;
 import org.pragmatica.consensus.rabia.infrastructure.TestCluster;
 import org.pragmatica.consensus.NodeId;
 import org.pragmatica.cluster.state.kvstore.KVCommand;
@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.pragmatica.consensus.rabia.infrastructure.TestCluster.StringKey.key;
 import static org.pragmatica.lang.io.TimeSpan.timeSpan;
@@ -92,7 +93,7 @@ class RabiaIntegrationIT {
          .apply(List.of(new KVCommand.Put<>(key("d"), "4")))
          .await(timeSpan(2).seconds())
          .onSuccess(_ -> fail("Should not be successful"))
-         .onFailure(cause -> assertEquals(ConsensusErrors.nodeInactive(c.ids().get(3)), cause));
+         .onFailure(cause -> assertInstanceOf(ConsensusError.NodeInactive.class, cause));
 
         Awaitility.await()
                   .during(Duration.ofSeconds(1))
@@ -100,7 +101,7 @@ class RabiaIntegrationIT {
                   .untilAsserted(() -> assertEquals(beforeSize, c.stores().get(c.ids().get(3)).snapshot().size()));
 
         // bring up node-6 as a replacement
-        var node6 = NodeId.nodeId("node-6");
+        var node6 = NodeId.nodeId("node-6").unwrap();
         c.addNewNode(node6);
         c.awaitNode(node6);
 

@@ -373,13 +373,15 @@ class DeploymentMetricsCollectorTest {
         final List<SentMessage> sentMessages = new CopyOnWriteArrayList<>();
 
         @Override
-        public <M extends org.pragmatica.consensus.ProtocolMessage> void send(NodeId target, M message) {
+        public <M extends org.pragmatica.consensus.ProtocolMessage> Unit send(NodeId target, M message) {
             sentMessages.add(new SentMessage(target, message));
+            return Unit.unit();
         }
 
         @Override
-        public <M extends org.pragmatica.consensus.ProtocolMessage> void broadcast(M message) {
+        public <M extends org.pragmatica.consensus.ProtocolMessage> Unit broadcast(M message) {
             // Not used in these tests
+            return Unit.unit();
         }
 
         @Override

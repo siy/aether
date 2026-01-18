@@ -90,6 +90,12 @@
 
         <dependency>
             <groupId>org.pragmatica-lite.aether</groupId>
+            <artifactId>infra-aspect</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.pragmatica-lite.aether</groupId>
             <artifactId>dashboard</artifactId>
             <version>${project.version}</version>
         </dependency>

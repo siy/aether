@@ -136,9 +136,11 @@ public record Main(String[] args) {
 
     private NodeId parseNodeId(Option<AetherConfig> aetherConfig) {
         return findArg("--node-id=")
-                      .map(NodeId::nodeId)
+                      .flatMap(id -> NodeId.nodeId(id)
+                                           .option())
                       .orElse(findEnv("NODE_ID")
-                                     .map(NodeId::nodeId))
+                                     .flatMap(id -> NodeId.nodeId(id)
+                                                          .option()))
                       .or(NodeId::randomNodeId);
     }
 
@@ -173,13 +175,15 @@ public record Main(String[] args) {
     }
 
     private List<NodeInfo> parsePeers(NodeId self, int selfPort, Option<AetherConfig> aetherConfig) {
-        var selfInfo = nodeInfo(self, nodeAddress("localhost", selfPort));
+        var selfInfo = nodeAddress("localhost", selfPort)
+                                  .map(addr -> nodeInfo(self, addr))
+                                  .unwrap();
         return findArg("--peers=")
                       .map(peersStr -> parsePeersFromString(peersStr, self, selfInfo))
                       .orElse(findEnv("CLUSTER_PEERS")
                                      .map(peersStr -> parsePeersFromString(peersStr, self, selfInfo)))
                       .orElse(aetherConfig.map(this::generatePeersFromConfig))
-                      .or(() -> List.of(selfInfo));
+                      .or(List.of(selfInfo));
     }
 
     private List<NodeInfo> generatePeersFromConfig(AetherConfig aetherConfig) {
@@ -201,7 +205,10 @@ public record Main(String[] args) {
         var port = clusterPort + (env == Environment.LOCAL
                                   ? index
                                   : 0);
-        return nodeInfo(NodeId.nodeId("node-" + index), nodeAddress(host, port));
+        return NodeId.nodeId("node-" + index)
+                     .flatMap(nodeId -> nodeAddress(host, port)
+                                                   .map(addr -> nodeInfo(nodeId, addr)))
+                     .unwrap();
     }
 
     private List<NodeInfo> parsePeersFromString(String peersStr, NodeId self, NodeInfo selfInfo) {
@@ -238,15 +245,19 @@ public record Main(String[] args) {
     private Option<NodeInfo> parseHostPortPeer(String[] parts) {
         var host = parts[0];
         var port = Integer.parseInt(parts[1]);
-        var nodeId = NodeId.nodeId("node-" + host + "-" + port);
-        return Option.option(nodeInfo(nodeId, nodeAddress(host, port)));
+        return NodeId.nodeId("node-" + host + "-" + port)
+                     .flatMap(nodeId -> nodeAddress(host, port)
+                                                   .map(addr -> nodeInfo(nodeId, addr)))
+                     .option();
     }
 
     private Option<NodeInfo> parseIdHostPortPeer(String[] parts) {
-        var nodeId = NodeId.nodeId(parts[0]);
         var host = parts[1];
         var port = Integer.parseInt(parts[2]);
-        return Option.option(nodeInfo(nodeId, nodeAddress(host, port)));
+        return NodeId.nodeId(parts[0])
+                     .flatMap(nodeId -> nodeAddress(host, port)
+                                                   .map(addr -> nodeInfo(nodeId, addr)))
+                     .option();
     }
 
     private Option<NodeInfo> logInvalidPeerFormat(String peerStr) {

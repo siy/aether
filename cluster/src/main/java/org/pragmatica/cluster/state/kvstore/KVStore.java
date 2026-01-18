@@ -89,9 +89,10 @@ public class KVStore<K extends StructuredKey, V> implements StateMachine<KVComma
     }
 
     @Override
-    public void reset() {
+    public Unit reset() {
         notifyRemoveAll();
         storage.clear();
+        return Unit.unit();
     }
 
     public Map<K, V> snapshot() {

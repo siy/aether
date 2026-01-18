@@ -5,6 +5,7 @@ import org.pragmatica.aether.slice.SliceMethod;
 import org.pragmatica.config.toml.TomlDocument;
 import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.parse.TimeSpan;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
@@ -150,6 +151,125 @@ public interface ConfigService extends Slice {
      * @return Subscription handle to cancel the watch
      */
     Promise<ConfigSubscription> watch(String section, String key, Fn1<Unit, Option<String>> callback);
+
+    // ========== Slice Configuration Methods ==========
+    // Resolution order: [sliceName.methodName.section] → [sliceName.section] → [default.section]
+    /**
+     * Get a string configuration value with slice hierarchy lookup.
+     * Resolves: [sliceName.methodName.section] → [sliceName.section] → [default.section]
+     *
+     * @param sliceName  Slice name (class name with lowercase first letter)
+     * @param methodName Method name
+     * @param section    Configuration section (e.g., "cache", "retry")
+     * @param key        Configuration key
+     * @return Option containing the value if found
+     */
+    Promise<Option<String>> getSliceString(String sliceName, String methodName, String section, String key);
+
+    /**
+     * Get a string configuration value with slice hierarchy lookup (slice-level).
+     * Resolves: [sliceName.section] → [default.section]
+     *
+     * @param sliceName Slice name (class name with lowercase first letter)
+     * @param section   Configuration section (e.g., "cache", "retry")
+     * @param key       Configuration key
+     * @return Option containing the value if found
+     */
+    Promise<Option<String>> getSliceString(String sliceName, String section, String key);
+
+    /**
+     * Get an integer configuration value with slice hierarchy lookup.
+     * Resolves: [sliceName.methodName.section] → [sliceName.section] → [default.section]
+     *
+     * @param sliceName  Slice name (class name with lowercase first letter)
+     * @param methodName Method name
+     * @param section    Configuration section (e.g., "cache", "retry")
+     * @param key        Configuration key
+     * @return Option containing the value if found
+     */
+    Promise<Option<Integer>> getSliceInt(String sliceName, String methodName, String section, String key);
+
+    /**
+     * Get an integer configuration value with slice hierarchy lookup (slice-level).
+     * Resolves: [sliceName.section] → [default.section]
+     *
+     * @param sliceName Slice name (class name with lowercase first letter)
+     * @param section   Configuration section (e.g., "cache", "retry")
+     * @param key       Configuration key
+     * @return Option containing the value if found
+     */
+    Promise<Option<Integer>> getSliceInt(String sliceName, String section, String key);
+
+    /**
+     * Get a boolean configuration value with slice hierarchy lookup.
+     * Resolves: [sliceName.methodName.section] → [sliceName.section] → [default.section]
+     *
+     * @param sliceName  Slice name (class name with lowercase first letter)
+     * @param methodName Method name
+     * @param section    Configuration section (e.g., "cache", "retry")
+     * @param key        Configuration key
+     * @return Option containing the value if found
+     */
+    Promise<Option<Boolean>> getSliceBoolean(String sliceName, String methodName, String section, String key);
+
+    /**
+     * Get a boolean configuration value with slice hierarchy lookup (slice-level).
+     * Resolves: [sliceName.section] → [default.section]
+     *
+     * @param sliceName Slice name (class name with lowercase first letter)
+     * @param section   Configuration section (e.g., "cache", "retry")
+     * @param key       Configuration key
+     * @return Option containing the value if found
+     */
+    Promise<Option<Boolean>> getSliceBoolean(String sliceName, String section, String key);
+
+    /**
+     * Get a double configuration value with slice hierarchy lookup.
+     * Resolves: [sliceName.methodName.section] → [sliceName.section] → [default.section]
+     *
+     * @param sliceName  Slice name (class name with lowercase first letter)
+     * @param methodName Method name
+     * @param section    Configuration section (e.g., "cache", "retry")
+     * @param key        Configuration key
+     * @return Option containing the value if found
+     */
+    Promise<Option<Double>> getSliceDouble(String sliceName, String methodName, String section, String key);
+
+    /**
+     * Get a double configuration value with slice hierarchy lookup (slice-level).
+     * Resolves: [sliceName.section] → [default.section]
+     *
+     * @param sliceName Slice name (class name with lowercase first letter)
+     * @param section   Configuration section (e.g., "cache", "retry")
+     * @param key       Configuration key
+     * @return Option containing the value if found
+     */
+    Promise<Option<Double>> getSliceDouble(String sliceName, String section, String key);
+
+    /**
+     * Get a TimeSpan configuration value with slice hierarchy lookup.
+     * Parses duration strings like "5m", "1h", "30s".
+     * Resolves: [sliceName.methodName.section] → [sliceName.section] → [default.section]
+     *
+     * @param sliceName  Slice name (class name with lowercase first letter)
+     * @param methodName Method name
+     * @param section    Configuration section (e.g., "cache", "retry")
+     * @param key        Configuration key
+     * @return Option containing the TimeSpan if found and valid
+     */
+    Promise<Option<TimeSpan>> getSliceTimeSpan(String sliceName, String methodName, String section, String key);
+
+    /**
+     * Get a TimeSpan configuration value with slice hierarchy lookup (slice-level).
+     * Parses duration strings like "5m", "1h", "30s".
+     * Resolves: [sliceName.section] → [default.section]
+     *
+     * @param sliceName Slice name (class name with lowercase first letter)
+     * @param section   Configuration section (e.g., "cache", "retry")
+     * @param key       Configuration key
+     * @return Option containing the TimeSpan if found and valid
+     */
+    Promise<Option<TimeSpan>> getSliceTimeSpan(String sliceName, String section, String key);
 
     /**
      * Factory method for in-memory implementation.

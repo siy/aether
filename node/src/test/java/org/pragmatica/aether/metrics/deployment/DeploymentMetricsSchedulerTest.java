@@ -225,12 +225,15 @@ class DeploymentMetricsSchedulerTest {
         final List<SentMessage> sentMessages = new CopyOnWriteArrayList<>();
 
         @Override
-        public <M extends ProtocolMessage> void send(NodeId target, M message) {
+        public <M extends ProtocolMessage> Unit send(NodeId target, M message) {
             sentMessages.add(new SentMessage(target, message));
+            return Unit.unit();
         }
 
         @Override
-        public <M extends ProtocolMessage> void broadcast(M message) {}
+        public <M extends ProtocolMessage> Unit broadcast(M message) {
+            return Unit.unit();
+        }
 
         @Override
         public void connect(NetworkManagementOperation.ConnectNode connectNode) {}

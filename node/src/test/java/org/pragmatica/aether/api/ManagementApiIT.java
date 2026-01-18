@@ -44,9 +44,9 @@ class ManagementApiIT {
     private static final Duration AWAIT_DURATION = Duration.ofSeconds(10);
 
     private final List<NodeInfo> nodeInfos = List.of(
-            nodeInfo(nodeId("mgmt-1"), nodeAddress("localhost", BASE_PORT)),
-            nodeInfo(nodeId("mgmt-2"), nodeAddress("localhost", BASE_PORT + 1)),
-            nodeInfo(nodeId("mgmt-3"), nodeAddress("localhost", BASE_PORT + 2))
+            nodeInfo(nodeId("mgmt-1").unwrap(), nodeAddress("localhost", BASE_PORT).unwrap()),
+            nodeInfo(nodeId("mgmt-2").unwrap(), nodeAddress("localhost", BASE_PORT + 1).unwrap()),
+            nodeInfo(nodeId("mgmt-3").unwrap(), nodeAddress("localhost", BASE_PORT + 2).unwrap())
     );
 
     private final List<AetherNode> nodes = new ArrayList<>();

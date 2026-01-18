@@ -17,4 +17,16 @@ public sealed interface SliceRuntimeError extends Cause {
                    + "This typically means the slice is being used outside of the Aether runtime.";
         }
     }
+
+    /**
+     * AspectFactory has not been configured by the runtime.
+     */
+    enum AspectFactoryNotConfigured implements SliceRuntimeError {
+        INSTANCE;
+        @Override
+        public String message() {
+            return "AspectFactory not configured. "
+                   + "This typically means the slice is being used outside of the Aether runtime.";
+        }
+    }
 }

@@ -42,6 +42,10 @@ import org.pragmatica.aether.ttm.TTMManager;
 import org.pragmatica.aether.ttm.TTMState;
 import org.pragmatica.aether.update.RollingUpdateManager;
 import org.pragmatica.aether.update.RollingUpdateManagerImpl;
+import org.pragmatica.aether.aspect.DefaultAspectFactory;
+import org.pragmatica.aether.infra.aspect.CacheFactory;
+import org.pragmatica.aether.infra.aspect.ConcurrentMapCacheStorage;
+import org.pragmatica.aether.slice.AspectFactory;
 import org.pragmatica.aether.slice.FrameworkClassLoader;
 import org.pragmatica.aether.slice.SharedLibraryClassLoader;
 import org.pragmatica.aether.slice.SliceRuntime;
@@ -313,6 +317,7 @@ public interface AetherNode {
                               ComprehensiveSnapshotCollector snapshotCollector,
                               ArtifactMetricsCollector artifactMetricsCollector,
                               EventLoopMetricsCollector eventLoopMetricsCollector,
+                              AspectFactory aspectFactory,
                               Option<ManagementServer> managementServer,
                               long startTimeMs) implements AetherNode {
             private static final Logger log = LoggerFactory.getLogger(aetherNodeImpl.class);
@@ -328,6 +333,7 @@ public interface AetherNode {
                 // Start comprehensive snapshot collection (feeds TTM pipeline)
                 snapshotCollector.start();
                 SliceRuntime.setSliceInvoker(sliceInvoker);
+                SliceRuntime.setAspectFactory(aspectFactory);
                 InfraStore.setInstance(infraStore);
                 return managementServer.map(ManagementServer::start)
                                        .or(Promise.unitPromise())
@@ -471,6 +477,13 @@ public interface AetherNode {
         var artifactMetricsCollector = ArtifactMetricsCollector.artifactMetricsCollector(artifactStore);
         // Create infrastructure store for infra service instance sharing
         var infraStore = InfraStoreImpl.infraStoreImpl();
+        // Create aspect factory infrastructure (cache, retry, timeout, etc.)
+        var cacheStorage = ConcurrentMapCacheStorage.concurrentMapCacheStorage();
+        var serializerFactory = config.sliceAction()
+                                      .serializerProvider()
+                                      .createFactory(List.of());
+        var cacheFactory = CacheFactory.cacheFactory(cacheStorage, serializerFactory);
+        var aspectFactory = DefaultAspectFactory.defaultAspectFactory(cacheFactory);
         // Create TTM manager (returns no-op if disabled in config)
         var ttmManager = TTMManager.ttmManager(config.ttm(),
                                                minuteAggregator,
@@ -564,6 +577,7 @@ public interface AetherNode {
                                       snapshotCollector,
                                       artifactMetricsCollector,
                                       eventLoopMetricsCollector,
+                                      aspectFactory,
                                       Option.empty(),
                                       startTimeMs);
         // Build and wire ImmutableRouter, then create final node
@@ -606,6 +620,7 @@ public interface AetherNode {
                                                                snapshotCollector,
                                                                artifactMetricsCollector,
                                                                eventLoopMetricsCollector,
+                                                               aspectFactory,
                                                                Option.some(managementServer),
                                                                startTimeMs);
                                  }

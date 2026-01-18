@@ -14,6 +14,12 @@ import org.pragmatica.lang.Result;
  * SliceRuntime.getSliceInvoker()
  *     .async()
  *     .flatMap(invoker -> invoker.invoke(targetSlice, method, request, ResponseType.class));
+ *
+ * // For aspects (in generated code):
+ * var cache = SliceRuntime.getAspectFactory()
+ *     .flatMap(factory -> factory.create(Cache.class, cacheConfig))
+ *     .unwrap();
+ * var cachedFn = Aspects.withCaching(fn, Request::userId, cache);
  * }</pre>
  * <p>
  * This approach allows slices to remain records (immutable) while still
@@ -22,6 +28,7 @@ import org.pragmatica.lang.Result;
  */
 public final class SliceRuntime {
     private static volatile SliceInvokerFacade sliceInvoker;
+    private static volatile AspectFactory aspectFactory;
 
     private SliceRuntime() {}
 
@@ -54,9 +61,38 @@ public final class SliceRuntime {
     }
 
     /**
+     * Get the AspectFactory for creating aspect infrastructure.
+     *
+     * @return Result containing the AspectFactory, or failure if not configured
+     */
+    public static Result<AspectFactory> getAspectFactory() {
+        return Option.option(aspectFactory)
+                     .toResult(SliceRuntimeError.AspectFactoryNotConfigured.INSTANCE);
+    }
+
+    /**
+     * Get the AspectFactory if configured.
+     *
+     * @return Option containing the AspectFactory, or empty if not configured
+     */
+    public static Option<AspectFactory> tryAspectFactory() {
+        return Option.option(aspectFactory);
+    }
+
+    /**
+     * Configure the AspectFactory. Called by the runtime during startup.
+     *
+     * @param factory the AspectFactory to use
+     */
+    public static void setAspectFactory(AspectFactory factory) {
+        aspectFactory = factory;
+    }
+
+    /**
      * Clear all runtime services. Called during shutdown.
      */
     public static void clear() {
         sliceInvoker = null;
+        aspectFactory = null;
     }
 }

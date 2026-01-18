@@ -42,11 +42,11 @@ class RabiaNodeNettyIT {
     private static final int CLUSTER_SIZE = 5;
     private static final int BASE_PORT = 13040;
     private static final List<NodeInfo> NODES = List.of(
-            nodeInfo(nodeId("node-1"), nodeAddress("localhost", BASE_PORT)),
-            nodeInfo(nodeId("node-2"), nodeAddress("localhost", BASE_PORT + 1)),
-            nodeInfo(nodeId("node-3"), nodeAddress("localhost", BASE_PORT + 2)),
-            nodeInfo(nodeId("node-4"), nodeAddress("localhost", BASE_PORT + 3)),
-            nodeInfo(nodeId("node-5"), nodeAddress("localhost", BASE_PORT + 4)));
+            nodeInfo(nodeId("node-1").unwrap(), nodeAddress("localhost", BASE_PORT).unwrap()),
+            nodeInfo(nodeId("node-2").unwrap(), nodeAddress("localhost", BASE_PORT + 1).unwrap()),
+            nodeInfo(nodeId("node-3").unwrap(), nodeAddress("localhost", BASE_PORT + 2).unwrap()),
+            nodeInfo(nodeId("node-4").unwrap(), nodeAddress("localhost", BASE_PORT + 3).unwrap()),
+            nodeInfo(nodeId("node-5").unwrap(), nodeAddress("localhost", BASE_PORT + 4).unwrap()));
     private static final TimeSpan RECONCILE_INTERVAL = TimeSpan.timeSpan(5).seconds();
     private static final TimeSpan PING_INTERVAL = TimeSpan.timeSpan(100).seconds();
     private static final TimeSpan AWAIT_TIMEOUT = TimeSpan.timeSpan(10).seconds();

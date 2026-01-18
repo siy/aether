@@ -7,6 +7,7 @@ import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.parse.TimeSpan;
 
 import java.util.List;
 import java.util.Map;
@@ -114,6 +115,90 @@ final class InMemoryConfigService implements ConfigService {
                                  k -> new CopyOnWriteArrayList<>())
                 .add(entry);
         return Promise.success(new WatchSubscription(watchKey, entry));
+    }
+
+    // ========== Slice Configuration Methods ==========
+    @Override
+    public Promise<Option<String>> getSliceString(String sliceName, String methodName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, methodName, section, key, TomlDocument::getString));
+    }
+
+    @Override
+    public Promise<Option<String>> getSliceString(String sliceName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, null, section, key, TomlDocument::getString));
+    }
+
+    @Override
+    public Promise<Option<Integer>> getSliceInt(String sliceName, String methodName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, methodName, section, key, TomlDocument::getInt));
+    }
+
+    @Override
+    public Promise<Option<Integer>> getSliceInt(String sliceName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, null, section, key, TomlDocument::getInt));
+    }
+
+    @Override
+    public Promise<Option<Boolean>> getSliceBoolean(String sliceName, String methodName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, methodName, section, key, TomlDocument::getBoolean));
+    }
+
+    @Override
+    public Promise<Option<Boolean>> getSliceBoolean(String sliceName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, null, section, key, TomlDocument::getBoolean));
+    }
+
+    @Override
+    public Promise<Option<Double>> getSliceDouble(String sliceName, String methodName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, methodName, section, key, TomlDocument::getDouble));
+    }
+
+    @Override
+    public Promise<Option<Double>> getSliceDouble(String sliceName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, null, section, key, TomlDocument::getDouble));
+    }
+
+    @Override
+    public Promise<Option<TimeSpan>> getSliceTimeSpan(String sliceName, String methodName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, methodName, section, key, TomlDocument::getString)
+                                                   .flatMap(str -> TimeSpan.timeSpan(str)
+                                                                           .option()));
+    }
+
+    @Override
+    public Promise<Option<TimeSpan>> getSliceTimeSpan(String sliceName, String section, String key) {
+        return Promise.success(getSliceHierarchical(sliceName, null, section, key, TomlDocument::getString)
+                                                   .flatMap(str -> TimeSpan.timeSpan(str)
+                                                                           .option()));
+    }
+
+    /**
+     * Get value with slice hierarchy resolution.
+     * Order: [sliceName.methodName.section] → [sliceName.section] → [default.section]
+     */
+    private <T> Option<T> getSliceHierarchical(String sliceName,
+                                               String methodName,
+                                               String section,
+                                               String key,
+                                               ValueGetter<T> getter) {
+        var doc = documents.get(ConfigScope.GLOBAL);
+        // Try method-level first: sliceName.methodName.section
+        if (methodName != null) {
+            var methodSection = sliceName + "." + methodName + "." + section;
+            var methodValue = getter.get(doc, methodSection, key);
+            if (methodValue.isPresent()) {
+                return methodValue;
+            }
+        }
+        // Try slice-level: sliceName.section
+        var sliceSection = sliceName + "." + section;
+        var sliceValue = getter.get(doc, sliceSection, key);
+        if (sliceValue.isPresent()) {
+            return sliceValue;
+        }
+        // Fall back to default: default.section
+        var defaultSection = "default." + section;
+        return getter.get(doc, defaultSection, key);
     }
 
     private <T> Option<T> getHierarchical(String section, String key, ValueGetter<T> getter) {

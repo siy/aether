@@ -183,7 +183,7 @@ class BlueprintServiceTest {
 
         @Override
         public NodeId self() {
-            return NodeId.nodeId("test-node");
+            return NodeId.nodeId("test-node").unwrap();
         }
 
         @Override

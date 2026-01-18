@@ -60,9 +60,10 @@ public class LocalNetwork implements ClusterNetwork {
     }
 
     @Override
-    public <M extends ProtocolMessage> void broadcast(M message) {
+    public <M extends ProtocolMessage> Unit broadcast(M message) {
         nodes.keySet()
              .forEach(nodeId -> send(nodeId, message));
+        return Unit.unit();
     }
 
     @Override
@@ -91,17 +92,18 @@ public class LocalNetwork implements ClusterNetwork {
     }
 
     @Override
-    public <M extends ProtocolMessage> void send(NodeId nodeId, M message) {
+    public <M extends ProtocolMessage> Unit send(NodeId nodeId, M message) {
         // For Byzantine behavior - only check if it's a Byzantine node if we can get the sender
         var sender = message.sender();
         if (sender != null && faultInjector.isFaultyNode(sender, FaultType.NODE_BYZANTINE)) {
             // Handle Byzantine behavior - for now, just drop the message
-            return;
+            return Unit.unit();
         }
 
         if (nodes.containsKey(nodeId)) {
             processWithFaultInjection(nodeId, (RabiaProtocolMessage) message);
         }
+        return Unit.unit();
     }
 
     public void disconnect(NodeId nodeId) {

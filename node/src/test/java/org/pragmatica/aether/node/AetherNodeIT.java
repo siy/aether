@@ -45,9 +45,9 @@ class AetherNodeIT {
     private static final Duration AWAIT_DURATION = Duration.ofSeconds(10);
 
     private static final List<NodeInfo> NODES = List.of(
-            nodeInfo(nodeId("aether-1"), nodeAddress("localhost", BASE_PORT)),
-            nodeInfo(nodeId("aether-2"), nodeAddress("localhost", BASE_PORT + 1)),
-            nodeInfo(nodeId("aether-3"), nodeAddress("localhost", BASE_PORT + 2))
+            nodeInfo(nodeId("aether-1").unwrap(), nodeAddress("localhost", BASE_PORT).unwrap()),
+            nodeInfo(nodeId("aether-2").unwrap(), nodeAddress("localhost", BASE_PORT + 1).unwrap()),
+            nodeInfo(nodeId("aether-3").unwrap(), nodeAddress("localhost", BASE_PORT + 2).unwrap())
     );
 
     private final List<AetherNode> nodes = new ArrayList<>();

@@ -68,9 +68,11 @@ public final class ForgeCluster {
         // Create node infos for initial cluster
         var initialNodes = new ArrayList<NodeInfo>();
         for (int i = 1; i <= initialClusterSize; i++) {
-            var nodeId = nodeId("node-" + i);
+            var nodeId = nodeId("node-" + i)
+                               .unwrap();
             var port = BASE_PORT + i - 1;
-            var info = nodeInfo(nodeId, nodeAddress("localhost", port));
+            var info = nodeInfo(nodeId, nodeAddress("localhost", port)
+                                                   .unwrap());
             initialNodes.add(info);
             nodeInfos.put(nodeId.id(), info);
         }
@@ -117,9 +119,11 @@ public final class ForgeCluster {
      */
     public Promise<NodeId> addNode() {
         var nodeNum = nodeCounter.incrementAndGet();
-        var nodeId = nodeId("node-" + nodeNum);
+        var nodeId = nodeId("node-" + nodeNum)
+                           .unwrap();
         var port = BASE_PORT + nodeNum - 1;
-        var info = nodeInfo(nodeId, nodeAddress("localhost", port));
+        var info = nodeInfo(nodeId, nodeAddress("localhost", port)
+                                               .unwrap());
         log.info("Adding new node {} on port {}", nodeId.id(), port);
         nodeInfos.put(nodeId.id(), info);
         // Get current topology including the new node

@@ -31,8 +31,8 @@ class ArtifactDeploymentTrackerTest {
         artifact1 = Artifact.artifact("org.example:slice1:1.0.0").unwrap();
         artifact2 = Artifact.artifact("org.example:slice2:2.0.0").unwrap();
 
-        node1 = NodeId.nodeId("node-1");
-        node2 = NodeId.nodeId("node-2");
+        node1 = NodeId.nodeId("node-1").unwrap();
+        node2 = NodeId.nodeId("node-2").unwrap();
     }
 
     @Test
@@ -109,6 +109,32 @@ class ArtifactDeploymentTrackerTest {
         var artifacts = tracker.deployedArtifacts();
         assertThatThrownBy(() -> artifacts.add(artifact2))
             .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void instanceCounts_returnsEmpty_initially() {
+        assertThat(tracker.instanceCounts()).isEmpty();
+    }
+
+    @Test
+    void instanceCounts_returnsCorrectCounts() {
+        deployArtifact(artifact1, node1);
+        deployArtifact(artifact1, node2);
+        deployArtifact(artifact2, node1);
+
+        var counts = tracker.instanceCounts();
+        assertThat(counts).containsEntry(artifact1.asString(), 2);
+        assertThat(counts).containsEntry(artifact2.asString(), 1);
+    }
+
+    @Test
+    void instanceCounts_updatesAfterUndeploy() {
+        deployArtifact(artifact1, node1);
+        deployArtifact(artifact1, node2);
+        undeployArtifact(artifact1, node1);
+
+        var counts = tracker.instanceCounts();
+        assertThat(counts).containsEntry(artifact1.asString(), 1);
     }
 
     @SuppressWarnings("unchecked")

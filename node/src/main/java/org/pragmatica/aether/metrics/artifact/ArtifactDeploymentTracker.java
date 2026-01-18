@@ -8,8 +8,10 @@ import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValuePut;
 import org.pragmatica.cluster.state.kvstore.KVStoreNotification.ValueRemove;
 import org.pragmatica.messaging.MessageReceiver;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +55,16 @@ public interface ArtifactDeploymentTracker {
      * Get count of deployed artifacts.
      */
     int deployedCount();
+
+    /**
+     * Get per-artifact instance counts for migration decisions.
+     * <p>
+     * Returns a map from artifact coordinate (groupId:artifactId:version) to
+     * the number of instances currently deployed in the cluster.
+     *
+     * @return map of artifact coordinates to instance counts
+     */
+    Map<String, Integer> instanceCounts();
 
     /**
      * Create a new artifact deployment tracker.
@@ -115,5 +127,14 @@ class ArtifactDeploymentTrackerImpl implements ArtifactDeploymentTracker {
     @Override
     public int deployedCount() {
         return deploymentCounts.size();
+    }
+
+    @Override
+    public Map<String, Integer> instanceCounts() {
+        return deploymentCounts.entrySet()
+                               .stream()
+                               .collect(Collectors.toMap(e -> e.getKey()
+                                                               .asString(),
+                                                         Map.Entry::getValue));
     }
 }

@@ -4,6 +4,8 @@ import org.pragmatica.consensus.NodeId;
 import org.pragmatica.consensus.net.NodeInfo;
 import org.pragmatica.consensus.topology.TopologyManager;
 import org.pragmatica.lang.Option;
+import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Unit;
 import org.pragmatica.lang.io.TimeSpan;
 
 import java.net.SocketAddress;
@@ -20,11 +22,13 @@ public record TestTopologyManager(int clusterSize, NodeInfo self) implements Top
     }
 
     @Override
-    public void start() {
+    public Promise<Unit> start() {
+        return Promise.unitPromise();
     }
 
     @Override
-    public void stop() {
+    public Promise<Unit> stop() {
+        return Promise.unitPromise();
     }
 
     @Override

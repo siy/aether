@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-01-17
+
 ### Added
 - **MethodHandle API** - Performance optimization for repeated slice invocations
   - New `MethodHandle<R, T>` interface for pre-parsed artifact/method (response type first per convention)
@@ -18,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Mandatory `requestId` extension for request tracing
   - `application/problem+json` content type for all error responses
   - Covers handler errors, HttpError failures, and 404 not found
+- **JBCT compliance improvements** - Message passing architecture
+  - `AetherLocalMessage` marker interface for local messages
+  - `RouteGroup` builder for organized routing with fan-out support
+  - `SealedBuilder` integration for compile-time exhaustiveness validation
+  - Extracted complex lambdas to named methods in InvocationHandler
+  - Renamed `getConfiguration()` to `configuration()` per JBCT naming
+
+### Fixed
+- Support common endpoints (`/health`, `/status`, `/nodes`, `/slices`, `/metrics`) without `/api/` prefix for Docker health checks and E2E tests
+- Updated order-demo aether.version reference to match parent
 
 ## [0.7.4] - 2026-01-13
 

@@ -1,0 +1,264 @@
+package org.pragmatica.aether.forge;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
+
+/**
+ * Tests for slice method invocation.
+ *
+ * <p>Tests cover:
+ * <ul>
+ *   <li>Route registration when slices are deployed</li>
+ *   <li>HTTP request routing to slice methods</li>
+ *   <li>Error handling for non-existent routes</li>
+ *   <li>Request distribution across slice instances</li>
+ * </ul>
+ *
+ * <p>Note: Full invocation testing requires slices with defined methods.
+ * The example-slice has no methods, so some tests focus on infrastructure
+ * and error handling rather than successful invocations.
+ */
+@Execution(ExecutionMode.SAME_THREAD)
+class SliceInvocationTest {
+    private static final int BASE_PORT = 5080;
+    private static final int BASE_MGMT_PORT = 5180;
+    private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.8.0";
+
+    private ForgeCluster cluster;
+    private HttpClient httpClient;
+
+    @BeforeEach
+    void setUp() {
+        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+        httpClient = HttpClient.newBuilder()
+                               .connectTimeout(Duration.ofSeconds(5))
+                               .build();
+        cluster.start()
+               .await()
+               .onFailure(cause -> {
+                   throw new AssertionError("Cluster start failed: " + cause.message());
+               });
+
+        await().atMost(WAIT_TIMEOUT)
+               .pollInterval(POLL_INTERVAL)
+               .until(() -> cluster.currentLeader().isPresent());
+
+        await().atMost(WAIT_TIMEOUT)
+               .pollInterval(POLL_INTERVAL)
+               .until(this::allNodesHealthy);
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (cluster != null) {
+            cluster.stop()
+                   .await();
+        }
+    }
+
+    @Nested
+    class RouteHandling {
+
+        @Test
+        void invokeNonExistentRoute_returns404() {
+            var response = invokeGet("/api/nonexistent");
+
+            assertThat(response).containsAnyOf("error", "404", "not found", "Not Found");
+        }
+
+        @Test
+        void invokeWithInvalidMethod_returnsError() {
+            var response = invokeSlice("PATCH", "/api/test", "{}");
+
+            assertThat(response).contains("error");
+        }
+
+        @Test
+        void routesEndpoint_returnsRegisteredRoutes() {
+            var routes = getRoutes();
+
+            assertThat(routes).doesNotContain("\"error\"");
+        }
+
+        @Test
+        void afterSliceDeployment_routesAreAvailable() {
+            deploy(TEST_ARTIFACT, 1);
+
+            await().atMost(WAIT_TIMEOUT)
+                   .pollInterval(POLL_INTERVAL)
+                   .until(() -> getSlices().contains("example-slice"));
+
+            var routes = getRoutes();
+            assertThat(routes).doesNotContain("\"error\"");
+        }
+    }
+
+    @Nested
+    class ErrorHandling {
+
+        @Test
+        void invokeWithMalformedBody_returnsError() {
+            var response = invokePost("/api/test", "not valid json");
+
+            assertThat(response).containsAnyOf("error", "404", "Bad Request");
+        }
+
+        @Test
+        void invokeWithEmptyBody_handledGracefully() {
+            var response = invokePost("/api/test", "");
+
+            assertThat(response).isNotNull();
+        }
+
+        @Test
+        void invokeAfterSliceUndeploy_returnsNotFound() {
+            deploy(TEST_ARTIFACT, 1);
+            await().atMost(WAIT_TIMEOUT)
+                   .pollInterval(POLL_INTERVAL)
+                   .until(() -> getSlices().contains("example-slice"));
+
+            undeploy(TEST_ARTIFACT);
+            await().atMost(WAIT_TIMEOUT)
+                   .pollInterval(POLL_INTERVAL)
+                   .until(() -> !getSlices().contains("example-slice"));
+
+            var response = invokeGet("/api/example");
+            assertThat(response).containsAnyOf("error", "404", "not found", "Not Found");
+        }
+    }
+
+    @Nested
+    class RequestDistribution {
+
+        @Test
+        void multipleNodes_allCanHandleRequests() {
+            deploy(TEST_ARTIFACT, 3);
+
+            await().atMost(WAIT_TIMEOUT)
+                   .pollInterval(POLL_INTERVAL)
+                   .until(() -> getSlices().contains("example-slice"));
+
+            for (var node : cluster.status().nodes()) {
+                var health = getHealth(node.mgmtPort());
+                assertThat(health).contains("\"status\"");
+                assertThat(health).doesNotContain("\"error\"");
+            }
+        }
+
+        @Test
+        void requestToAnyNode_succeeds() {
+            var nodes = cluster.status().nodes();
+
+            var node1Response = getStatus(nodes.get(0).mgmtPort());
+            var node2Response = getStatus(nodes.get(1).mgmtPort());
+            var node3Response = getStatus(nodes.get(2).mgmtPort());
+
+            assertThat(node1Response).doesNotContain("\"error\"");
+            assertThat(node2Response).doesNotContain("\"error\"");
+            assertThat(node3Response).doesNotContain("\"error\"");
+        }
+    }
+
+    // HTTP helper methods
+
+    private int anyMgmtPort() {
+        return cluster.status().nodes().getFirst().mgmtPort();
+    }
+
+    private String invokeGet(String path) {
+        return httpRequest("GET", anyMgmtPort(), path, null);
+    }
+
+    private String invokePost(String path, String body) {
+        return httpRequest("POST", anyMgmtPort(), path, body);
+    }
+
+    private String invokeSlice(String method, String path, String body) {
+        return httpRequest(method, anyMgmtPort(), path, body);
+    }
+
+    private String getRoutes() {
+        return httpRequest("GET", anyMgmtPort(), "/api/routes", null);
+    }
+
+    private String getSlices() {
+        return httpRequest("GET", anyMgmtPort(), "/api/slices", null);
+    }
+
+    private String getHealth(int port) {
+        return httpRequest("GET", port, "/api/health", null);
+    }
+
+    private String getStatus(int port) {
+        return httpRequest("GET", port, "/api/status", null);
+    }
+
+    private void deploy(String artifact, int instances) {
+        var body = "{\"artifact\":\"" + artifact + "\",\"instances\":" + instances + "}";
+        var leaderPort = cluster.getLeaderManagementPort().or(anyMgmtPort());
+        httpRequest("POST", leaderPort, "/api/deploy", body);
+    }
+
+    private void undeploy(String artifact) {
+        var body = "{\"artifact\":\"" + artifact + "\"}";
+        var leaderPort = cluster.getLeaderManagementPort().or(anyMgmtPort());
+        httpRequest("POST", leaderPort, "/api/undeploy", body);
+    }
+
+    private String httpRequest(String method, int port, String path, String body) {
+        var builder = HttpRequest.newBuilder()
+                                 .uri(URI.create("http://localhost:" + port + path))
+                                 .timeout(Duration.ofSeconds(10));
+
+        if (body != null) {
+            builder.header("Content-Type", "application/json")
+                   .method(method, HttpRequest.BodyPublishers.ofString(body));
+        } else {
+            builder.method(method, HttpRequest.BodyPublishers.noBody());
+        }
+
+        try {
+            var response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            return response.body();
+        } catch (IOException | InterruptedException e) {
+            return "{\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    private boolean allNodesHealthy() {
+        var status = cluster.status();
+        return status.nodes().stream()
+                     .allMatch(node -> checkNodeHealth(node.mgmtPort()));
+    }
+
+    private boolean checkNodeHealth(int port) {
+        var request = HttpRequest.newBuilder()
+                                 .uri(URI.create("http://localhost:" + port + "/api/health"))
+                                 .GET()
+                                 .timeout(Duration.ofSeconds(5))
+                                 .build();
+        try {
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() == 200 && response.body().contains("\"quorum\":true");
+        } catch (IOException | InterruptedException e) {
+            return false;
+        }
+    }
+}

@@ -69,10 +69,15 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
     LeaderManager leaderManager();
 
     /**
+     * Check if the consensus engine is active and ready for commands.
+     */
+    boolean isActive();
+
+    /**
      * Get the route entries for RabiaNode's internal components.
      * These should be combined with other entries when building the final router.
      */
-    List<Entry< ?>> routeEntries();
+    List<Entry<?>> routeEntries();
 
     /**
      * Creates a RabiaNode without metrics collection.
@@ -165,7 +170,7 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
                                               route(NewBatch.class,
                                                     (NewBatch b) -> consensus.handleNewBatch(b)));
         // Collect all entries
-        var allEntries = new ArrayList<Entry< ?>>();
+        var allEntries = new ArrayList<Entry<?>>();
         allEntries.add(topologyMgmtRoutes);
         allEntries.add(networkMgmtRoutes);
         allEntries.add(topologyChangeRoutes);
@@ -181,34 +186,35 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
                                             TopologyManager topologyManager,
                                             RabiaEngine<C> consensus,
                                             LeaderManager leaderManager,
-                                            List<Entry< ?>> routeEntries) implements RabiaNode<C> {
+                                            List<Entry<?>> routeEntries) implements RabiaNode<C> {
             @Override
             public NodeId self() {
-                return config()
-                             .topology()
+                return config().topology()
                              .self();
             }
 
             @Override
             public Promise<Unit> start() {
-                return network()
-                              .start()
+                return network().start()
                               .onSuccessRunAsync(topologyManager()::start)
                               .flatMap(consensus()::start);
             }
 
             @Override
             public Promise<Unit> stop() {
-                return consensus()
-                                .stop()
+                return consensus().stop()
                                 .onResultRun(topologyManager()::stop)
                                 .flatMap(network()::stop);
             }
 
             @Override
+            public boolean isActive() {
+                return consensus().isActive();
+            }
+
+            @Override
             public <R> Promise<List<R>> apply(List<C> commands) {
-                return consensus()
-                                .apply(commands);
+                return consensus().apply(commands);
             }
         }
         return new rabiaNode<>(config,
@@ -229,9 +235,9 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
      * @return Result containing the ImmutableRouter, or failure if validation fails
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
-    static Result<MessageRouter> buildAndWireRouter(DelegateRouter delegateRouter, List<Entry< ?>> entries) {
+    static Result<MessageRouter> buildAndWireRouter(DelegateRouter delegateRouter, List<Entry<?>> entries) {
         // Validate all sealed hierarchies
-        Set<Class< ?>> validationErrors = new HashSet<>();
+        Set<Class<?>> validationErrors = new HashSet<>();
         for (var entry : entries) {
             validationErrors.addAll(entry.validate());
         }

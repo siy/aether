@@ -28,7 +28,7 @@ import static org.awaitility.Awaitility.await;
 class BootstrapE2ETest {
     private static final Path PROJECT_ROOT = Path.of(System.getProperty("project.basedir", ".."));
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(60);
-    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.7.2";
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order:0.8.0";
     private AetherCluster cluster;
 
     @BeforeEach
@@ -82,7 +82,7 @@ class BootstrapE2ETest {
         cluster.anyNode().deploy(TEST_ARTIFACT, 1);
         await().atMost(WAIT_TIMEOUT).until(() -> {
             var slices = cluster.anyNode().getSlices();
-            return slices.contains("example-slice");
+            return slices.contains("place-order");
         });
 
         // Kill and restart a node
@@ -95,7 +95,7 @@ class BootstrapE2ETest {
         // Slice should still be visible (state recovered from consensus)
         await().atMost(WAIT_TIMEOUT).until(() -> {
             var slices = cluster.anyNode().getSlices();
-            return slices.contains("example-slice");
+            return slices.contains("place-order");
         });
     }
 

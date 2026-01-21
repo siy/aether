@@ -121,10 +121,10 @@ class NetworkPartitionE2ETest {
         cluster.awaitLeader();
 
         // Deploy a slice while cluster is healthy
-        cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.2", 1);
+        cluster.anyNode().deploy("org.pragmatica-lite.aether.example:place-order:0.8.0", 1);
         await().atMost(WAIT_TIMEOUT).until(() -> {
             var slices = cluster.anyNode().getSlices();
-            return slices.contains("example-slice");
+            return slices.contains("place-order");
         });
 
         // Reduce to 2 nodes (still has quorum)
@@ -133,7 +133,7 @@ class NetworkPartitionE2ETest {
 
         // Slice state should be preserved
         var slices = cluster.anyNode().getSlices();
-        assertThat(slices).contains("example-slice");
+        assertThat(slices).contains("place-order");
 
         // Restore full cluster
         cluster.restartNode("node-3");
@@ -142,6 +142,6 @@ class NetworkPartitionE2ETest {
 
         // State should still be consistent
         slices = cluster.anyNode().getSlices();
-        assertThat(slices).contains("example-slice");
+        assertThat(slices).contains("place-order");
     }
 }

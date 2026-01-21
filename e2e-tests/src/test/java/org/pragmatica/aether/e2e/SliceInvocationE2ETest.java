@@ -24,13 +24,13 @@ import static org.awaitility.Awaitility.await;
  * </ul>
  *
  * <p>Note: Full invocation testing requires slices with defined methods.
- * The example-slice has no methods, so some tests focus on infrastructure
+ * The place-order has no methods, so some tests focus on infrastructure
  * and error handling rather than successful invocations.
  */
 class SliceInvocationE2ETest {
     private static final Path PROJECT_ROOT = Path.of(System.getProperty("project.basedir", ".."));
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(30);
-    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.7.2";
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order:0.8.0";
     private AetherCluster cluster;
 
     @BeforeEach
@@ -81,7 +81,7 @@ class SliceInvocationE2ETest {
 
             await().atMost(WAIT_TIMEOUT).until(() -> {
                 var slices = cluster.anyNode().getSlices();
-                return slices.contains("example-slice");
+                return slices.contains("place-order");
             });
 
             // Check routes endpoint
@@ -115,14 +115,14 @@ class SliceInvocationE2ETest {
             cluster.anyNode().deploy(TEST_ARTIFACT, 1);
             await().atMost(WAIT_TIMEOUT).until(() -> {
                 var slices = cluster.anyNode().getSlices();
-                return slices.contains("example-slice");
+                return slices.contains("place-order");
             });
 
             // Undeploy
             cluster.anyNode().undeploy(TEST_ARTIFACT);
             await().atMost(WAIT_TIMEOUT).until(() -> {
                 var slices = cluster.anyNode().getSlices();
-                return !slices.contains("example-slice");
+                return !slices.contains("place-order");
             });
 
             // Invoke should fail (no routes)
@@ -141,7 +141,7 @@ class SliceInvocationE2ETest {
 
             await().atMost(WAIT_TIMEOUT).until(() -> {
                 var slices = cluster.anyNode().getSlices();
-                return slices.contains("example-slice");
+                return slices.contains("place-order");
             });
 
             // All nodes should be able to respond to requests

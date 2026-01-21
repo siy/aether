@@ -42,6 +42,7 @@ import org.pragmatica.aether.ttm.TTMManager;
 import org.pragmatica.aether.ttm.TTMState;
 import org.pragmatica.aether.update.RollingUpdateManager;
 import org.pragmatica.aether.update.RollingUpdateManagerImpl;
+import org.pragmatica.aether.slice.DeferredSliceInvokerFacade;
 import org.pragmatica.aether.slice.FrameworkClassLoader;
 import org.pragmatica.aether.slice.SharedLibraryClassLoader;
 import org.pragmatica.aether.slice.SliceRuntime;
@@ -184,6 +185,11 @@ public interface AetherNode {
     boolean isLeader();
 
     /**
+     * Check if this node is ready for operations (consensus active).
+     */
+    boolean isReady();
+
+    /**
      * Get the current leader node ID.
      */
     Option<NodeId> leader();
@@ -243,7 +249,8 @@ public interface AetherNode {
         // Create slice management components
         var sliceRegistry = SliceRegistry.sliceRegistry();
         var sharedLibraryLoader = createSharedLibraryLoader(config);
-        var sliceStore = SliceStore.sliceStore(sliceRegistry, repositories, sharedLibraryLoader);
+        var deferredInvoker = DeferredSliceInvokerFacade.deferredSliceInvokerFacade();
+        var sliceStore = SliceStore.sliceStore(sliceRegistry, repositories, sharedLibraryLoader, deferredInvoker);
         // Create Rabia cluster node with metrics
         var nodeConfig = NodeConfig.nodeConfig(config.protocol(), config.topology());
         var rabiaMetricsCollector = RabiaMetricsCollector.rabiaMetricsCollector();
@@ -261,6 +268,7 @@ public interface AetherNode {
                             kvStore,
                             sliceRegistry,
                             sliceStore,
+                            deferredInvoker,
                             clusterNode,
                             rabiaMetricsCollector,
                             networkMetricsHandler,
@@ -275,6 +283,7 @@ public interface AetherNode {
                                                    KVStore<AetherKey, AetherValue> kvStore,
                                                    SliceRegistry sliceRegistry,
                                                    SliceStore sliceStore,
+                                                   DeferredSliceInvokerFacade deferredInvoker,
                                                    RabiaNode<KVCommand<AetherKey>> clusterNode,
                                                    RabiaMetricsCollector rabiaMetricsCollector,
                                                    NetworkMetricsHandler networkMetricsHandler,
@@ -357,14 +366,11 @@ public interface AetherNode {
             }
 
             private Promise<Unit> startClusterAsync() {
-                clusterNode.start()
-                           .onSuccess(_ -> {
-                                          log.info("Aether node {} cluster formation complete",
-                                                   self());
-                                          // Ensure NodeDeploymentManager is activated after cluster formation
-                // This guarantees activation even if QuorumStateNotification was missed
-                nodeDeploymentManager.onQuorumStateChange(QuorumStateNotification.ESTABLISHED);
-                                          // Register Netty EventLoopGroups for metrics collection
+                return clusterNode.start()
+                                  .onSuccess(_ -> {
+                                                 log.info("Aether node {} cluster formation complete",
+                                                          self());
+                                                 // Register Netty EventLoopGroups for metrics collection
                 clusterNode.network()
                            .server()
                            .onPresent(server -> {
@@ -372,10 +378,9 @@ public interface AetherNode {
                                           eventLoopMetricsCollector.register(server.workerGroup());
                                           log.info("Registered EventLoopGroups for metrics collection");
                                       });
-                                      })
-                           .onFailure(cause -> log.error("Cluster formation failed: {}",
-                                                         cause.message()));
-                return Promise.success(Unit.unit());
+                                             })
+                                  .onFailure(cause -> log.error("Cluster formation failed: {}",
+                                                                cause.message()));
             }
 
             @Override
@@ -393,6 +398,11 @@ public interface AetherNode {
             public boolean isLeader() {
                 return clusterNode.leaderManager()
                                   .isLeader();
+            }
+
+            @Override
+            public boolean isReady() {
+                return clusterNode.isActive();
             }
 
             @Override
@@ -493,6 +503,8 @@ public interface AetherNode {
                                                      serializer,
                                                      deserializer,
                                                      rollingUpdateManager);
+        // Wire the deferred invoker facade to the actual SliceInvoker
+        deferredInvoker.setDelegate(sliceInvoker);
         // Create node deployment manager (now created after sliceInvoker for HTTP route publishing)
         var nodeDeploymentManager = NodeDeploymentManager.nodeDeploymentManager(config.self(),
                                                                                 delegateRouter,
@@ -612,25 +624,25 @@ public interface AetherNode {
                              });
     }
 
-    private static List<MessageRouter.Entry< ?>> collectRouteEntries(KVStore<AetherKey, AetherValue> kvStore,
-                                                                     NodeDeploymentManager nodeDeploymentManager,
-                                                                     ClusterDeploymentManager clusterDeploymentManager,
-                                                                     EndpointRegistry endpointRegistry,
-                                                                     HttpRouteRegistry httpRouteRegistry,
-                                                                     MetricsCollector metricsCollector,
-                                                                     MetricsScheduler metricsScheduler,
-                                                                     DeploymentMetricsCollector deploymentMetricsCollector,
-                                                                     DeploymentMetricsScheduler deploymentMetricsScheduler,
-                                                                     ControlLoop controlLoop,
-                                                                     SliceInvoker sliceInvoker,
-                                                                     InvocationHandler invocationHandler,
-                                                                     AlertManager alertManager,
-                                                                     TTMManager ttmManager,
-                                                                     RabiaMetricsCollector rabiaMetricsCollector,
-                                                                     RollingUpdateManagerImpl rollingUpdateManager,
-                                                                     RollbackManager rollbackManager,
-                                                                     ArtifactMetricsCollector artifactMetricsCollector) {
-        var entries = new ArrayList<MessageRouter.Entry< ?>>();
+    private static List<MessageRouter.Entry<?>> collectRouteEntries(KVStore<AetherKey, AetherValue> kvStore,
+                                                                    NodeDeploymentManager nodeDeploymentManager,
+                                                                    ClusterDeploymentManager clusterDeploymentManager,
+                                                                    EndpointRegistry endpointRegistry,
+                                                                    HttpRouteRegistry httpRouteRegistry,
+                                                                    MetricsCollector metricsCollector,
+                                                                    MetricsScheduler metricsScheduler,
+                                                                    DeploymentMetricsCollector deploymentMetricsCollector,
+                                                                    DeploymentMetricsScheduler deploymentMetricsScheduler,
+                                                                    ControlLoop controlLoop,
+                                                                    SliceInvoker sliceInvoker,
+                                                                    InvocationHandler invocationHandler,
+                                                                    AlertManager alertManager,
+                                                                    TTMManager ttmManager,
+                                                                    RabiaMetricsCollector rabiaMetricsCollector,
+                                                                    RollingUpdateManagerImpl rollingUpdateManager,
+                                                                    RollbackManager rollbackManager,
+                                                                    ArtifactMetricsCollector artifactMetricsCollector) {
+        var entries = new ArrayList<MessageRouter.Entry<?>>();
         // KVStore notifications to deployment managers
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValuePut.class, nodeDeploymentManager::onValuePut));
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValuePut.class, clusterDeploymentManager::onValuePut));

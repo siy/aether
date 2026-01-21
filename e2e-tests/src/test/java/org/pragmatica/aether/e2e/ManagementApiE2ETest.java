@@ -88,15 +88,15 @@ class ManagementApiE2ETest {
             assertThat(slices).doesNotContain("\"error\"");
 
             // Deploy a slice and verify it appears
-            cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.2", 1);
+            cluster.anyNode().deploy("org.pragmatica-lite.aether.example:place-order:0.8.0", 1);
 
             await().atMost(WAIT_TIMEOUT).until(() -> {
                 var response = cluster.anyNode().getSlices();
-                return response.contains("example-slice");
+                return response.contains("place-order");
             });
 
             slices = cluster.anyNode().getSlices();
-            assertThat(slices).contains("example-slice");
+            assertThat(slices).contains("place-order");
         }
     }
 
@@ -125,11 +125,11 @@ class ManagementApiE2ETest {
         @Test
         void invocationMetrics_tracksCallsPerMethod() {
             // Deploy a slice to generate some invocation data
-            cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.2", 1);
+            cluster.anyNode().deploy("org.pragmatica-lite.aether.example:place-order:0.8.0", 1);
 
             await().atMost(WAIT_TIMEOUT).until(() -> {
                 var slices = cluster.anyNode().getSlices();
-                return slices.contains("example-slice");
+                return slices.contains("place-order");
             });
 
             var invocationMetrics = cluster.anyNode().getInvocationMetrics();
@@ -138,7 +138,7 @@ class ManagementApiE2ETest {
 
         @Test
         void invocationMetrics_filtering_byArtifactAndMethod() {
-            var filtered = cluster.anyNode().getInvocationMetrics("example-slice", null);
+            var filtered = cluster.anyNode().getInvocationMetrics("place-order", null);
             assertThat(filtered).doesNotContain("\"error\"");
 
             var methodFiltered = cluster.anyNode().getInvocationMetrics(null, "process");
@@ -262,11 +262,11 @@ class ManagementApiE2ETest {
         @Test
         void slicesStatus_returnsDetailedHealth() {
             // Deploy a slice first
-            cluster.anyNode().deploy("org.pragmatica-lite.aether:example-slice:0.7.2", 2);
+            cluster.anyNode().deploy("org.pragmatica-lite.aether.example:place-order:0.8.0", 2);
 
             await().atMost(WAIT_TIMEOUT).until(() -> {
                 var slices = cluster.anyNode().getSlices();
-                return slices.contains("example-slice");
+                return slices.contains("place-order");
             });
 
             var slicesStatus = cluster.anyNode().getSlicesStatus();

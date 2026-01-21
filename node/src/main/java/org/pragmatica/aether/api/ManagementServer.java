@@ -326,8 +326,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     private void serveDashboardFile(ChannelHandlerContext ctx, String filename, String contentType) {
-        try (InputStream is = getClass()
-                                      .getResourceAsStream("/dashboard/" + filename)) {
+        try (InputStream is = getClass().getResourceAsStream("/dashboard/" + filename)) {
             if (is == null) {
                 sendError(ctx, HttpResponseStatus.NOT_FOUND);
                 return;
@@ -779,18 +778,17 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         if (!requireLeader(ctx, node)) {
             return;
         }
-        parseRollingUpdateRequest(body)
-                                 .onSuccess(req -> node.rollingUpdateManager()
-                                                       .startUpdate(req.artifactBase(),
-                                                                    req.version(),
-                                                                    req.instances(),
-                                                                    req.thresholds(),
-                                                                    req.cleanupPolicy())
-                                                       .onSuccess(update -> sendJson(ctx,
-                                                                                     buildRollingUpdateJson(update)))
-                                                       .onFailure(cause -> sendJsonError(ctx,
-                                                                                         HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                                                         cause.message())))
+        parseRollingUpdateRequest(body).onSuccess(req -> node.rollingUpdateManager()
+                                                             .startUpdate(req.artifactBase(),
+                                                                          req.version(),
+                                                                          req.instances(),
+                                                                          req.thresholds(),
+                                                                          req.cleanupPolicy())
+                                                             .onSuccess(update -> sendJson(ctx,
+                                                                                           buildRollingUpdateJson(update)))
+                                                             .onFailure(cause -> sendJsonError(ctx,
+                                                                                               HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                                                                                               cause.message())))
                                  .onFailure(cause -> sendJsonError(ctx,
                                                                    HttpResponseStatus.BAD_REQUEST,
                                                                    cause.message()));
@@ -940,13 +938,14 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         var sliceCount = node.sliceStore()
                              .loaded()
                              .size();
+        var ready = node.isReady();
         // Quorum based on actual network connections (connectedNodeCount + 1 for self)
         // connectedNodeCount() returns peer count (not including self)
         var totalNodes = connectedNodeCount + 1;
         var hasQuorum = totalNodes >= 2;
         // At least 2 nodes for minimal cluster
-        // Determine status: healthy if quorum, degraded if no slices but quorum, unhealthy if no quorum
-        var status = !hasQuorum
+        // Determine status: healthy if ready and quorum, degraded if no slices but quorum, unhealthy otherwise
+        var status = !ready || !hasQuorum
                      ? "unhealthy"
                      : sliceCount == 0
                        ? "degraded"
@@ -956,6 +955,9 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         sb.append("\"status\":\"")
           .append(status)
           .append("\",");
+        sb.append("\"ready\":")
+          .append(ready)
+          .append(",");
         sb.append("\"quorum\":")
           .append(hasQuorum)
           .append(",");
@@ -1412,7 +1414,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         var config = ttm.config();
         var sb = new StringBuilder();
         sb.append("{");
-        sb.append("\"configEnabled\":")
+        sb.append("\"enabled\":")
           .append(config.enabled())
           .append(",");
         sb.append("\"active\":")

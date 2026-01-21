@@ -304,9 +304,11 @@ public class AetherCluster implements AutoCloseable {
     private boolean hasQuorum() {
         try {
             // Check cluster formation using /health endpoint which shows actual network connections
-            // The /health endpoint includes connectedPeers count from network layer
+            // The /health endpoint includes connectedPeers count and ready state from consensus layer
             var health = anyNode().getHealth();
             var expectedNodeCount = runningNodeCount();
+            // Parse ready state from health response: {"ready":true/false,...}
+            boolean ready = health.contains("\"ready\":true");
             // Parse connectedPeers from health response: {"connectedPeers":N,...}
             int connectedPeers = 0;
             var matcher = java.util.regex.Pattern.compile("\"connectedPeers\":(\\d+)").matcher(health);
@@ -319,9 +321,10 @@ public class AetherCluster implements AutoCloseable {
             System.out.println("[DEBUG] hasQuorum check: health=" + health +
                                ", expectedNodeCount=" + expectedNodeCount +
                                ", connectedPeers=" + connectedPeers +
-                               ", totalNodes=" + totalNodes);
-            // Quorum requires majority of expected nodes to be connected
-            return totalNodes >= (expectedNodeCount / 2 + 1);
+                               ", totalNodes=" + totalNodes +
+                               ", ready=" + ready);
+            // Quorum requires majority of expected nodes to be connected AND node must be ready
+            return ready && totalNodes >= (expectedNodeCount / 2 + 1);
         } catch (Exception e) {
             System.out.println("[DEBUG] hasQuorum error: " + e.getMessage());
             return false;
@@ -334,7 +337,7 @@ public class AetherCluster implements AutoCloseable {
                     .allMatch(node -> {
                         try {
                             var health = node.getHealth();
-                            return !health.contains("\"error\"");
+                            return !health.contains("\"error\"") && health.contains("\"ready\":true");
                         } catch (Exception e) {
                             return false;
                         }

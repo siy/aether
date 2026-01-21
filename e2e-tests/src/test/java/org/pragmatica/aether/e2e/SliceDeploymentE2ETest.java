@@ -57,7 +57,7 @@ class SliceDeploymentE2ETest {
     }
 
     @Test
-    @Disabled("Concurrent multi-instance loading has race condition - slices get stuck in LOADING")
+    @Disabled("Instance distribution issue - slice reaches ACTIVE but only on one node instead of all three")
     void deploySlice_multipleInstances_distributedAcrossNodes() {
         var response = cluster.anyNode().deploy(TEST_ARTIFACT, 3);
         assertThat(response).doesNotContain("\"error\"");
@@ -77,7 +77,7 @@ class SliceDeploymentE2ETest {
     }
 
     @Test
-    @Disabled("Scaling to multiple instances has race condition - new instances get stuck in LOADING")
+    @Disabled("Instance distribution issue - same as deploySlice_multipleInstances_distributedAcrossNodes")
     void scaleSlice_adjustsInstanceCount() {
         // Deploy with 1 instance
         cluster.anyNode().deploy(TEST_ARTIFACT, 1);

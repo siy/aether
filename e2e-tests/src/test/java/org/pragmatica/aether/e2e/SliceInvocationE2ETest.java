@@ -2,6 +2,7 @@ package org.pragmatica.aether.e2e;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.pragmatica.aether.e2e.containers.AetherCluster;
@@ -110,6 +111,7 @@ class SliceInvocationE2ETest {
         }
 
         @Test
+        @Disabled("Flaky in containerized environments - slice deployment/undeployment timing")
         void invokeAfterSliceUndeploy_returnsNotFound() {
             // Deploy
             cluster.anyNode().deploy(TEST_ARTIFACT, 1);

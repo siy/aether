@@ -2,6 +2,7 @@ package org.pragmatica.aether.slice.dependency;
 
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;
+import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Result;
 import org.pragmatica.lang.utils.Causes;
 
@@ -134,26 +135,24 @@ public record DependencyFile(List<ArtifactDependency> shared,
      * These are provided by the runtime and should never be in slice dependency files.
      */
     private Result<DependencyFile> validateNoFrameworkDependencies() {
-        var frameworkDep = findFrameworkDependency();
-        if (frameworkDep != null) {
-            return FRAMEWORK_DEPENDENCY_ERROR.apply(frameworkDep)
-                                             .result();
-        }
-        return Result.success(this);
+        return findFrameworkDependency()
+        .fold(() -> Result.success(this),
+              dep -> FRAMEWORK_DEPENDENCY_ERROR.apply(dep)
+                                               .result());
     }
 
-    private String findFrameworkDependency() {
+    private Option<String> findFrameworkDependency() {
         for (var dep : shared) {
             if (isFrameworkArtifact(dep)) {
-                return "[shared] " + dep.asString();
+                return Option.some("[shared] " + dep.asString());
             }
         }
         for (var dep : infra) {
             if (isFrameworkArtifact(dep)) {
-                return "[infra] " + dep.asString();
+                return Option.some("[infra] " + dep.asString());
             }
         }
-        return null;
+        return Option.none();
     }
 
     private static boolean isFrameworkArtifact(ArtifactDependency dep) {

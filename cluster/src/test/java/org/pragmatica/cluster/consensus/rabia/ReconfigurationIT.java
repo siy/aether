@@ -66,7 +66,7 @@ public class ReconfigurationIT {
         log.info("Current state size: {} entries", beforeSize);
 
         // Add a new node to the cluster
-        var newNode = NodeId.nodeId("node-" + (INITIAL_CLUSTER_SIZE + 1));
+        var newNode = NodeId.nodeId("node-" + (INITIAL_CLUSTER_SIZE + 1)).unwrap();
         log.info("Adding new node: {}", newNode);
 
         cluster.addNewNode(newNode);
@@ -285,8 +285,8 @@ public class ReconfigurationIT {
         cluster.disconnect(secondToRemove);
 
         // 3. Add two new nodes
-        var newNode1 = NodeId.nodeId("new-node-1");
-        var newNode2 = NodeId.nodeId("new-node-2");
+        var newNode1 = NodeId.nodeId("new-node-1").unwrap();
+        var newNode2 = NodeId.nodeId("new-node-2").unwrap();
 
         log.info("Adding two new nodes: {} and {}", newNode1, newNode2);
 
@@ -485,7 +485,7 @@ public class ReconfigurationIT {
         var newNodes = new ArrayList<NodeId>();
 
         for (int i = 0; i < nodesToReplace; i++) {
-            var newNode = NodeId.nodeId("replacement-node-" + (i + 1));
+            var newNode = NodeId.nodeId("replacement-node-" + (i + 1)).unwrap();
             newNodes.add(newNode);
 
             log.info("Adding replacement node: {}", newNode);

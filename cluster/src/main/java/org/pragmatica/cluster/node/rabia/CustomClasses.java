@@ -12,13 +12,10 @@ import java.util.function.Consumer;
 import static org.pragmatica.utility.HierarchyScanner.concreteSubtypes;
 
 public interface CustomClasses {
-    static void configure(Consumer<Class< ?>> consumer) {
-        concreteSubtypes(RabiaProtocolMessage.class)
-                        .forEach(consumer);
-        concreteSubtypes(NetworkMessage.class)
-                        .forEach(consumer);
-        concreteSubtypes(KVCommand.class)
-                        .forEach(consumer);
+    static void configure(Consumer<Class<?>> consumer) {
+        concreteSubtypes(RabiaProtocolMessage.class).forEach(consumer);
+        concreteSubtypes(NetworkMessage.class).forEach(consumer);
+        concreteSubtypes(KVCommand.class).forEach(consumer);
         consumer.accept(HashMap.class);
         consumer.accept(RabiaPersistence.SavedState.class);
         consumer.accept(NodeId.class);

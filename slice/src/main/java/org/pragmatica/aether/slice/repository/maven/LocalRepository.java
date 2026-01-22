@@ -39,8 +39,7 @@ public interface LocalRepository extends Repository {
         record repository(Path localRepo) implements LocalRepository {
             @Override
             public Promise<Location> locate(Artifact artifact) {
-                return resolveLocation(artifact)
-                                      .async();
+                return resolveLocation(artifact).async();
             }
 
             private Result<Location> resolveLocation(Artifact artifact) {

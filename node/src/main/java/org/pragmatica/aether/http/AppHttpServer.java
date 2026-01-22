@@ -17,6 +17,7 @@ import org.pragmatica.http.routing.ProblemDetail;
 import org.pragmatica.lang.Option;
 import org.pragmatica.lang.Promise;
 import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.type.TypeToken;
 import org.pragmatica.lang.utils.Causes;
 import org.pragmatica.net.tcp.TlsConfig;
 import org.pragmatica.net.tcp.TlsContextFactory;
@@ -168,7 +169,7 @@ class AppHttpServerImpl implements AppHttpServer {
         };
     }
 
-    private void handleBindResult(io.netty.util.concurrent.Future< ?> future, Promise<Unit> promise) {
+    private void handleBindResult(io.netty.util.concurrent.Future<?> future, Promise<Unit> promise) {
         if (future.isSuccess()) {
             var channel = ((io.netty.channel.ChannelFuture) future).channel();
             serverChannel.set(channel);
@@ -296,14 +297,13 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         // Validate security and proceed
         securityValidator.validate(initialContext,
                                    route.securityPolicy())
-                         .fold(cause -> {
-                                   sendSecurityError(ctx, cause, path, requestId);
-                                   return null;
-                               },
-                               securityContext -> {
-                                   invokeSecuredRoute(ctx, initialContext, securityContext, route, path, requestId);
-                                   return null;
-                               });
+                         .onFailure(cause -> sendSecurityError(ctx, cause, path, requestId))
+                         .onSuccess(securityContext -> invokeSecuredRoute(ctx,
+                                                                          initialContext,
+                                                                          securityContext,
+                                                                          route,
+                                                                          path,
+                                                                          requestId));
     }
 
     private void invokeSecuredRoute(ChannelHandlerContext ctx,
@@ -394,8 +394,8 @@ class AppHttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         }
         return sliceInvoker.flatMap(invoker -> invoker.methodHandle(route.artifact(),
                                                                     route.sliceMethod(),
-                                                                    HttpRequestContext.class,
-                                                                    HttpResponseData.class)
+                                                                    TypeToken.of(HttpRequestContext.class),
+                                                                    TypeToken.of(HttpResponseData.class))
                                                       .onSuccess(handle -> methodHandleCache.put(cacheKey, handle))
                                                       .option());
     }

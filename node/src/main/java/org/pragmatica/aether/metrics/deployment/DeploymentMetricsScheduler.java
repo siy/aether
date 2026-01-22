@@ -74,7 +74,7 @@ class DeploymentMetricsSchedulerImpl implements DeploymentMetricsScheduler {
                                                                                                       return thread;
                                                                                                   });
 
-    private final AtomicReference<ScheduledFuture< ? >> pingTask = new AtomicReference<>();
+    private final AtomicReference<ScheduledFuture<?>> pingTask = new AtomicReference<>();
     private final AtomicReference<List<NodeId>> topology = new AtomicReference<>(List.of());
 
     DeploymentMetricsSchedulerImpl(NodeId self,

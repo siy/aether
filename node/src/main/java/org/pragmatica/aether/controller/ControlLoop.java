@@ -108,7 +108,7 @@ class ControlLoopImpl implements ControlLoop {
                                                                                                       return thread;
                                                                                                   });
 
-    private final AtomicReference<ScheduledFuture< ? >> evaluationTask = new AtomicReference<>();
+    private final AtomicReference<ScheduledFuture<?>> evaluationTask = new AtomicReference<>();
     private final AtomicReference<List<NodeId>> topology = new AtomicReference<>(List.of());
     private final ConcurrentHashMap<Artifact, ClusterController.Blueprint> blueprints = new ConcurrentHashMap<>();
 

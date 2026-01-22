@@ -5,6 +5,7 @@ import org.pragmatica.aether.slice.dependency.DependencyResolver;
 import org.pragmatica.aether.slice.dependency.SliceRegistry;
 import org.pragmatica.aether.slice.repository.Location;
 import org.pragmatica.aether.slice.repository.Repository;
+import org.pragmatica.aether.slice.SliceInvokerFacade;
 import org.pragmatica.lang.Cause;
 import org.pragmatica.lang.Functions.Fn1;
 import org.pragmatica.lang.Option;
@@ -15,7 +16,7 @@ import org.pragmatica.lang.utils.Causes;
 import java.io.IOException;
 import java.net.URL;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -61,35 +62,46 @@ public interface SliceStoreImpl {
 
     static SliceStore sliceStore(SliceRegistry registry,
                                  List<Repository> repositories,
-                                 SharedLibraryClassLoader sharedLibraryLoader) {
-        return new SliceStoreRecord(registry, repositories, sharedLibraryLoader, new ConcurrentHashMap<>());
+                                 SharedLibraryClassLoader sharedLibraryLoader,
+                                 SliceInvokerFacade invokerFacade) {
+        return new SliceStoreRecord(registry,
+                                    repositories,
+                                    sharedLibraryLoader,
+                                    invokerFacade,
+                                    new ConcurrentHashMap<>());
     }
 
+    /**
+     * Thread-safe slice store using ConcurrentHashMap with Promise values.
+     * Storing Promise<LoadedSliceEntry> allows computeIfAbsent to atomically start loading
+     * and return the same Promise to concurrent callers. Operations that need the entry
+     * simply flatMap on the Promise.
+     */
     record SliceStoreRecord(SliceRegistry registry,
                             List<Repository> repositories,
                             SharedLibraryClassLoader sharedLibraryLoader,
-                            Map<Artifact, LoadedSliceEntry> entries) implements SliceStore {
+                            SliceInvokerFacade invokerFacade,
+                            ConcurrentHashMap<Artifact, Promise<LoadedSliceEntry>> entries) implements SliceStore {
         private static final Logger log = LoggerFactory.getLogger(SliceStoreRecord.class);
 
         @Override
         public Promise<LoadedSlice> loadSlice(Artifact artifact) {
-            return Option.option(entries.get(artifact))
-                         .map(existing -> {
-                                  log.debug("Slice {} already loaded", artifact);
-                                  return Promise.<LoadedSlice>success(existing);
-                              })
-                         .or(() -> {
-                                 log.info("Loading slice {}", artifact);
-                                 return locateInRepositories(artifact)
-                                                            .flatMap(_ -> loadFromLocation(artifact));
-                             });
+            return entries.computeIfAbsent(artifact, this::startLoading)
+                          .map(entry -> (LoadedSlice) entry);
         }
 
-        private Promise<LoadedSlice> loadFromLocation(Artifact artifact) {
+        private Promise<LoadedSliceEntry> startLoading(Artifact artifact) {
+            log.info("Loading slice {}", artifact);
+            return locateInRepositories(artifact).flatMap(_ -> loadFromLocation(artifact))
+                                       .onFailure(_ -> CompletableFuture.runAsync(() -> entries.remove(artifact)));
+        }
+
+        private Promise<LoadedSliceEntry> loadFromLocation(Artifact artifact) {
             return DependencyResolver.resolve(artifact,
                                               compositeRepository(),
                                               registry,
-                                              sharedLibraryLoader)
+                                              sharedLibraryLoader,
+                                              invokerFacade)
                                      .map(slice -> {
                                               // Extract the classloader from the slice's class
             var sliceClassLoader = slice.getClass()
@@ -111,9 +123,8 @@ public interface SliceStoreImpl {
                                                                    cause.message()));
         }
 
-        private LoadedSlice createEntry(Artifact artifact, Slice slice, SliceClassLoader classLoader) {
+        private LoadedSliceEntry createEntry(Artifact artifact, Slice slice, SliceClassLoader classLoader) {
             var entry = new LoadedSliceEntry(artifact, slice, classLoader, EntryState.LOADED);
-            entries.put(artifact, entry);
             log.info("Slice {} loaded successfully", artifact);
             return entry;
         }
@@ -123,7 +134,7 @@ public interface SliceStoreImpl {
             return Option.option(entries.get(artifact))
                          .toResult(SLICE_NOT_LOADED.apply(artifact.asString()))
                          .async()
-                         .flatMap(entry -> activateEntry(artifact, entry));
+                         .flatMap(entryPromise -> entryPromise.flatMap(entry -> activateEntry(artifact, entry)));
         }
 
         private Promise<LoadedSlice> activateEntry(Artifact artifact, LoadedSliceEntry entry) {
@@ -146,7 +157,7 @@ public interface SliceStoreImpl {
 
         private LoadedSlice transitionToActive(Artifact artifact, LoadedSliceEntry entry) {
             var activeEntry = entry.withState(EntryState.ACTIVE);
-            entries.put(artifact, activeEntry);
+            entries.put(artifact, Promise.success(activeEntry));
             log.info("Slice {} activated successfully", artifact);
             return activeEntry;
         }
@@ -156,7 +167,7 @@ public interface SliceStoreImpl {
             return Option.option(entries.get(artifact))
                          .toResult(SLICE_NOT_LOADED.apply(artifact.asString()))
                          .async()
-                         .flatMap(entry -> deactivateEntry(artifact, entry));
+                         .flatMap(entryPromise -> entryPromise.flatMap(entry -> deactivateEntry(artifact, entry)));
         }
 
         private Promise<LoadedSlice> deactivateEntry(Artifact artifact, LoadedSliceEntry entry) {
@@ -179,7 +190,7 @@ public interface SliceStoreImpl {
 
         private LoadedSlice transitionToLoaded(Artifact artifact, LoadedSliceEntry entry) {
             var loadedEntry = entry.withState(EntryState.LOADED);
-            entries.put(artifact, loadedEntry);
+            entries.put(artifact, Promise.success(loadedEntry));
             log.info("Slice {} deactivated successfully", artifact);
             return loadedEntry;
         }
@@ -187,10 +198,10 @@ public interface SliceStoreImpl {
         @Override
         public Promise<Unit> unloadSlice(Artifact artifact) {
             return Option.option(entries.get(artifact))
-                         .map(entry -> unloadEntry(artifact, entry))
+                         .map(entryPromise -> entryPromise.flatMap(entry -> unloadEntry(artifact, entry)))
                          .or(() -> {
                                  log.debug("Slice {} not loaded, nothing to unload", artifact);
-                                 return Promise.success(Unit.unit());
+                                 return Promise.unitPromise();
                              });
         }
 
@@ -199,7 +210,7 @@ public interface SliceStoreImpl {
             Promise<Unit> deactivatePromise = entry.state() == EntryState.ACTIVE
                                               ? entry.sliceInstance()
                                                      .stop()
-                                              : Promise.success(Unit.unit());
+                                              : Promise.unitPromise();
             return deactivatePromise.map(_ -> cleanup(artifact, entry))
                                     .onFailure(cause -> log.error("Failed to unload slice {}: {}",
                                                                   artifact,
@@ -218,7 +229,10 @@ public interface SliceStoreImpl {
         public List<LoadedSlice> loaded() {
             return entries.values()
                           .stream()
-                          .map(LoadedSliceEntry::asLoadedSlice)
+                          .filter(Promise::isResolved)
+                          .flatMap(promise -> promise.await()
+                                                     .fold(_ -> java.util.stream.Stream.empty(),
+                                                           entry -> java.util.stream.Stream.of(entry.asLoadedSlice())))
                           .toList();
         }
 

@@ -189,7 +189,7 @@ public class CrashStopFailuresIT {
         log.info("Simulating recovery of crashed node: {}", nodeToFail);
 
         // Add a new node (same ID) to represent the recovered node
-        var recoveredNode = nodeId("node-recovered");
+        var recoveredNode = nodeId("node-recovered").unwrap();
 
         cluster.addNewNode(recoveredNode);
         cluster.awaitNode(recoveredNode);

@@ -194,6 +194,52 @@ public class AetherCluster implements AutoCloseable {
     }
 
     /**
+     * Waits for a slice to become ACTIVE on ALL nodes.
+     * Use this for multi-instance deployments where the slice should be distributed.
+     *
+     * @param artifact artifact to wait for (can be partial match)
+     * @param timeout  maximum time to wait
+     * @throws SliceDeploymentException if slice transitions to FAILED state on any node
+     */
+    public void awaitSliceActiveOnAllNodes(String artifact, Duration timeout) {
+        await().atMost(timeout)
+               .pollInterval(POLL_INTERVAL)
+               .until(() -> checkSliceStateOnAllNodes(artifact));
+    }
+
+    /**
+     * Checks slice state on ALL nodes, throwing exception on FAILED, returning true when ALL are ACTIVE.
+     */
+    private boolean checkSliceStateOnAllNodes(String artifact) {
+        for (var node : nodes) {
+            if (!node.isRunning()) {
+                continue; // Skip stopped nodes
+            }
+            try {
+                var state = node.getSliceState(artifact);
+                System.out.println("[DEBUG] Node " + node.nodeId() + " slice " + artifact + " state: " + state);
+
+                if ("FAILED".equals(state)) {
+                    var status = node.getSlicesStatus();
+                    var logs = getContainerLogs(node);
+                    throw new SliceDeploymentException(
+                        "Slice " + artifact + " reached FAILED state on " + node.nodeId() +
+                        ".\nStatus: " + status + "\n\n=== Container Logs ===\n" + logs);
+                }
+                if (!"ACTIVE".equals(state)) {
+                    return false; // Not yet ACTIVE on this node
+                }
+            } catch (SliceDeploymentException e) {
+                throw e;
+            } catch (Exception e) {
+                System.out.println("[DEBUG] Error checking slice state on " + node.nodeId() + ": " + e.getMessage());
+                return false;
+            }
+        }
+        return true; // All nodes have ACTIVE state
+    }
+
+    /**
      * Checks slice state, throwing exception on FAILED, returning true on ACTIVE.
      */
     private boolean checkSliceState(String artifact) {

@@ -74,7 +74,7 @@ class MetricsSchedulerImpl implements MetricsScheduler {
                                                                                                       return thread;
                                                                                                   });
 
-    private final AtomicReference<ScheduledFuture< ? >> pingTask = new AtomicReference<>();
+    private final AtomicReference<ScheduledFuture<?>> pingTask = new AtomicReference<>();
     private final AtomicReference<List<NodeId>> topology = new AtomicReference<>(List.of());
 
     MetricsSchedulerImpl(NodeId self,

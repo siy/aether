@@ -52,11 +52,11 @@ class ClusterFailoverIT {
     private static final Duration SHORT_AWAIT = Duration.ofSeconds(10);
 
     private static final List<NodeInfo> ALL_NODES = List.of(
-            nodeInfo(nodeId("node-1"), nodeAddress("localhost", BASE_PORT)),
-            nodeInfo(nodeId("node-2"), nodeAddress("localhost", BASE_PORT + 1)),
-            nodeInfo(nodeId("node-3"), nodeAddress("localhost", BASE_PORT + 2)),
-            nodeInfo(nodeId("node-4"), nodeAddress("localhost", BASE_PORT + 3)),
-            nodeInfo(nodeId("node-5"), nodeAddress("localhost", BASE_PORT + 4))
+            nodeInfo(nodeId("node-1").unwrap(), nodeAddress("localhost", BASE_PORT).unwrap()),
+            nodeInfo(nodeId("node-2").unwrap(), nodeAddress("localhost", BASE_PORT + 1).unwrap()),
+            nodeInfo(nodeId("node-3").unwrap(), nodeAddress("localhost", BASE_PORT + 2).unwrap()),
+            nodeInfo(nodeId("node-4").unwrap(), nodeAddress("localhost", BASE_PORT + 3).unwrap()),
+            nodeInfo(nodeId("node-5").unwrap(), nodeAddress("localhost", BASE_PORT + 4).unwrap())
     );
 
     private final List<AetherNode> nodes = new ArrayList<>();

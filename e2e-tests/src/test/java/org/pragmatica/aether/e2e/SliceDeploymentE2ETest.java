@@ -57,17 +57,12 @@ class SliceDeploymentE2ETest {
     }
 
     @Test
-    @Disabled("Instance distribution issue - slice reaches ACTIVE but only on one node instead of all three")
     void deploySlice_multipleInstances_distributedAcrossNodes() {
         var response = cluster.anyNode().deploy(TEST_ARTIFACT, 3);
         assertThat(response).doesNotContain("\"error\"");
 
-        // Wait for slice to become active, fail fast on FAILED state
-        cluster.awaitSliceActive(TEST_ARTIFACT, DEPLOY_TIMEOUT);
-
-        // Check that instances are distributed
-        var slices = cluster.anyNode().getSlices();
-        assertThat(slices).contains(TEST_ARTIFACT);
+        // Wait for slice to become ACTIVE on ALL nodes (multi-instance distribution)
+        cluster.awaitSliceActiveOnAllNodes(TEST_ARTIFACT, DEPLOY_TIMEOUT);
 
         // Each node should report the slice
         for (var node : cluster.nodes()) {

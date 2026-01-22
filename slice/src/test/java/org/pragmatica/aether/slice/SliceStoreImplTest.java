@@ -8,7 +8,10 @@ import org.pragmatica.aether.slice.SliceStoreImpl.EntryState;
 import org.pragmatica.aether.slice.SliceStoreImpl.LoadedSliceEntry;
 import org.pragmatica.aether.slice.dependency.SliceRegistry;
 import org.pragmatica.lang.Promise;
+import org.pragmatica.lang.Result;
 import org.pragmatica.lang.Unit;
+import org.pragmatica.lang.type.TypeToken;
+import org.pragmatica.lang.utils.Causes;
 
 import java.net.URL;
 import java.util.List;
@@ -18,6 +21,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SliceStoreImplTest {
+
+    private static final SliceInvokerFacade STUB_INVOKER = new SliceInvokerFacade() {
+        @Override
+        public <R, T> Result<MethodHandle<R, T>> methodHandle(String artifact, String method, TypeToken<T> requestType, TypeToken<R> responseType) {
+            return Causes.cause("Stub invoker").result();
+        }
+    };
 
     private SliceRegistry registry;
     private SharedLibraryClassLoader sharedLoader;
@@ -68,7 +78,7 @@ class SliceStoreImplTest {
 
     @Test
     void slice_store_factory_creates_instance() {
-        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader);
+        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader, STUB_INVOKER);
 
         assertThat(store).isNotNull();
         assertThat(store.loaded()).isEmpty();
@@ -127,7 +137,7 @@ class SliceStoreImplTest {
 
     @Test
     void activate_not_loaded_fails() {
-        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader);
+        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader, STUB_INVOKER);
 
         store.activateSlice(artifact)
              .await()
@@ -192,7 +202,7 @@ class SliceStoreImplTest {
 
     @Test
     void deactivate_not_loaded_fails() {
-        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader);
+        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader, STUB_INVOKER);
 
         store.deactivateSlice(artifact)
              .await()
@@ -256,7 +266,7 @@ class SliceStoreImplTest {
 
     @Test
     void unload_nonexistent_succeeds() {
-        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader);
+        var store = SliceStore.sliceStore(registry, List.of(), sharedLoader, STUB_INVOKER);
 
         store.unloadSlice(artifact)
              .await()
@@ -272,7 +282,7 @@ class SliceStoreImplTest {
         var artifact1 = Artifact.artifact("org.example:slice1:1.0.0").unwrap();
         var artifact2 = Artifact.artifact("org.example:slice2:1.0.0").unwrap();
 
-        var store = SliceStoreImpl.sliceStore(registry, List.of(), sharedLoader);
+        var store = SliceStoreImpl.sliceStore(registry, List.of(), sharedLoader, STUB_INVOKER);
         addPreloadedSlice(store, artifact1, slice1, EntryState.LOADED);
         addPreloadedSlice(store, artifact2, slice2, EntryState.ACTIVE);
 
@@ -315,7 +325,7 @@ class SliceStoreImplTest {
     }
 
     private SliceStore createStoreWithPreloadedSlice(Slice slice, EntryState state) {
-        var store = SliceStoreImpl.sliceStore(registry, List.of(), sharedLoader);
+        var store = SliceStoreImpl.sliceStore(registry, List.of(), sharedLoader, STUB_INVOKER);
         addPreloadedSlice(store, artifact, slice, state);
         return store;
     }
@@ -327,6 +337,6 @@ class SliceStoreImplTest {
         var impl = (SliceStoreImpl.SliceStoreRecord) store;
         var classLoader = new SliceClassLoader(new URL[0], getClass().getClassLoader());
         var entry = new LoadedSliceEntry(artifact, slice, classLoader, state);
-        impl.entries().put(artifact, entry);
+        impl.entries().put(artifact, Promise.success(entry));
     }
 }

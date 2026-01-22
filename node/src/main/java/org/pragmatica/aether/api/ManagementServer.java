@@ -300,6 +300,7 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         var response = switch (uri) {
             case "/status" -> buildStatusResponse(node);
             case "/nodes" -> buildNodesResponse(node);
+            case "/routes" -> buildRoutesResponse(node);
             case "/slices" -> buildSlicesResponse(node);
             case "/slices/status" -> buildSlicesStatusResponse(node);
             case "/metrics" -> buildMetricsResponse(node);
@@ -1050,15 +1051,37 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     private String buildNodesResponse(AetherNode node) {
+        // Collect nodes from metrics
         var metrics = node.metricsCollector()
                           .allMetrics();
+        // Build a set of node IDs to ensure uniqueness and include self
+        var nodeIds = new java.util.LinkedHashSet<String>();
+        // Always include self
+        nodeIds.add(node.self()
+                        .id());
+        // Add nodes from initial topology (configured core nodes)
+        node.initialTopology()
+            .forEach(nid -> nodeIds.add(nid.id()));
+        // Add nodes from metrics
+        for (NodeId nodeId : metrics.keySet()) {
+            nodeIds.add(nodeId.id());
+        }
+        // Add nodes from KV-Store slice entries (nodes that have registered slices)
+        node.kvStore()
+            .snapshot()
+            .keySet()
+            .stream()
+            .filter(key -> key instanceof AetherKey.SliceNodeKey)
+            .map(key -> ((AetherKey.SliceNodeKey) key).nodeId()
+                                   .id())
+            .forEach(nodeIds::add);
         var sb = new StringBuilder();
         sb.append("{\"nodes\":[");
         boolean first = true;
-        for (NodeId nodeId : metrics.keySet()) {
+        for (String id : nodeIds) {
             if (!first) sb.append(",");
             sb.append("\"")
-              .append(nodeId.id())
+              .append(id)
               .append("\"");
             first = false;
         }
@@ -1078,6 +1101,29 @@ class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
               .append(slice.artifact()
                            .asString())
               .append("\"");
+            first = false;
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    private String buildRoutesResponse(AetherNode node) {
+        var routes = node.httpRouteRegistry()
+                         .allRoutes();
+        var sb = new StringBuilder();
+        sb.append("{\"routes\":[");
+        boolean first = true;
+        for (var route : routes) {
+            if (!first) sb.append(",");
+            sb.append("{\"method\":\"")
+              .append(route.httpMethod())
+              .append("\",\"path\":\"")
+              .append(route.pathPrefix())
+              .append("\",\"artifact\":\"")
+              .append(route.artifact())
+              .append("\",\"sliceMethod\":\"")
+              .append(route.sliceMethod())
+              .append("\"}");
             first = false;
         }
         sb.append("]}");

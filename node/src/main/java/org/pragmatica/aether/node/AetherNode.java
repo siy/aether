@@ -210,6 +210,12 @@ public interface AetherNode {
      */
     long uptimeSeconds();
 
+    /**
+     * Get the initial topology node IDs from configuration.
+     * This includes all core nodes that were configured at startup.
+     */
+    List<NodeId> initialTopology();
+
     static Result<AetherNode> aetherNode(AetherNodeConfig config) {
         var delegateRouter = MessageRouter.DelegateRouter.delegate();
         var serializer = furySerializer(AetherCustomClasses::configure);
@@ -419,6 +425,15 @@ public interface AetherNode {
             @Override
             public long uptimeSeconds() {
                 return (System.currentTimeMillis() - startTimeMs) / 1000;
+            }
+
+            @Override
+            public List<NodeId> initialTopology() {
+                return config.topology()
+                             .coreNodes()
+                             .stream()
+                             .map(org.pragmatica.consensus.net.NodeInfo::id)
+                             .toList();
             }
         }
         // Create invocation handler BEFORE deployment manager (needed for slice registration)

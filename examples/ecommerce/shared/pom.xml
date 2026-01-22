@@ -16,13 +16,6 @@
     <description>Shared value objects for e-commerce domain</description>
 
     <dependencies>
-        <dependency>
-            <groupId>org.pragmatica-lite</groupId>
-            <artifactId>core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.pragmatica-lite</groupId>
-            <artifactId>utility</artifactId>
-        </dependency>
+        <!-- core, utility inherited from parent with provided scope -->
     </dependencies>
 </project>

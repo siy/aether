@@ -1,51 +1,66 @@
 # Forge Test Port Allocation
 
 Each test class has a dedicated port range to avoid conflicts when running tests in parallel.
-Each range provides 10 ports (5 cluster + 5 management) to support up to 5 nodes per test.
+Tests use per-method port offsets to avoid TIME_WAIT issues between sequential test methods.
+
+**IMPORTANT**: Tests run sequentially (`@Execution(ExecutionMode.SAME_THREAD)`), so port ranges
+between classes can overlap. The per-method offsets ensure no conflicts within a class.
 
 ## Port Allocation Table
 
-| Test Class                    | Base Port | Base Mgmt Port | Cluster Ports | Mgmt Ports  | Notes |
-|-------------------------------|-----------|----------------|---------------|-------------|-------|
-| ForgeClusterIntegrationTest   | 5050      | 5150           | 5050-5054     | 5150-5154   |       |
-| ClusterFormationTest          | 5060      | 5160           | 5060-5064     | 5160-5164   |       |
-| SliceDeploymentTest           | 5070      | 5170           | 5070-5074     | 5170-5174   |       |
-| SliceInvocationTest           | 5080      | 5180           | 5080-5084     | 5180-5184   |       |
-| NodeFailureTest               | 5090      | 5190           | 5090-5094     | 5190-5194   |       |
-| ~~GracefulShutdownTest~~      | 5100      | 5200           | 5100-5104     | 5200-5204   | *UNUSED* |
-| BootstrapTest                 | 5110      | 5210           | 5110-5114     | 5210-5214   |       |
-| RollingUpdateTest             | 5120      | 5220           | 5120-5124     | 5220-5224   |       |
-| ChaosTest                     | 5130      | 5230           | 5130-5134     | 5230-5234   |       |
-| MetricsTest                   | 5140      | 5240           | 5140-5144     | 5240-5244   |       |
-| ManagementApiTest             | 5250      | 5350           | 5250-5254     | 5350-5354   |       |
-| ControllerTest                | 5260      | 5360           | 5260-5264     | 5360-5364   |       |
-| NetworkPartitionTest          | 5270      | 5370           | 5270-5274     | 5370-5374   |       |
-| TtmTest                       | 5280      | 5380           | 5280-5284     | 5380-5384   |       |
-| GracefulShutdownTest          | 5290      | 5390           | 5290-5339     | 5390-5439   | 50 ports, per-method offset |
+| Test Class                    | Base Port | Base Mgmt Port | Max Offset | Max Cluster Port | Max Mgmt Port | Nodes |
+|-------------------------------|-----------|----------------|------------|------------------|---------------|-------|
+| ForgeClusterIntegrationTest   | 5050      | 5150           | 15         | 5067             | 5167          | 3     |
+| ClusterFormationTest          | 5060      | 5160           | 20         | 5082             | 5182          | 3     |
+| SliceDeploymentTest           | 5070      | 5170           | 30         | 5102             | 5202          | 3     |
+| SliceInvocationTest           | 5080      | 5180           | 45         | 5127             | 5227          | 3     |
+| NodeFailureTest               | 5090      | 5190           | 60         | 5154             | 5254          | 5     |
+| BootstrapTest                 | 5110      | 5210           | 40         | 5152             | 5252          | 3     |
+| RollingUpdateTest             | 5120      | 5220           | 60         | 5184             | 5284          | 5     |
+| ChaosTest                     | 5130      | 5230           | 50         | 5184             | 5284          | 5     |
+| MetricsTest                   | 5140      | 5240           | 0          | 5142             | 5242          | 3 (shared) |
+| ManagementApiTest             | 5250      | 5350           | 95         | 5347             | 5447          | 3     |
+| ControllerTest                | 5260      | 5360           | 35         | 5297             | 5397          | 3     |
+| NetworkPartitionTest          | 5270      | 5370           | 40         | 5312             | 5412          | 3     |
+| TtmTest                       | 5280      | 5380           | 35         | 5317             | 5417          | 3     |
+| GracefulShutdownTest          | 5290      | 5390           | 30         | 5322             | 5422          | 3     |
 
-## Usage
+## Per-Method Offset Pattern
 
-In each test class, initialize ForgeCluster with the assigned ports:
+Tests use `TestInfo` to get unique port offsets per test method:
 
 ```java
-// Example for ClusterFormationTest
-private static final int BASE_PORT = 5060;
-private static final int BASE_MGMT_PORT = 5160;
-
 @BeforeEach
-void setUp() {
-    cluster = ForgeCluster.forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+void setUp(TestInfo testInfo) {
+    int portOffset = getPortOffset(testInfo);
+    cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "prefix");
+    // ...
+}
+
+private int getPortOffset(TestInfo testInfo) {
+    return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+        case "testMethod1" -> 0;
+        case "testMethod2" -> 5;  // 5-port increment for 5-node clusters
+        case "testMethod3" -> 10;
+        default -> 15;
+    };
 }
 ```
+
+## Notes
+
+- **MetricsTest** uses `@BeforeAll`/`@AfterAll` (shared cluster) so no per-method offset needed
+- **Port spacing**: Use 5-port increments (enough for 5-node clusters)
+- **Sequential execution**: All tests have `@Execution(ExecutionMode.SAME_THREAD)`
 
 ## Adding New Tests
 
 When adding a new test class:
-1. Find the next available port range (increment by 10 from the last used)
+1. Find a base port with sufficient range for (num_tests × 5) + num_nodes
 2. Add an entry to this table
-3. Use the allocated ports in the test class
+3. Implement the `getPortOffset()` pattern
+4. Use `@Execution(ExecutionMode.SAME_THREAD)` annotation
 
 ## Reserved Ranges
 
-- 5050-5059 / 5150-5159: ForgeClusterIntegrationTest (default when not specified)
-- 5340+ / 5440+: Reserved for future tests
+- 5400+ / 5500+: Reserved for future tests

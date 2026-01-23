@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -45,8 +46,9 @@ class ControllerTest {
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "ct");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -64,6 +66,19 @@ class ControllerTest {
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
                .until(this::allNodesHealthy);
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "controllerConfig_getReturnsCurrentSettings" -> 0;
+            case "controllerConfig_updateSucceeds" -> 5;
+            case "controllerConfig_persistsAcrossRequests" -> 10;
+            case "controllerStatus_returnsRunningState" -> 15;
+            case "controllerEvaluate_triggersImmediately" -> 20;
+            case "controller_runsOnlyOnLeader" -> 25;
+            case "controller_survivesLeaderFailure" -> 30;
+            default -> 35;
+        };
     }
 
     @AfterEach
@@ -143,8 +158,8 @@ class ControllerTest {
 
         @Test
         void controller_survivesLeaderFailure() {
-            // Kill the leader (node-1 is deterministic leader)
-            cluster.killNode("node-1")
+            // Kill the leader (ct-1 is deterministic leader)
+            cluster.killNode("ct-1")
                    .await();
 
             // Wait for new quorum and leader

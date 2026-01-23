@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -44,8 +45,9 @@ class TtmTest {
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "tm");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -59,6 +61,19 @@ class TtmTest {
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
                .until(() -> cluster.currentLeader().isPresent());
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "ttmStatus_returnsValidJson" -> 0;
+            case "ttmStatus_showsDisabledByDefault" -> 5;
+            case "ttmStatus_includesConfigurationDetails" -> 10;
+            case "ttmStatus_availableOnAllNodes" -> 15;
+            case "ttmStatus_consistentAcrossCluster" -> 20;
+            case "ttmStatus_survivesLeaderFailure" -> 25;
+            case "ttmStatus_showsNoForecastWhenDisabled" -> 30;
+            default -> 35;
+        };
     }
 
     @AfterEach
@@ -134,7 +149,7 @@ class TtmTest {
             assertThat(initialStatus).doesNotContain("\"error\"");
 
             // Kill the leader
-            cluster.killNode("node-1")
+            cluster.killNode("tm-1")
                    .await();
 
             // Wait for new quorum

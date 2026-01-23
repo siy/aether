@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -30,7 +31,7 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  * </ul>
  *
  * <p>Note: Full invocation testing requires slices with defined methods.
- * The example-slice has no methods, so some tests focus on infrastructure
+ * The place-order-place-order has no methods, so some tests focus on infrastructure
  * and error handling rather than successful invocations.
  */
 @Execution(ExecutionMode.SAME_THREAD)
@@ -39,14 +40,15 @@ class SliceInvocationTest {
     private static final int BASE_MGMT_PORT = 5180;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
-    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.8.0";
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0";
 
     private ForgeCluster cluster;
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "si");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -63,6 +65,21 @@ class SliceInvocationTest {
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
                .until(this::allNodesHealthy);
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "invokeNonExistentRoute_returns404" -> 0;
+            case "invokeWithInvalidMethod_returnsError" -> 5;
+            case "routesEndpoint_returnsRegisteredRoutes" -> 10;
+            case "afterSliceDeployment_routesAreAvailable" -> 15;
+            case "invokeWithMalformedBody_returnsError" -> 20;
+            case "invokeWithEmptyBody_handledGracefully" -> 25;
+            case "invokeAfterSliceUndeploy_returnsNotFound" -> 30;
+            case "multipleNodes_allCanHandleRequests" -> 35;
+            case "requestToAnyNode_succeeds" -> 40;
+            default -> 45;
+        };
     }
 
     @AfterEach
@@ -99,11 +116,18 @@ class SliceInvocationTest {
 
         @Test
         void afterSliceDeployment_routesAreAvailable() {
-            deploy(TEST_ARTIFACT, 1);
+            var deployResponse = deploy(TEST_ARTIFACT, 1);
+            assertDeploymentSucceeded(deployResponse);
 
             await().atMost(WAIT_TIMEOUT)
                    .pollInterval(POLL_INTERVAL)
-                   .until(() -> getSlices().contains("example-slice"));
+                   .failFast(() -> {
+                       var slices = getSlices();
+                       if (slices.contains("\"error\"")) {
+                           throw new AssertionError("Slice query failed: " + slices);
+                       }
+                   })
+                   .until(() -> getSlices().contains("place-order-place-order"));
 
             var routes = getRoutes();
             assertThat(routes).doesNotContain("\"error\"");
@@ -129,15 +153,23 @@ class SliceInvocationTest {
 
         @Test
         void invokeAfterSliceUndeploy_returnsNotFound() {
-            deploy(TEST_ARTIFACT, 1);
+            var deployResponse = deploy(TEST_ARTIFACT, 1);
+            assertDeploymentSucceeded(deployResponse);
+
             await().atMost(WAIT_TIMEOUT)
                    .pollInterval(POLL_INTERVAL)
-                   .until(() -> getSlices().contains("example-slice"));
+                   .failFast(() -> {
+                       var slices = getSlices();
+                       if (slices.contains("\"error\"")) {
+                           throw new AssertionError("Slice query failed: " + slices);
+                       }
+                   })
+                   .until(() -> getSlices().contains("place-order-place-order"));
 
             undeploy(TEST_ARTIFACT);
             await().atMost(WAIT_TIMEOUT)
                    .pollInterval(POLL_INTERVAL)
-                   .until(() -> !getSlices().contains("example-slice"));
+                   .until(() -> !getSlices().contains("place-order-place-order"));
 
             var response = invokeGet("/api/example");
             assertThat(response).containsAnyOf("error", "404", "not found", "Not Found");
@@ -149,11 +181,18 @@ class SliceInvocationTest {
 
         @Test
         void multipleNodes_allCanHandleRequests() {
-            deploy(TEST_ARTIFACT, 3);
+            var deployResponse = deploy(TEST_ARTIFACT, 3);
+            assertDeploymentSucceeded(deployResponse);
 
             await().atMost(WAIT_TIMEOUT)
                    .pollInterval(POLL_INTERVAL)
-                   .until(() -> getSlices().contains("example-slice"));
+                   .failFast(() -> {
+                       var slices = getSlices();
+                       if (slices.contains("\"error\"")) {
+                           throw new AssertionError("Slice query failed: " + slices);
+                       }
+                   })
+                   .until(() -> getSlices().contains("place-order-place-order"));
 
             for (var node : cluster.status().nodes()) {
                 var health = getHealth(node.mgmtPort());
@@ -210,10 +249,17 @@ class SliceInvocationTest {
         return httpRequest("GET", port, "/api/status", null);
     }
 
-    private void deploy(String artifact, int instances) {
+    private String deploy(String artifact, int instances) {
         var body = "{\"artifact\":\"" + artifact + "\",\"instances\":" + instances + "}";
         var leaderPort = cluster.getLeaderManagementPort().or(anyMgmtPort());
-        httpRequest("POST", leaderPort, "/api/deploy", body);
+        return httpRequest("POST", leaderPort, "/api/deploy", body);
+    }
+
+    private void assertDeploymentSucceeded(String response) {
+        assertThat(response)
+            .describedAs("Deployment response")
+            .doesNotContain("\"error\"")
+            .contains("\"status\":\"deployed\"");
     }
 
     private void undeploy(String artifact) {

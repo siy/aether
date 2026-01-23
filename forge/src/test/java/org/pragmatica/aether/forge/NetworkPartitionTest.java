@@ -3,6 +3,7 @@ package org.pragmatica.aether.forge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -38,13 +39,15 @@ class NetworkPartitionTest {
     private static final int BASE_MGMT_PORT = 5370;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0";
 
     private ForgeCluster cluster;
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "np");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -58,6 +61,16 @@ class NetworkPartitionTest {
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
                .until(() -> cluster.currentLeader().isPresent());
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "majorityPartition_continuesOperating" -> 0;
+            case "lostQuorum_detectedAndReported" -> 10;
+            case "partitionHealing_clusterReconverges" -> 20;
+            case "quorumTransitions_maintainConsistency" -> 30;
+            default -> 40;
+        };
     }
 
     @AfterEach
@@ -76,7 +89,7 @@ class NetworkPartitionTest {
 
         // Simulate minority partition by stopping one node
         // Majority (2 nodes) should continue operating
-        cluster.killNode("node-3")
+        cluster.killNode("np-3")
                .await();
 
         // Wait for cluster to detect partition
@@ -105,9 +118,9 @@ class NetworkPartitionTest {
                .until(() -> cluster.currentLeader().isPresent());
 
         // Stop 2 nodes - remaining 1 node loses quorum
-        cluster.killNode("node-2")
+        cluster.killNode("np-2")
                .await();
-        cluster.killNode("node-3")
+        cluster.killNode("np-3")
                .await();
 
         // Wait for partition detection
@@ -132,19 +145,19 @@ class NetworkPartitionTest {
                .until(() -> cluster.currentLeader().isPresent());
 
         // Create simulated partition
-        cluster.killNode("node-2")
+        cluster.killNode("np-2")
                .await();
-        cluster.killNode("node-3")
+        cluster.killNode("np-3")
                .await();
 
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
                .until(() -> cluster.nodeCount() == 1);
 
-        // Heal partition - add new nodes (ForgeCluster uses addNode instead of restartNode)
-        cluster.addNode()
+        // Heal partition - restart the killed nodes
+        cluster.restartNode("np-2")
                .await();
-        cluster.addNode()
+        cluster.restartNode("np-3")
                .await();
 
         // Cluster should reconverge
@@ -173,17 +186,24 @@ class NetworkPartitionTest {
                .until(() -> cluster.currentLeader().isPresent());
 
         // Deploy a slice while cluster is healthy
-        deploySlice("org.pragmatica-lite.aether:example-slice:0.7.2", 1);
+        var deployResponse = deploySlice(TEST_ARTIFACT, 1);
+        assertDeploymentSucceeded(deployResponse);
 
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> {
+                   var slices = getSlicesFromAnyNode();
+                   if (slices.contains("\"error\"")) {
+                       throw new AssertionError("Slice query failed: " + slices);
+                   }
+               })
                .until(() -> {
                    var slices = getSlicesFromAnyNode();
-                   return slices.contains("example-slice");
+                   return slices.contains("place-order-place-order");
                });
 
         // Reduce to 2 nodes (still has quorum)
-        cluster.killNode("node-3")
+        cluster.killNode("np-3")
                .await();
 
         await().atMost(WAIT_TIMEOUT)
@@ -192,10 +212,10 @@ class NetworkPartitionTest {
 
         // Slice state should be preserved
         var slices = getSlicesFromAnyNode();
-        assertThat(slices).contains("example-slice");
+        assertThat(slices).contains("place-order-place-order");
 
-        // Restore full cluster
-        cluster.addNode()
+        // Restore full cluster by restarting the killed node
+        cluster.restartNode("np-3")
                .await();
 
         await().atMost(WAIT_TIMEOUT)
@@ -208,7 +228,7 @@ class NetworkPartitionTest {
 
         // State should still be consistent
         slices = getSlicesFromAnyNode();
-        assertThat(slices).contains("example-slice");
+        assertThat(slices).contains("place-order-place-order");
     }
 
     private boolean allNodesHealthy() {
@@ -258,10 +278,10 @@ class NetworkPartitionTest {
         return httpGet(port, "/api/slices");
     }
 
-    private void deploySlice(String artifact, int instances) {
+    private String deploySlice(String artifact, int instances) {
         var status = cluster.status();
         if (status.nodes().isEmpty()) {
-            return;
+            return "{\"error\":\"No nodes available\"}";
         }
         var port = status.nodes().getFirst().mgmtPort();
         var body = "{\"artifact\":\"" + artifact + "\",\"instances\":" + instances + "}";
@@ -272,10 +292,18 @@ class NetworkPartitionTest {
                                  .timeout(Duration.ofSeconds(10))
                                  .build();
         try {
-            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body();
         } catch (IOException | InterruptedException e) {
-            // Ignore deployment errors in test setup
+            return "{\"error\":\"" + e.getMessage() + "\"}";
         }
+    }
+
+    private void assertDeploymentSucceeded(String response) {
+        assertThat(response)
+            .describedAs("Deployment response")
+            .doesNotContain("\"error\"")
+            .contains("\"status\":\"deployed\"");
     }
 
     private String httpGet(int port, String path) {
@@ -288,7 +316,7 @@ class NetworkPartitionTest {
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return response.body();
         } catch (IOException | InterruptedException e) {
-            return "";
+            return "{\"error\":\"" + e.getMessage() + "\"}";
         }
     }
 }

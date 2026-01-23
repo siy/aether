@@ -3,6 +3,7 @@ package org.pragmatica.aether.forge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -51,8 +52,9 @@ class ChaosTest {
     private Set<String> killedNodeIds;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(5, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(5, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "ch");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -68,6 +70,17 @@ class ChaosTest {
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
                .until(() -> cluster.currentLeader().isPresent());
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "randomNodeKills_clusterRecovers" -> 0;
+            case "rapidKillRestart_clusterRemainsFunctional" -> 10;
+            case "concurrentChaos_clusterMaintainsConsistency" -> 20;
+            case "leaderKillSpree_clusterSurvives" -> 30;
+            case "splitBrainRecovery_clusterReconverges" -> 40;
+            default -> 50;
+        };
     }
 
     @AfterEach
@@ -100,10 +113,11 @@ class ChaosTest {
 
         assertThat(killCount.get()).isGreaterThan(0);
 
-        // Restore nodes by adding new ones
-        while (cluster.nodeCount() < 5) {
-            cluster.addNode().await();
+        // Restore nodes by restarting killed ones
+        for (var killedId : killedNodeIds) {
+            cluster.restartNode(killedId).await();
         }
+        killedNodeIds.clear();
 
         // Full recovery
         await().atMost(RECOVERY_TIMEOUT)
@@ -136,9 +150,8 @@ class ChaosTest {
             } catch (Exception ignored) {
             }
 
-            // Add new node (can't restart same node, so add new one)
-            var newNodeId = cluster.addNode().await();
-            targetNodeId = newNodeId.unwrap().id();
+            // Restart the killed node
+            cluster.restartNode(targetNodeId).await();
             sleep(Duration.ofMillis(500));
         }
 
@@ -167,7 +180,7 @@ class ChaosTest {
                         var victimId = nodeIds.get(random.nextInt(nodeIds.size()));
                         cluster.killNode(victimId).await();
                         sleep(Duration.ofSeconds(1));
-                        cluster.addNode().await();
+                        cluster.restartNode(victimId).await();
                     }
                     sleep(Duration.ofSeconds(2));
                 } catch (Exception e) {
@@ -202,10 +215,7 @@ class ChaosTest {
         chaosThread.join(5000);
         opsThread.join(5000);
 
-        // Allow cluster to stabilize - add nodes until we have at least 5
-        while (cluster.nodeCount() < 5) {
-            cluster.addNode().await();
-        }
+        // Allow cluster to stabilize
         awaitQuorum();
 
         // Check results
@@ -223,6 +233,7 @@ class ChaosTest {
             if (leader.isPresent()) {
                 var leaderId = leader.unwrap();
                 cluster.killNode(leaderId).await();
+                killedNodeIds.add(leaderId);
                 leaderKills++;
                 sleep(Duration.ofSeconds(2));
 
@@ -234,10 +245,11 @@ class ChaosTest {
 
         assertThat(leaderKills).isGreaterThanOrEqualTo(2);
 
-        // Restore nodes by adding new ones
-        while (cluster.nodeCount() < 5) {
-            cluster.addNode().await();
+        // Restore nodes by restarting killed ones
+        for (var killedId : killedNodeIds) {
+            cluster.restartNode(killedId).await();
         }
+        killedNodeIds.clear();
 
         awaitQuorum();
         assertThat(cluster.nodeCount()).isEqualTo(5);
@@ -248,8 +260,10 @@ class ChaosTest {
         var nodeIds = getRunningNodeIds();
 
         // Simulate split-brain by killing nodes on one "side"
-        cluster.killNode(nodeIds.get(0)).await();
-        cluster.killNode(nodeIds.get(1)).await();
+        var killed1 = nodeIds.get(0);
+        var killed2 = nodeIds.get(1);
+        cluster.killNode(killed1).await();
+        cluster.killNode(killed2).await();
         sleep(Duration.ofSeconds(5));
 
         // Remaining nodes (3) should maintain quorum
@@ -257,16 +271,17 @@ class ChaosTest {
 
         // Kill one more to lose quorum
         var remainingNodes = getRunningNodeIds();
-        cluster.killNode(remainingNodes.get(0)).await();
+        var killed3 = remainingNodes.get(0);
+        cluster.killNode(killed3).await();
         sleep(Duration.ofSeconds(2));
 
         // Now only 2 nodes - no quorum
         assertThat(cluster.nodeCount()).isEqualTo(2);
 
-        // Restore all nodes by adding new ones
-        cluster.addNode().await();
-        cluster.addNode().await();
-        cluster.addNode().await();
+        // Restore all nodes by restarting killed ones
+        cluster.restartNode(killed1).await();
+        cluster.restartNode(killed2).await();
+        cluster.restartNode(killed3).await();
 
         // Cluster should reconverge
         await().atMost(RECOVERY_TIMEOUT)

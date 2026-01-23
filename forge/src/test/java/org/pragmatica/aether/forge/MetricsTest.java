@@ -45,7 +45,7 @@ class MetricsTest {
 
     @BeforeAll
     void setUp() {
-        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT, "mt");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();

@@ -3,6 +3,7 @@ package org.pragmatica.aether.forge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.pragmatica.aether.slice.SliceState;
 
 import java.io.IOException;
@@ -41,8 +42,9 @@ class SliceDeploymentTest {
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "sd");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -67,6 +69,18 @@ class SliceDeploymentTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "deploySlice_becomesActive" -> 0;
+            case "deploySlice_multipleInstances_distributedAcrossNodes" -> 5;
+            case "scaleSlice_adjustsInstanceCount" -> 10;
+            case "undeploySlice_removesFromCluster" -> 15;
+            case "deploySlice_survivesNodeFailure" -> 20;
+            case "blueprintApply_deploysMultipleSlices" -> 25;
+            default -> 30;
+        };
     }
 
     @AfterEach
@@ -169,7 +183,7 @@ class SliceDeploymentTest {
 
         // Kill one node (not the leader)
         var leaderId = cluster.currentLeader().unwrap();
-        var nodeToKill = leaderId.equals("node-2") ? "node-3" : "node-2";
+        var nodeToKill = leaderId.equals("sd-2") ? "sd-3" : "sd-2";
         cluster.killNode(nodeToKill).await();
 
         // Wait for quorum to stabilize
@@ -232,7 +246,7 @@ class SliceDeploymentTest {
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return response.body();
         } catch (IOException | InterruptedException e) {
-            return "";
+            return "{\"error\":\"" + e.getMessage() + "\"}";
         }
     }
 

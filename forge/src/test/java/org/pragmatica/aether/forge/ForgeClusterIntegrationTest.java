@@ -3,6 +3,7 @@ package org.pragmatica.aether.forge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.pragmatica.aether.slice.SliceState;
 
 import java.io.IOException;
@@ -29,12 +30,25 @@ class ForgeClusterIntegrationTest {
     private ForgeCluster cluster;
     private HttpClient httpClient;
 
+    private static final int BASE_PORT = 5050;
+    private static final int BASE_MGMT_PORT = 5150;
+
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(3);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "fci");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "clusterStartup_withThreeNodes_electsLeader" -> 0;
+            case "blueprintDeployment_deploysSlices_andReachesActiveState" -> 5;
+            case "clusterShutdown_stopsAllNodes_gracefully" -> 10;
+            default -> 15;
+        };
     }
 
     @AfterEach
@@ -61,7 +75,7 @@ class ForgeClusterIntegrationTest {
         assertThat(cluster.currentLeader().isPresent()).isTrue();
 
         var leaderId = cluster.currentLeader().unwrap();
-        assertThat(leaderId).startsWith("node-");
+        assertThat(leaderId).startsWith("fci-");
     }
 
     @Test

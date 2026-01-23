@@ -3,6 +3,7 @@ package org.pragmatica.aether.forge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -12,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -30,18 +32,29 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class GracefulShutdownTest {
-    private static final int BASE_PORT = 5100;
-    private static final int BASE_MGMT_PORT = 5200;
+    private static final int BASE_PORT = 5290;
+    private static final int BASE_MGMT_PORT = 5390;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
-    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether:example-slice:0.7.2";
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0";
+
+    // Per-method port offsets to avoid TIME_WAIT conflicts between test methods
+    private static final Map<String, Integer> METHOD_PORT_OFFSETS = Map.of(
+        "nodeShutdown_peersDetectDisconnection", 0,
+        "nodeShutdown_clusterRemainsFunctional", 10,
+        "shutdownDuringDeployment_handledGracefully", 20,
+        "leaderShutdown_newLeaderElected", 30
+    );
 
     private ForgeCluster cluster;
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        var methodName = testInfo.getTestMethod().orElseThrow().getName();
+        var portOffset = METHOD_PORT_OFFSETS.getOrDefault(methodName, 0);
+
+        cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "gs");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -71,8 +84,8 @@ class GracefulShutdownTest {
         var initialHealth = getHealthFromAnyNode();
         assertThat(initialHealth).contains("\"connectedPeers\":2");
 
-        // Shutdown node-3
-        cluster.killNode("node-3")
+        // Shutdown gs-3
+        cluster.killNode("gs-3")
                .await();
 
         // Remaining nodes should detect the disconnection
@@ -92,16 +105,24 @@ class GracefulShutdownTest {
         awaitLeader();
 
         // Deploy a slice
-        deploySlice(TEST_ARTIFACT, 2);
+        var deployResponse = deploySlice(TEST_ARTIFACT, 2);
+        assertDeploymentSucceeded(deployResponse);
+
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> {
+                   var slices = getSlicesFromAnyNode();
+                   if (slices.contains("\"error\"")) {
+                       throw new AssertionError("Slice query failed: " + slices);
+                   }
+               })
                .until(() -> {
                    var slices = getSlicesFromAnyNode();
-                   return slices.contains("example-slice");
+                   return slices.contains("place-order-place-order");
                });
 
         // Shutdown one node
-        cluster.killNode("node-2")
+        cluster.killNode("gs-2")
                .await();
 
         // Cluster should still be functional
@@ -114,7 +135,7 @@ class GracefulShutdownTest {
 
         // Slice should still be accessible
         var slices = getSlicesFromAnyNode();
-        assertThat(slices).contains("example-slice");
+        assertThat(slices).contains("place-order-place-order");
     }
 
     @Test
@@ -122,10 +143,11 @@ class GracefulShutdownTest {
         awaitLeader();
 
         // Start a deployment
-        deploySlice(TEST_ARTIFACT, 3);
+        var deployResponse = deploySlice(TEST_ARTIFACT, 3);
+        assertDeploymentSucceeded(deployResponse);
 
         // Immediately shutdown a node (deployment may still be in progress)
-        cluster.killNode("node-3")
+        cluster.killNode("gs-3")
                .await();
 
         // Wait for quorum
@@ -134,13 +156,15 @@ class GracefulShutdownTest {
         // Cluster should recover and deployment should eventually complete
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
-               .until(() -> {
-                   try {
-                       var slices = getSlicesFromAnyNode();
-                       return slices.contains("example-slice") || !slices.contains("\"error\"");
-                   } catch (Exception e) {
-                       return false;
+               .failFast(() -> {
+                   var slices = getSlicesFromAnyNode();
+                   if (slices.contains("\"error\"") && !slices.contains("place-order-place-order")) {
+                       throw new AssertionError("Slice query failed: " + slices);
                    }
+               })
+               .until(() -> {
+                   var slices = getSlicesFromAnyNode();
+                   return slices.contains("place-order-place-order");
                });
 
         // Verify cluster is healthy
@@ -234,14 +258,21 @@ class GracefulShutdownTest {
         return httpGet(port, "/api/slices");
     }
 
-    private void deploySlice(String artifact, int instances) {
+    private String deploySlice(String artifact, int instances) {
         var leaderPort = cluster.getLeaderManagementPort()
                                 .or(cluster.status()
                                            .nodes()
                                            .get(0)
                                            .mgmtPort());
         var body = "{\"artifact\":\"" + artifact + "\",\"instances\":" + instances + "}";
-        httpPost(leaderPort, "/api/deploy", body);
+        return httpPost(leaderPort, "/api/deploy", body);
+    }
+
+    private void assertDeploymentSucceeded(String response) {
+        assertThat(response)
+            .describedAs("Deployment response")
+            .doesNotContain("\"error\"")
+            .contains("\"status\":\"deployed\"");
     }
 
     private String httpGet(int port, String path) {
@@ -258,7 +289,7 @@ class GracefulShutdownTest {
         }
     }
 
-    private void httpPost(int port, String path, String body) {
+    private String httpPost(int port, String path, String body) {
         var request = HttpRequest.newBuilder()
                                  .uri(URI.create("http://localhost:" + port + path))
                                  .header("Content-Type", "application/json")
@@ -266,9 +297,10 @@ class GracefulShutdownTest {
                                  .timeout(Duration.ofSeconds(10))
                                  .build();
         try {
-            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body();
         } catch (IOException | InterruptedException e) {
-            // Ignore errors during deployment - we're testing shutdown scenarios
+            return "{\"error\":\"" + e.getMessage() + "\"}";
         }
     }
 }

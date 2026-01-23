@@ -1,5 +1,6 @@
 package org.pragmatica.aether.e2e.containers;
 
+import org.pragmatica.lang.Option;
 import org.testcontainers.containers.Network;
 
 import java.nio.file.Path;
@@ -128,27 +129,27 @@ public class AetherCluster implements AutoCloseable {
         // Start nodes sequentially
         for (var node : nodes) {
             node.start();
-            var ip = getContainerIp(node).orElse("unknown");
+            var ip = getContainerIp(node).or("unknown");
             System.out.println("[DEBUG] Node " + node.nodeId() + " started with IP: " + ip);
         }
 
         System.out.println("[DEBUG] All nodes started. Waiting for cluster formation...");
     }
 
-    private Optional<String> getContainerIp(AetherNodeContainer node) {
+    private Option<String> getContainerIp(AetherNodeContainer node) {
         try {
             var networkSettings = node.getContainerInfo().getNetworkSettings();
             var networks = networkSettings.getNetworks();
             for (var networkEntry : networks.entrySet()) {
                 var ip = networkEntry.getValue().getIpAddress();
                 if (ip != null && !ip.isEmpty()) {
-                    return Optional.of(ip);
+                    return Option.some(ip);
                 }
             }
         } catch (Exception e) {
             System.err.println("[DEBUG] Failed to get IP for " + node.nodeId() + ": " + e.getMessage());
         }
-        return Optional.empty();
+        return Option.none();
     }
 
     /**
@@ -239,8 +240,13 @@ public class AetherCluster implements AutoCloseable {
         return true; // All nodes have ACTIVE state
     }
 
+    // Track stuck states to detect infrastructure issues early
+    private final Map<String, Long> stuckStateStartTime = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Duration STUCK_STATE_THRESHOLD = Duration.ofMinutes(2);
+
     /**
      * Checks slice state, throwing exception on FAILED, returning true on ACTIVE.
+     * Also detects when a slice is stuck in an intermediate state for too long.
      */
     private boolean checkSliceState(String artifact) {
         try {
@@ -257,6 +263,24 @@ public class AetherCluster implements AutoCloseable {
                     "Slice " + artifact + " reached FAILED state.\nStatus: " + status +
                     "\n\n=== Container Logs ===\n" + logs);
             }
+
+            // Detect stuck intermediate states (LOADING, ACTIVATING, etc.)
+            if (isIntermediateState(state)) {
+                var stuckSince = stuckStateStartTime.computeIfAbsent(artifact + ":" + state,
+                    k -> System.currentTimeMillis());
+                var stuckDuration = Duration.ofMillis(System.currentTimeMillis() - stuckSince);
+                if (stuckDuration.compareTo(STUCK_STATE_THRESHOLD) > 0) {
+                    var logs = getContainerLogs(node);
+                    throw new SliceDeploymentException(
+                        "Slice " + artifact + " stuck in " + state + " state for " +
+                        stuckDuration.toSeconds() + "s. This indicates an infrastructure issue.\n" +
+                        "\n=== Container Logs ===\n" + logs);
+                }
+            } else {
+                // Clear tracking when state changes to non-intermediate
+                stuckStateStartTime.keySet().removeIf(k -> k.startsWith(artifact + ":"));
+            }
+
             return "ACTIVE".equals(state);
         } catch (SliceDeploymentException e) {
             throw e;
@@ -264,6 +288,11 @@ public class AetherCluster implements AutoCloseable {
             System.out.println("[DEBUG] Error checking slice state: " + e.getMessage());
             return false;
         }
+    }
+
+    private boolean isIntermediateState(String state) {
+        return "LOADING".equals(state) || "ACTIVATING".equals(state) ||
+               "DEACTIVATING".equals(state) || "UNLOADING".equals(state);
     }
 
     /**
@@ -360,11 +389,11 @@ public class AetherCluster implements AutoCloseable {
      *
      * @return leader node, or empty if not determinable
      */
-    public Optional<AetherNodeContainer> leader() {
-        return nodes.stream()
+    public Option<AetherNodeContainer> leader() {
+        return Option.from(nodes.stream()
                     .filter(AetherNodeContainer::isRunning)
                     .filter(this::isLeader)
-                    .findFirst();
+                    .findFirst());
     }
 
     /**

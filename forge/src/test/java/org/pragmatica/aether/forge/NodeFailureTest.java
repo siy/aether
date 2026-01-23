@@ -3,6 +3,7 @@ package org.pragmatica.aether.forge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -24,7 +25,7 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  *   <li>Single node failure with quorum maintained</li>
  *   <li>Double node failure with quorum maintained</li>
  *   <li>Leader failure and re-election</li>
- *   <li>Node recovery (via addNode)</li>
+ *   <li>Node recovery (via restartNode)</li>
  *   <li>Rolling restart</li>
  *   <li>Minority partition (quorum lost) and recovery</li>
  * </ul>
@@ -40,8 +41,9 @@ class NodeFailureTest {
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(5, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(5, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "nf");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -57,6 +59,18 @@ class NodeFailureTest {
                .until(() -> cluster.currentLeader().isPresent());
     }
 
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "singleNodeFailure_clusterMaintainsQuorum" -> 0;
+            case "twoNodeFailure_clusterMaintainsQuorum" -> 10;
+            case "leaderFailure_newLeaderElected" -> 20;
+            case "nodeRecovery_newNodeJoinsCluster" -> 30;
+            case "rollingRestart_maintainsQuorum" -> 40;
+            case "minorityPartition_quorumLost_thenRecovered" -> 50;
+            default -> 60;
+        };
+    }
+
     @AfterEach
     void tearDown() {
         if (cluster != null) {
@@ -70,7 +84,7 @@ class NodeFailureTest {
         assertThat(cluster.nodeCount()).isEqualTo(5);
 
         // Kill one node
-        cluster.killNode("node-3")
+        cluster.killNode("nf-3")
                .await();
         assertThat(cluster.nodeCount()).isEqualTo(4);
 
@@ -87,9 +101,9 @@ class NodeFailureTest {
     @Test
     void twoNodeFailure_clusterMaintainsQuorum() {
         // Kill two nodes (5 - 2 = 3, still majority)
-        cluster.killNode("node-2")
+        cluster.killNode("nf-2")
                .await();
-        cluster.killNode("node-4")
+        cluster.killNode("nf-4")
                .await();
         assertThat(cluster.nodeCount()).isEqualTo(3);
 
@@ -102,9 +116,9 @@ class NodeFailureTest {
         var nodeIds = status.nodes().stream()
                             .map(ForgeCluster.NodeStatus::id)
                             .toList();
-        assertThat(nodeIds).contains("node-1");
-        assertThat(nodeIds).contains("node-3");
-        assertThat(nodeIds).contains("node-5");
+        assertThat(nodeIds).contains("nf-1");
+        assertThat(nodeIds).contains("nf-3");
+        assertThat(nodeIds).contains("nf-5");
     }
 
     @Test
@@ -132,15 +146,15 @@ class NodeFailureTest {
     @Test
     void nodeRecovery_newNodeJoinsCluster() {
         // Kill a node
-        cluster.killNode("node-2")
+        cluster.killNode("nf-2")
                .await();
 
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
                .until(() -> cluster.nodeCount() == 4);
 
-        // Add a new node (ForgeCluster doesn't support restarting same node)
-        cluster.addNode()
+        // Restart the killed node
+        cluster.restartNode("nf-2")
                .await();
 
         // Wait for node to join
@@ -174,18 +188,18 @@ class NodeFailureTest {
     @Test
     void minorityPartition_quorumLost_thenRecovered() {
         // Kill majority (3 of 5)
-        cluster.killNode("node-1")
+        cluster.killNode("nf-1")
                .await();
-        cluster.killNode("node-2")
+        cluster.killNode("nf-2")
                .await();
-        cluster.killNode("node-3")
+        cluster.killNode("nf-3")
                .await();
 
         assertThat(cluster.nodeCount()).isEqualTo(2);
 
         // Remaining nodes may not have quorum (no leader or degraded)
-        // Add a new node to restore quorum (3 of original 5 topology)
-        cluster.addNode()
+        // Restart a killed node to restore quorum (3 of original 5 topology)
+        cluster.restartNode("nf-1")
                .await();
 
         // Wait for quorum to be restored

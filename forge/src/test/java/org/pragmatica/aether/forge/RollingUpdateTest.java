@@ -3,6 +3,7 @@ package org.pragmatica.aether.forge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -37,16 +38,17 @@ class RollingUpdateTest {
     private static final int BASE_MGMT_PORT = 5220;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(120);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
-    private static final String OLD_VERSION = "org.pragmatica-lite.aether:example-slice:0.7.5";
-    private static final String NEW_VERSION = "org.pragmatica-lite.aether:example-slice:0.8.0";
-    private static final String ARTIFACT_BASE = "org.pragmatica-lite.aether:example-slice";
+    private static final String OLD_VERSION = "org.pragmatica-lite.aether.example:place-order-place-order:0.7.5";
+    private static final String NEW_VERSION = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0";
+    private static final String ARTIFACT_BASE = "org.pragmatica-lite.aether.example:place-order-place-order";
 
     private ForgeCluster cluster;
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(5, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(5, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "ru");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -69,10 +71,30 @@ class RollingUpdateTest {
         sleep(Duration.ofSeconds(3));
 
         // Deploy old version
-        deploy(OLD_VERSION, 3);
+        var deployResponse = deploy(OLD_VERSION, 3);
+        assertDeploymentSucceeded(deployResponse);
+
         await().atMost(Duration.ofSeconds(60))
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> {
+                   var slices = getSlices();
+                   if (slices.contains("\"error\"")) {
+                       throw new AssertionError("Slice query failed: " + slices);
+                   }
+               })
                .until(() -> sliceIsActive(OLD_VERSION));
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "rollingUpdate_deploysNewVersion_withoutTraffic" -> 0;
+            case "rollingUpdate_graduallyShiftsTraffic" -> 10;
+            case "rollingUpdate_completion_removesOldVersion" -> 20;
+            case "rollingUpdate_rollback_restoresOldVersion" -> 30;
+            case "rollingUpdate_maintainsRequestContinuity" -> 40;
+            case "rollingUpdate_nodeFailure_continuesUpdate" -> 50;
+            default -> 60;
+        };
     }
 
     @AfterEach
@@ -233,8 +255,8 @@ class RollingUpdateTest {
                .until(() -> sliceIsActive(NEW_VERSION));
 
         // Kill a non-leader node during update
-        var leaderId = cluster.currentLeader().or("node-1");
-        var nodeToKill = leaderId.equals("node-3") ? "node-4" : "node-3";
+        var leaderId = cluster.currentLeader().or("ru-1");
+        var nodeToKill = leaderId.equals("ru-3") ? "ru-4" : "ru-3";
 
         cluster.killNode(nodeToKill)
                .await();
@@ -250,8 +272,8 @@ class RollingUpdateTest {
         var status = getUpdateStatus();
         assertThat(status).contains("\"state\":\"ROUTING\"");
 
-        // Restore node
-        cluster.addNode()
+        // Restore the killed node
+        cluster.restartNode(nodeToKill)
                .await();
 
         await().atMost(WAIT_TIMEOUT)
@@ -303,9 +325,16 @@ class RollingUpdateTest {
 
     // ===== API Helpers =====
 
-    private void deploy(String artifact, int instances) {
+    private String deploy(String artifact, int instances) {
         var body = "{\"artifact\":\"" + artifact + "\",\"instances\":" + instances + "}";
-        post("/deploy", body);
+        return post("/deploy", body);
+    }
+
+    private void assertDeploymentSucceeded(String response) {
+        assertThat(response)
+            .describedAs("Deployment response")
+            .doesNotContain("\"error\"")
+            .contains("\"status\":\"deployed\"");
     }
 
     private String startRollingUpdate(String newVersion, int instances) {

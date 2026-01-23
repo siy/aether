@@ -59,6 +59,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Pragmatica Lite Core -->
+        <dependency>
+            <groupId>org.pragmatica-lite</groupId>
+            <artifactId>core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Logging -->
         <dependency>
             <groupId>org.slf4j</groupId>

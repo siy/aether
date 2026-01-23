@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -42,8 +43,9 @@ class ManagementApiTest {
     private HttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
-        cluster = forgeCluster(3, BASE_PORT, BASE_MGMT_PORT);
+    void setUp(TestInfo testInfo) {
+        int portOffset = getPortOffset(testInfo);
+        cluster = forgeCluster(3, BASE_PORT + portOffset, BASE_MGMT_PORT + portOffset, "ma");
         httpClient = HttpClient.newBuilder()
                                .connectTimeout(Duration.ofSeconds(5))
                                .build();
@@ -68,6 +70,31 @@ class ManagementApiTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private int getPortOffset(TestInfo testInfo) {
+        return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
+            case "health_returnsQuorumStatus_andConnectedPeers" -> 0;
+            case "status_showsLeaderInfo_andNodeState" -> 5;
+            case "nodes_listsAllClusterMembers" -> 10;
+            case "slices_listsDeployedSlices_withState" -> 15;
+            case "metrics_returnsNodeMetrics_andSliceMetrics" -> 20;
+            case "prometheusMetrics_validFormat_scrapable" -> 25;
+            case "invocationMetrics_tracksCallsPerMethod" -> 30;
+            case "invocationMetrics_filtering_byArtifactAndMethod" -> 35;
+            case "slowInvocations_capturedAboveThreshold" -> 40;
+            case "invocationStrategy_returnsCurrentConfig" -> 45;
+            case "thresholds_setAndGet_persisted" -> 50;
+            case "thresholds_delete_removesThreshold" -> 55;
+            case "alerts_active_reflectsCurrentState" -> 60;
+            case "alerts_history_recordsPastAlerts" -> 65;
+            case "alerts_clear_removesAllAlerts" -> 70;
+            case "controllerConfig_getAndUpdate" -> 75;
+            case "controllerStatus_showsEnabledState" -> 80;
+            case "controllerEvaluate_triggersImmediateCheck" -> 85;
+            case "slicesStatus_returnsDetailedHealth" -> 90;
+            default -> 95;
+        };
     }
 
     @AfterEach
@@ -105,13 +132,13 @@ class ManagementApiTest {
         void nodes_listsAllClusterMembers() {
             await().atMost(WAIT_TIMEOUT).until(() -> {
                 var nodes = getNodes(anyNodePort());
-                return nodes.contains("node-1") && nodes.contains("node-2") && nodes.contains("node-3");
+                return nodes.contains("ma-1") && nodes.contains("ma-2") && nodes.contains("ma-3");
             });
 
             var nodes = getNodes(anyNodePort());
-            assertThat(nodes).contains("node-1");
-            assertThat(nodes).contains("node-2");
-            assertThat(nodes).contains("node-3");
+            assertThat(nodes).contains("ma-1");
+            assertThat(nodes).contains("ma-2");
+            assertThat(nodes).contains("ma-3");
         }
 
         @Test

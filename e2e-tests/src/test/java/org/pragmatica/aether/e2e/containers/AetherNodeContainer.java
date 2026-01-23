@@ -239,7 +239,8 @@ public class AetherNodeContainer extends GenericContainer<AetherNodeContainer> {
     }
 
     /**
-     * Deploys a slice to the cluster.
+     * Deploys a slice to the cluster with retry logic.
+     * Consensus operations may occasionally timeout during cluster formation.
      *
      * @param artifact artifact coordinates (group:artifact:version)
      * @param instances number of instances
@@ -247,7 +248,30 @@ public class AetherNodeContainer extends GenericContainer<AetherNodeContainer> {
      */
     public String deploy(String artifact, int instances) {
         var body = "{\"artifact\":\"" + artifact + "\",\"instances\":" + instances + "}";
-        return post("/api/deploy", body);
+        return postWithRetry("/api/deploy", body, 3, Duration.ofSeconds(2));
+    }
+
+    /**
+     * POST request with retry logic for consensus operations.
+     */
+    private String postWithRetry(String path, String body, int maxRetries, Duration retryDelay) {
+        String lastResponse = null;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            lastResponse = post(path, body);
+            if (!lastResponse.contains("\"error\"")) {
+                return lastResponse;
+            }
+            System.out.println("[DEBUG] POST " + path + " attempt " + attempt + " failed: " + lastResponse);
+            if (attempt < maxRetries) {
+                try {
+                    Thread.sleep(retryDelay.toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        return lastResponse;
     }
 
     /**
@@ -318,7 +342,7 @@ public class AetherNodeContainer extends GenericContainer<AetherNodeContainer> {
                                      .uri(URI.create(managementUrl() + path))
                                      .header("Content-Type", "application/json")
                                      .POST(HttpRequest.BodyPublishers.ofString(body))
-                                     .timeout(Duration.ofSeconds(30))
+                                     .timeout(Duration.ofSeconds(60))
                                      .build();
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return response.body();

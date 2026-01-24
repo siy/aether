@@ -39,8 +39,8 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class ChaosTest {
-    private static final int BASE_PORT = 5130;
-    private static final int BASE_MGMT_PORT = 5230;
+    private static final int BASE_PORT = 5340;
+    private static final int BASE_MGMT_PORT = 5440;
     private static final Duration CHAOS_DURATION = Duration.ofSeconds(30);
     private static final Duration RECOVERY_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(120);

@@ -34,8 +34,8 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class RollingUpdateTest {
-    private static final int BASE_PORT = 5120;
-    private static final int BASE_MGMT_PORT = 5220;
+    private static final int BASE_PORT = 5270;
+    private static final int BASE_MGMT_PORT = 5370;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(120);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
     private static final String OLD_VERSION = "org.pragmatica-lite.aether.example:place-order-place-order:0.7.5";
@@ -320,7 +320,7 @@ class RollingUpdateTest {
 
     private int getLeaderPort() {
         return cluster.getLeaderManagementPort()
-                      .or(5150);
+                      .or(BASE_MGMT_PORT);
     }
 
     // ===== API Helpers =====

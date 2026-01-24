@@ -36,8 +36,8 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class SliceInvocationTest {
-    private static final int BASE_PORT = 5080;
-    private static final int BASE_MGMT_PORT = 5180;
+    private static final int BASE_PORT = 5090;
+    private static final int BASE_MGMT_PORT = 5190;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
     private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0";

@@ -33,8 +33,8 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class ClusterFormationTest {
-    private static final int BASE_PORT = 5060;
-    private static final int BASE_MGMT_PORT = 5160;
+    private static final int BASE_PORT = 5020;
+    private static final int BASE_MGMT_PORT = 5120;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(120);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
 

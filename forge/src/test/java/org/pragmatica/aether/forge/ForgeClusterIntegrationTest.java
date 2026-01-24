@@ -30,8 +30,8 @@ class ForgeClusterIntegrationTest {
     private ForgeCluster cluster;
     private HttpClient httpClient;
 
-    private static final int BASE_PORT = 5050;
-    private static final int BASE_MGMT_PORT = 5150;
+    private static final int BASE_PORT = 5000;
+    private static final int BASE_MGMT_PORT = 5100;
 
     @BeforeEach
     void setUp(TestInfo testInfo) {

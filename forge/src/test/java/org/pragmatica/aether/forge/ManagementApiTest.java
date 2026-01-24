@@ -33,8 +33,8 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class ManagementApiTest {
-    private static final int BASE_PORT = 5250;
-    private static final int BASE_MGMT_PORT = 5350;
+    private static final int BASE_PORT = 5400;
+    private static final int BASE_MGMT_PORT = 5500;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(120);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
     private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order:0.8.0-SNAPSHOT";

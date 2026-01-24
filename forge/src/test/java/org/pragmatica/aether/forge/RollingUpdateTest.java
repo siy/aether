@@ -88,20 +88,21 @@ class RollingUpdateTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "rollingUpdate_deploysNewVersion_withoutTraffic" -> 0;
-            case "rollingUpdate_graduallyShiftsTraffic" -> 10;
-            case "rollingUpdate_completion_removesOldVersion" -> 20;
-            case "rollingUpdate_rollback_restoresOldVersion" -> 30;
-            case "rollingUpdate_maintainsRequestContinuity" -> 40;
-            case "rollingUpdate_nodeFailure_continuesUpdate" -> 50;
-            default -> 60;
+            case "rollingUpdate_graduallyShiftsTraffic" -> 20;
+            case "rollingUpdate_completion_removesOldVersion" -> 40;
+            case "rollingUpdate_rollback_restoresOldVersion" -> 60;
+            case "rollingUpdate_maintainsRequestContinuity" -> 80;
+            case "rollingUpdate_nodeFailure_continuesUpdate" -> 100;
+            default -> 120;
         };
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 

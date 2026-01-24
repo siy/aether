@@ -41,9 +41,9 @@ class GracefulShutdownTest {
     // Per-method port offsets to avoid TIME_WAIT conflicts between test methods
     private static final Map<String, Integer> METHOD_PORT_OFFSETS = Map.of(
         "nodeShutdown_peersDetectDisconnection", 0,
-        "nodeShutdown_clusterRemainsFunctional", 10,
-        "shutdownDuringDeployment_handledGracefully", 20,
-        "leaderShutdown_newLeaderElected", 30
+        "nodeShutdown_clusterRemainsFunctional", 20,
+        "shutdownDuringDeployment_handledGracefully", 40,
+        "leaderShutdown_newLeaderElected", 60
     );
 
     private ForgeCluster cluster;
@@ -69,10 +69,11 @@ class GracefulShutdownTest {
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 

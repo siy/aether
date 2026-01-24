@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -63,18 +64,19 @@ class BootstrapTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "nodeRestart_rejoinsCluster" -> 0;
-            case "nodeRestart_recoversState" -> 10;
-            case "manualRollingRestart_maintainsAvailability" -> 20;
-            case "multipleNodeRestarts_clusterRemainsFunctional" -> 30;
-            default -> 40;
+            case "nodeRestart_recoversState" -> 20;
+            case "manualRollingRestart_maintainsAvailability" -> 40;
+            case "multipleNodeRestarts_clusterRemainsFunctional" -> 60;
+            default -> 80;
         };
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 
@@ -190,9 +192,17 @@ class BootstrapTest {
                .pollInterval(POLL_INTERVAL)
                .until(this::allNodesHealthy);
 
-        // Perform a manual rolling restart: kill and add nodes one at a time
-        for (int i = 1; i <= 3; i++) {
-            var nodeId = "bt-" + i;
+        // Snapshot current node IDs at start
+        var initialNodeIds = new ArrayList<>(cluster.status().nodes().stream()
+                                                     .map(ForgeCluster.NodeStatus::id)
+                                                     .toList());
+
+        for (var nodeId : initialNodeIds) {
+            // Skip if node was already killed in previous iteration
+            if (!cluster.status().nodes().stream()
+                        .anyMatch(n -> n.id().equals(nodeId))) {
+                continue;
+            }
 
             // Kill node
             cluster.killNode(nodeId).await();

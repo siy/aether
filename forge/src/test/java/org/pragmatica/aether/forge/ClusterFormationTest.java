@@ -53,10 +53,10 @@ class ClusterFormationTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "threeNodeCluster_formsQuorum_andElectsLeader" -> 0;
-            case "cluster_nodesVisibleToAllMembers" -> 5;
-            case "cluster_statusConsistent_acrossNodes" -> 10;
-            case "cluster_metricsAvailable_afterFormation" -> 15;
-            default -> 20;
+            case "cluster_nodesVisibleToAllMembers" -> 20;
+            case "cluster_statusConsistent_acrossNodes" -> 40;
+            case "cluster_metricsAvailable_afterFormation" -> 60;
+            default -> 80;
         };
     }
 

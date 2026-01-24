@@ -37,7 +37,7 @@ class ManagementApiTest {
     private static final int BASE_MGMT_PORT = 5500;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(120);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
-    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order:0.8.0-SNAPSHOT";
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0";
 
     private ForgeCluster cluster;
     private HttpClient httpClient;
@@ -75,33 +75,34 @@ class ManagementApiTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "health_returnsQuorumStatus_andConnectedPeers" -> 0;
-            case "status_showsLeaderInfo_andNodeState" -> 5;
-            case "nodes_listsAllClusterMembers" -> 10;
-            case "slices_listsDeployedSlices_withState" -> 15;
-            case "metrics_returnsNodeMetrics_andSliceMetrics" -> 20;
-            case "prometheusMetrics_validFormat_scrapable" -> 25;
-            case "invocationMetrics_tracksCallsPerMethod" -> 30;
-            case "invocationMetrics_filtering_byArtifactAndMethod" -> 35;
-            case "slowInvocations_capturedAboveThreshold" -> 40;
-            case "invocationStrategy_returnsCurrentConfig" -> 45;
-            case "thresholds_setAndGet_persisted" -> 50;
-            case "thresholds_delete_removesThreshold" -> 55;
-            case "alerts_active_reflectsCurrentState" -> 60;
-            case "alerts_history_recordsPastAlerts" -> 65;
-            case "alerts_clear_removesAllAlerts" -> 70;
-            case "controllerConfig_getAndUpdate" -> 75;
-            case "controllerStatus_showsEnabledState" -> 80;
-            case "controllerEvaluate_triggersImmediateCheck" -> 85;
-            case "slicesStatus_returnsDetailedHealth" -> 90;
-            default -> 95;
+            case "status_showsLeaderInfo_andNodeState" -> 20;
+            case "nodes_listsAllClusterMembers" -> 40;
+            case "slices_listsDeployedSlices_withState" -> 60;
+            case "metrics_returnsNodeMetrics_andSliceMetrics" -> 80;
+            case "prometheusMetrics_validFormat_scrapable" -> 100;
+            case "invocationMetrics_tracksCallsPerMethod" -> 120;
+            case "invocationMetrics_filtering_byArtifactAndMethod" -> 140;
+            case "slowInvocations_capturedAboveThreshold" -> 160;
+            case "invocationStrategy_returnsCurrentConfig" -> 180;
+            case "thresholds_setAndGet_persisted" -> 200;
+            case "thresholds_delete_removesThreshold" -> 220;
+            case "alerts_active_reflectsCurrentState" -> 240;
+            case "alerts_history_recordsPastAlerts" -> 260;
+            case "alerts_clear_removesAllAlerts" -> 280;
+            case "controllerConfig_getAndUpdate" -> 300;
+            case "controllerStatus_showsEnabledState" -> 320;
+            case "controllerEvaluate_triggersImmediateCheck" -> 340;
+            case "slicesStatus_returnsDetailedHealth" -> 360;
+            default -> 380;
         };
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 

@@ -70,23 +70,24 @@ class SliceInvocationTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "invokeNonExistentRoute_returns404" -> 0;
-            case "invokeWithInvalidMethod_returnsError" -> 5;
-            case "routesEndpoint_returnsRegisteredRoutes" -> 10;
-            case "afterSliceDeployment_routesAreAvailable" -> 15;
-            case "invokeWithMalformedBody_returnsError" -> 20;
-            case "invokeWithEmptyBody_handledGracefully" -> 25;
-            case "invokeAfterSliceUndeploy_returnsNotFound" -> 30;
-            case "multipleNodes_allCanHandleRequests" -> 35;
-            case "requestToAnyNode_succeeds" -> 40;
-            default -> 45;
+            case "invokeWithInvalidMethod_returnsError" -> 20;
+            case "routesEndpoint_returnsRegisteredRoutes" -> 40;
+            case "afterSliceDeployment_routesAreAvailable" -> 60;
+            case "invokeWithMalformedBody_returnsError" -> 80;
+            case "invokeWithEmptyBody_handledGracefully" -> 100;
+            case "invokeAfterSliceUndeploy_returnsNotFound" -> 120;
+            case "multipleNodes_allCanHandleRequests" -> 140;
+            case "requestToAnyNode_succeeds" -> 160;
+            default -> 180;
         };
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 
@@ -141,14 +142,15 @@ class SliceInvocationTest {
         void invokeWithMalformedBody_returnsError() {
             var response = invokePost("/api/test", "not valid json");
 
-            assertThat(response).containsAnyOf("error", "404", "Bad Request");
+            assertThat(response).containsAnyOf("error", "Bad Request", "400");
         }
 
         @Test
         void invokeWithEmptyBody_handledGracefully() {
             var response = invokePost("/api/test", "");
-
+            // Should return a response without crashing - either error or valid response
             assertThat(response).isNotNull();
+            assertThat(response).isNotEmpty();
         }
 
         @Test

@@ -13,6 +13,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
@@ -30,13 +33,14 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  *   <li>Blueprint deployment</li>
  * </ul>
  */
+@Execution(ExecutionMode.SAME_THREAD)
 class SliceDeploymentTest {
     private static final int BASE_PORT = 5050;
     private static final int BASE_MGMT_PORT = 5150;
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(120);
     private static final Duration DEPLOY_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
-    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order:0.8.0-SNAPSHOT";
+    private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0";
 
     private ForgeCluster cluster;
     private HttpClient httpClient;
@@ -74,20 +78,21 @@ class SliceDeploymentTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "deploySlice_becomesActive" -> 0;
-            case "deploySlice_multipleInstances_distributedAcrossNodes" -> 5;
-            case "scaleSlice_adjustsInstanceCount" -> 10;
-            case "undeploySlice_removesFromCluster" -> 15;
-            case "deploySlice_survivesNodeFailure" -> 20;
-            case "blueprintApply_deploysMultipleSlices" -> 25;
-            default -> 30;
+            case "deploySlice_multipleInstances_distributedAcrossNodes" -> 20;
+            case "scaleSlice_adjustsInstanceCount" -> 40;
+            case "undeploySlice_removesFromCluster" -> 60;
+            case "deploySlice_survivesNodeFailure" -> 80;
+            case "blueprintApply_deploysMultipleSlices" -> 100;
+            default -> 120;
         };
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 
@@ -203,7 +208,7 @@ class SliceDeploymentTest {
 
         var blueprint = """
             [[slices]]
-            artifact = "org.pragmatica-lite.aether.example:place-order:0.8.0-SNAPSHOT"
+            artifact = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0"
             instances = 2
             """;
 

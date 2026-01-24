@@ -66,18 +66,19 @@ class NetworkPartitionTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "majorityPartition_continuesOperating" -> 0;
-            case "lostQuorum_detectedAndReported" -> 10;
-            case "partitionHealing_clusterReconverges" -> 20;
-            case "quorumTransitions_maintainConsistency" -> 30;
-            default -> 40;
+            case "lostQuorum_detectedAndReported" -> 20;
+            case "partitionHealing_clusterReconverges" -> 40;
+            case "quorumTransitions_maintainConsistency" -> 60;
+            default -> 80;
         };
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 

@@ -62,20 +62,21 @@ class NodeFailureTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "singleNodeFailure_clusterMaintainsQuorum" -> 0;
-            case "twoNodeFailure_clusterMaintainsQuorum" -> 10;
-            case "leaderFailure_newLeaderElected" -> 20;
-            case "nodeRecovery_newNodeJoinsCluster" -> 30;
-            case "manualRollingRestart_maintainsQuorum" -> 40;
-            case "minorityPartition_quorumLost_thenRecovered" -> 50;
-            default -> 60;
+            case "twoNodeFailure_clusterMaintainsQuorum" -> 20;
+            case "leaderFailure_newLeaderElected" -> 40;
+            case "nodeRecovery_newNodeJoinsCluster" -> 60;
+            case "manualRollingRestart_maintainsQuorum" -> 80;
+            case "minorityPartition_quorumLost_thenRecovered" -> 100;
+            default -> 120;
         };
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 

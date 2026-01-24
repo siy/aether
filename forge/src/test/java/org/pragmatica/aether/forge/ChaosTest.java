@@ -75,19 +75,20 @@ class ChaosTest {
     private int getPortOffset(TestInfo testInfo) {
         return switch (testInfo.getTestMethod().map(m -> m.getName()).orElse("")) {
             case "randomNodeKills_clusterRecovers" -> 0;
-            case "rapidKillAdd_clusterRemainsFunctional" -> 10;
-            case "concurrentChaos_clusterMaintainsConsistency" -> 20;
-            case "leaderKillSpree_clusterSurvives" -> 30;
-            case "splitBrainRecovery_clusterReconverges" -> 40;
-            default -> 50;
+            case "rapidKillAdd_clusterRemainsFunctional" -> 20;
+            case "concurrentChaos_clusterMaintainsConsistency" -> 40;
+            case "leaderKillSpree_clusterSurvives" -> 60;
+            case "splitBrainRecovery_clusterReconverges" -> 80;
+            default -> 100;
         };
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws InterruptedException {
         if (cluster != null) {
             cluster.stop()
                    .await();
+            Thread.sleep(1000);
         }
     }
 
@@ -156,8 +157,8 @@ class ChaosTest {
             sleep(Duration.ofMillis(500));
         }
 
-        // Most operations should succeed
-        assertThat(successfulOps.get()).isGreaterThan(iterations / 2);
+        // At least 70% of operations should succeed
+        assertThat(successfulOps.get()).isGreaterThan(iterations * 7 / 10);
 
         // Final state should be stable
         awaitQuorum();
@@ -222,7 +223,7 @@ class ChaosTest {
         // Check results
         assertThat(operations.get()).isGreaterThan(0);
         var errorRate = (double) errors.get() / operations.get();
-        assertThat(errorRate).isLessThan(0.5); // Less than 50% error rate during chaos
+        assertThat(errorRate).isLessThan(0.3); // Less than 30% error rate during chaos
     }
 
     @Test
@@ -236,6 +237,10 @@ class ChaosTest {
                 cluster.killNode(leaderId).await();
                 killedNodeIds.add(leaderId);
                 leaderKills++;
+
+                // Add replacement node immediately to maintain cluster size
+                cluster.addNode().await();
+
                 sleep(Duration.ofSeconds(2));
 
                 // Should elect new leader
@@ -245,12 +250,6 @@ class ChaosTest {
         }
 
         assertThat(leaderKills).isGreaterThanOrEqualTo(2);
-
-        // Restore nodes by adding new ones
-        for (var killedId : killedNodeIds) {
-            cluster.addNode().await();
-        }
-        killedNodeIds.clear();
 
         awaitQuorum();
         assertThat(cluster.nodeCount()).isEqualTo(5);
@@ -293,6 +292,26 @@ class ChaosTest {
         var leader = cluster.currentLeader().unwrap();
         assertThat(leader).isNotNull();
         assertThat(cluster.nodeCount()).isEqualTo(5);
+
+        // Verify all nodes report quorum
+        for (var node : cluster.status().nodes()) {
+            var health = getHealthFromNode(node.mgmtPort());
+            assertThat(health).contains("\"quorum\":true");
+        }
+    }
+
+    private String getHealthFromNode(int port) {
+        var request = HttpRequest.newBuilder()
+                                 .uri(URI.create("http://localhost:" + port + "/api/health"))
+                                 .GET()
+                                 .timeout(Duration.ofSeconds(5))
+                                 .build();
+        try {
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body();
+        } catch (IOException | InterruptedException e) {
+            return "{\"error\":\"" + e.getMessage() + "\"}";
+        }
     }
 
     private void awaitQuorum() {

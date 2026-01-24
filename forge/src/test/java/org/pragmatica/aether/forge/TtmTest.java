@@ -148,8 +148,9 @@ class TtmTest {
             var initialStatus = getTtmStatusFromAnyNode();
             assertThat(initialStatus).doesNotContain("\"error\"");
 
-            // Kill the leader
-            cluster.killNode("tm-1")
+            // Kill the actual leader
+            var leaderId = cluster.currentLeader().unwrap();
+            cluster.killNode(leaderId)
                    .await();
 
             // Wait for new quorum

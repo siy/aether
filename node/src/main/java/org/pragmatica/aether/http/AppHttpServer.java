@@ -37,6 +37,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -148,6 +149,7 @@ class AppHttpServerImpl implements AppHttpServer {
     private void configureAndBind(Promise<Unit> promise) {
         var bootstrap = new ServerBootstrap().group(bossGroup, workerGroup)
                                              .channel(NioServerSocketChannel.class)
+                                             .option(ChannelOption.SO_REUSEADDR, true)
                                              .childHandler(createChannelInitializer());
         bootstrap.bind(config.port())
                  .addListener(future -> handleBindResult(future, promise));

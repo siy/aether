@@ -35,6 +35,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -119,6 +120,7 @@ class ManagementServerImpl implements ManagementServer {
         return Promise.promise(promise -> {
                                    var bootstrap = new ServerBootstrap().group(bossGroup, workerGroup)
                                                                         .channel(NioServerSocketChannel.class)
+                                                                        .option(ChannelOption.SO_REUSEADDR, true)
                                                                         .childHandler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {

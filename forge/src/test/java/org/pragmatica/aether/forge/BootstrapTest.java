@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -34,7 +35,7 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
 class BootstrapTest {
     private static final int BASE_PORT = 5220;
     private static final int BASE_MGMT_PORT = 5320;
-    private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
     private static final String TEST_ARTIFACT = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0";
 
@@ -81,6 +82,7 @@ class BootstrapTest {
     }
 
     @Test
+    @Timeout(120)
     void nodeRestart_rejoinsCluster() {
         // Kill bt-2
         cluster.killNode("bt-2")
@@ -108,24 +110,29 @@ class BootstrapTest {
         // Cluster should be fully formed again
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> failFastIfNodesDied(3))
                .until(() -> cluster.currentLeader().isPresent());
 
         // Verify all nodes are healthy
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> failFastIfNodesDied(3))
                .until(this::allNodesHealthy);
 
         for (var node : cluster.status().nodes()) {
+            failFastIfHttpNotReady(node.mgmtPort());
             var health = getNodeHealth(node.mgmtPort());
             assertThat(health).doesNotContain("\"error\"");
         }
     }
 
     @Test
+    @Timeout(120)
     void nodeRestart_recoversState() {
         // Wait for all nodes to be healthy before deploying
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> failFastIfNodesDied(3))
                .until(this::allNodesHealthy);
 
         // Deploy a slice
@@ -164,12 +171,14 @@ class BootstrapTest {
 
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> failFastIfNodesDied(3))
                .until(() -> cluster.currentLeader().isPresent());
 
         // Slice should still be visible (state recovered from consensus)
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
                .failFast(() -> {
+                   failFastIfNodesDied(3);
                    var currentLeaderPort = cluster.getLeaderManagementPort()
                                                   .or(leaderPort);
                    var slices = getSlices(currentLeaderPort);
@@ -186,10 +195,12 @@ class BootstrapTest {
     }
 
     @Test
+    @Timeout(120)
     void manualRollingRestart_maintainsAvailability() {
         // Wait for all nodes to be healthy
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> failFastIfNodesDied(3))
                .until(this::allNodesHealthy);
 
         // Snapshot current node IDs at start
@@ -220,26 +231,31 @@ class BootstrapTest {
 
             await().atMost(WAIT_TIMEOUT)
                    .pollInterval(POLL_INTERVAL)
+                   .failFast(() -> failFastIfNodesDied(3))
                    .until(() -> cluster.currentLeader().isPresent());
         }
 
         // After rolling restart, cluster should be healthy
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> failFastIfNodesDied(3))
                .until(this::allNodesHealthy);
 
         var leaderPort = cluster.getLeaderManagementPort()
                                 .unwrap();
+        failFastIfHttpNotReady(leaderPort);
         var health = getNodeHealth(leaderPort);
         assertThat(health).doesNotContain("\"error\"");
         assertThat(health).contains("\"nodeCount\":3");
     }
 
     @Test
+    @Timeout(120)
     void multipleNodeRestarts_clusterRemainsFunctional() {
         // Wait for all nodes to be healthy
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> failFastIfNodesDied(3))
                .until(this::allNodesHealthy);
 
         // Restart each non-leader node one at a time
@@ -267,12 +283,14 @@ class BootstrapTest {
 
             await().atMost(WAIT_TIMEOUT)
                    .pollInterval(POLL_INTERVAL)
+                   .failFast(() -> failFastIfNodesDied(3))
                    .until(() -> cluster.currentLeader().isPresent());
         }
 
         // Final verification
         await().atMost(WAIT_TIMEOUT)
                .pollInterval(POLL_INTERVAL)
+               .failFast(() -> failFastIfNodesDied(3))
                .until(this::allNodesHealthy);
 
         assertThat(cluster.nodeCount()).isEqualTo(3);
@@ -283,6 +301,32 @@ class BootstrapTest {
         return status.nodes()
                      .stream()
                      .allMatch(node -> checkNodeHealth(node.mgmtPort()));
+    }
+
+    private void failFastIfNodesDied(int expectedCount) {
+        var actualCount = cluster.nodeCount();
+        if (actualCount < expectedCount) {
+            throw new AssertionError("Expected " + expectedCount + " nodes but only " + actualCount + " running");
+        }
+    }
+
+    private void failFastIfHttpNotReady(int port) {
+        var request = HttpRequest.newBuilder()
+                                 .uri(URI.create("http://localhost:" + port + "/api/health"))
+                                 .GET()
+                                 .timeout(Duration.ofSeconds(2))
+                                 .build();
+        try {
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new AssertionError("HTTP server returned status " + response.statusCode() + ": " + response.body());
+            }
+        } catch (IOException e) {
+            throw new AssertionError("HTTP server not reachable on port " + port + ": " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while checking HTTP server");
+        }
     }
 
     private boolean checkNodeHealth(int port) {

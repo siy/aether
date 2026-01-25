@@ -207,6 +207,8 @@ class SliceDeploymentTest {
         var leaderPort = cluster.getLeaderManagementPort().unwrap();
 
         var blueprint = """
+            id = "org.test:blueprint:1.0.0"
+
             [[slices]]
             artifact = "org.pragmatica-lite.aether.example:place-order-place-order:0.8.0"
             instances = 2

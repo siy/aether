@@ -9,7 +9,7 @@ Do NOT write code directly - delegate to `jbct-coder` agent.
 
 ## Project Overview
 
-**Pragmatica Aether** (v0.8.0) - AI-driven distributed runtime for Java with predictive scaling and seamless multi-cloud deployment.
+**Pragmatica Aether** (v0.8.1) - AI-driven distributed runtime for Java with predictive scaling and seamless multi-cloud deployment.
 
 **Key Principle:** Every inter-slice call will **EVENTUALLY SUCCEED** if the cluster is alive. Slices are NOT prepared for communication errors - runtime handles retries, failover, recovery. Design slices to be idempotent.
 
@@ -179,6 +179,28 @@ mvn test -pl module-name   # Specific module
 ```
 
 **Important:** Run `mvn install -DskipTests` before testing forge module. Forge tests depend on locally installed artifacts from other modules.
+
+## Parallel Releases with Circular Dependencies
+
+When releasing projects with circular dependencies (e.g., aether ↔ jbct-cli), use this approach:
+
+1. **Comment out** the unpublished plugin in `pom.xml`:
+   ```xml
+   <!-- jbct-maven-plugin commented out until X.Y.Z is published
+   <plugin>
+       <groupId>org.pragmatica-lite</groupId>
+       <artifactId>jbct-maven-plugin</artifactId>
+   </plugin>
+   -->
+   ```
+
+2. **Release the first project** (aether) without the plugin dependency
+
+3. **Release the second project** (jbct-cli) which depends on the first
+
+4. **Uncomment the plugin** and release a patch version with full functionality
+
+This breaks the circular dependency chain while preserving functionality.
 
 ## Key Files
 

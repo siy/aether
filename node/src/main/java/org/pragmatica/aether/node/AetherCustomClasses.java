@@ -1,6 +1,7 @@
 package org.pragmatica.aether.node;
 
 import org.pragmatica.aether.artifact.Artifact;
+import org.pragmatica.aether.artifact.ArtifactBase;
 import org.pragmatica.aether.artifact.ArtifactId;
 import org.pragmatica.aether.artifact.GroupId;
 import org.pragmatica.aether.artifact.Version;
@@ -32,6 +33,7 @@ public interface AetherCustomClasses {
         concreteSubtypes(AetherKey.AetherKeyPattern.class).forEach(consumer);
         // Artifact types
         consumer.accept(Artifact.class);
+        consumer.accept(ArtifactBase.class);
         consumer.accept(GroupId.class);
         consumer.accept(ArtifactId.class);
         consumer.accept(Version.class);

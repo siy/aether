@@ -703,13 +703,15 @@ public interface AetherNode {
         entries.add(MessageRouter.Entry.route(KVStoreNotification.ValueRemove.class,
                                               notification -> alertManager.onKvStoreRemove((AetherKey) notification.cause()
                                                                                                                   .key())));
-        // Quorum state notifications
+        // Quorum state notifications - these handlers activate/deactivate components.
+        // NOTE: RabiaNode's handlers run first (consensus activates before LeaderManager emits LeaderChange).
         entries.add(MessageRouter.Entry.route(QuorumStateNotification.class, nodeDeploymentManager::onQuorumStateChange));
         entries.add(MessageRouter.Entry.route(QuorumStateNotification.class, controlLoop::onQuorumStateChange));
         entries.add(MessageRouter.Entry.route(QuorumStateNotification.class, metricsScheduler::onQuorumStateChange));
         entries.add(MessageRouter.Entry.route(QuorumStateNotification.class,
                                               deploymentMetricsScheduler::onQuorumStateChange));
-        // Leader change notifications
+        // Leader change notifications - handlers may call cluster.apply(), which is safe because
+        // consensus engine is already active by the time LeaderChange is emitted (see RabiaNode handler order).
         entries.add(MessageRouter.Entry.route(LeaderNotification.LeaderChange.class,
                                               clusterDeploymentManager::onLeaderChange));
         entries.add(MessageRouter.Entry.route(LeaderNotification.LeaderChange.class, metricsScheduler::onLeaderChange));

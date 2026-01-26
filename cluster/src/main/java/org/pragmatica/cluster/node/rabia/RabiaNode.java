@@ -194,8 +194,11 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
         allEntries.add(topologyChangeRoutes);
         allEntries.add(syncRoutes);
         allEntries.add(asyncRoutes);
-        allEntries.add(route(QuorumStateNotification.class, leaderManager::watchQuorumState));
+        // IMPORTANT: Order matters! Consensus must activate BEFORE LeaderManager emits LeaderChange.
+        // LeaderChange handlers (e.g., ClusterDeploymentManager) may immediately call cluster.apply(),
+        // which requires the consensus engine to be active.
         allEntries.add(route(QuorumStateNotification.class, consensus::quorumState));
+        allEntries.add(route(QuorumStateNotification.class, leaderManager::watchQuorumState));
         record rabiaNode<C extends Command>(NodeConfig config,
                                             StateMachine<C> stateMachine,
                                             ClusterNetwork network,

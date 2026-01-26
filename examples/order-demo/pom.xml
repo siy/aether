@@ -26,7 +26,7 @@
     </modules>
 
     <properties>
-        <aether.version>0.8.0</aether.version>
+        <aether.version>0.8.1</aether.version>
     </properties>
 
     <dependencyManagement>

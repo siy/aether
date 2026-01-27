@@ -10,6 +10,8 @@
     </parent>
 
     <artifactId>slice</artifactId>
+    <name>Aether Slice</name>
+
     <dependencies>
         <!-- Internal -->
         <dependency>

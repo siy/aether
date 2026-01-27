@@ -10,6 +10,7 @@
     </parent>
 
     <artifactId>node</artifactId>
+    <name>Aether Node</name>
 
     <dependencies>
         <!-- Internal -->

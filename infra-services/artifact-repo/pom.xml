@@ -10,6 +10,7 @@
     </parent>
 
     <artifactId>artifact-repo</artifactId>
+    <name>Aether Artifact Repository</name>
 
     <dependencies>
         <!-- Internal -->

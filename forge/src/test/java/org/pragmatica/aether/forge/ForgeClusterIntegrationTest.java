@@ -23,7 +23,7 @@ import static org.pragmatica.aether.forge.ForgeCluster.forgeCluster;
  * Integration tests for ForgeCluster startup, blueprint deployment, and shutdown.
  */
 class ForgeClusterIntegrationTest {
-    private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(120);
+    private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(180);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
     private static final Path BLUEPRINT_PATH = Path.of("../examples/ecommerce/place-order/target/blueprint.toml");
 

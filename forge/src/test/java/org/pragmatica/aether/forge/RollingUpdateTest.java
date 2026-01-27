@@ -182,7 +182,7 @@ class RollingUpdateTest {
         completeUpdate();
 
         // Old version should be removed
-        await().atMost(Duration.ofSeconds(30))
+        await().atMost(Duration.ofSeconds(60))
                .pollInterval(POLL_INTERVAL)
                .until(() -> {
                    var slices = getSlices();

@@ -75,7 +75,7 @@ public final class ControllerRoutes implements RouteHandler {
         var callRateMatch = CALL_RATE_PATTERN.matcher(body);
         var intervalMatch = INTERVAL_PATTERN.matcher(body);
         var currentConfig = node.controller()
-                                .getConfiguration();
+                                .configuration();
         ControllerConfig.controllerConfig(cpuUpMatch.find()
                                           ? Double.parseDouble(cpuUpMatch.group(1))
                                           : currentConfig.cpuScaleUpThreshold(),
@@ -99,14 +99,14 @@ public final class ControllerRoutes implements RouteHandler {
     private String buildControllerConfigResponse() {
         var node = nodeSupplier.get();
         return node.controller()
-                   .getConfiguration()
+                   .configuration()
                    .toJson();
     }
 
     private String buildControllerStatusResponse() {
         var node = nodeSupplier.get();
         var config = node.controller()
-                         .getConfiguration();
+                         .configuration();
         return "{\"enabled\":true," + "\"evaluationIntervalMs\":" + config.evaluationIntervalMs() + "," + "\"config\":" + config.toJson()
                + "}";
     }

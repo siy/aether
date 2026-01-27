@@ -315,8 +315,9 @@ public interface ClusterDeploymentManager {
                 log.info("scaleUp: artifact={}, toAdd={}, activeNodes={}, activeNodeIds={}",
                          artifact,
                          toAdd,
-                         activeNodes.size(),
-                         activeNodes);
+                         activeNodes.get()
+                                    .size(),
+                         activeNodes.get());
                 var nodesWithInstances = existingInstances.stream()
                                                           .map(SliceNodeKey::nodeId)
                                                           .collect(java.util.stream.Collectors.toSet());

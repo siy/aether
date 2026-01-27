@@ -643,12 +643,10 @@ public interface NodeDeploymentManager {
                     }
                     case DISAPPEARED -> {
                         // Deactivate all slices before going dormant
-                        if (state()
-                                 .get() instanceof NodeDeploymentState.ActiveNodeDeploymentState activeState) {
+                        if (state().get() instanceof NodeDeploymentState.ActiveNodeDeploymentState activeState) {
                             activeState.deactivateAllSlices();
                         }
-                        state()
-                             .set(new NodeDeploymentState.DormantNodeDeploymentState());
+                        state().set(new NodeDeploymentState.DormantNodeDeploymentState());
                     }
                 }
             }

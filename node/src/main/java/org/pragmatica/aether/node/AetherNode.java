@@ -519,7 +519,7 @@ public interface AetherNode {
         // Create TTM manager (returns no-op if disabled in config)
         var ttmManager = TTMManager.ttmManager(config.ttm(),
                                                minuteAggregator,
-                                               controller::getConfiguration)
+                                               controller::configuration)
                                    .or(TTMManager.noOp(config.ttm()));
         // Create control loop with adaptive controller when TTM is actually enabled and functional
         ClusterController effectiveController = ttmManager.isEnabled()

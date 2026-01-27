@@ -90,10 +90,10 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
      * Creates a RabiaNode without metrics collection.
      */
     static <C extends Command> Result<RabiaNode<C>> rabiaNode(NodeConfig config,
-                                                               DelegateRouter delegateRouter,
-                                                               StateMachine<C> stateMachine,
-                                                               Serializer serializer,
-                                                               Deserializer deserializer) {
+                                                              DelegateRouter delegateRouter,
+                                                              StateMachine<C> stateMachine,
+                                                              Serializer serializer,
+                                                              Deserializer deserializer) {
         return rabiaNode(config,
                          delegateRouter,
                          stateMachine,
@@ -107,11 +107,11 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
      * Creates a RabiaNode with metrics collection.
      */
     static <C extends Command> Result<RabiaNode<C>> rabiaNode(NodeConfig config,
-                                                               DelegateRouter delegateRouter,
-                                                               StateMachine<C> stateMachine,
-                                                               Serializer serializer,
-                                                               Deserializer deserializer,
-                                                               ConsensusMetrics metrics) {
+                                                              DelegateRouter delegateRouter,
+                                                              StateMachine<C> stateMachine,
+                                                              Serializer serializer,
+                                                              Deserializer deserializer,
+                                                              ConsensusMetrics metrics) {
         return rabiaNode(config, delegateRouter, stateMachine, serializer, deserializer, metrics, List.of());
     }
 
@@ -131,14 +131,15 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
      * @return Result containing RabiaNode instance, or failure if topology manager creation fails
      */
     static <C extends Command> Result<RabiaNode<C>> rabiaNode(NodeConfig config,
-                                                               DelegateRouter delegateRouter,
-                                                               StateMachine<C> stateMachine,
-                                                               Serializer serializer,
-                                                               Deserializer deserializer,
-                                                               ConsensusMetrics metrics,
-                                                               List<ChannelHandler> additionalHandlers) {
+                                                              DelegateRouter delegateRouter,
+                                                              StateMachine<C> stateMachine,
+                                                              Serializer serializer,
+                                                              Deserializer deserializer,
+                                                              ConsensusMetrics metrics,
+                                                              List<ChannelHandler> additionalHandlers) {
         // Create components with delegate router (routes configured after construction)
-        return TcpTopologyManager.tcpTopologyManager(config.topology(), delegateRouter)
+        return TcpTopologyManager.tcpTopologyManager(config.topology(),
+                                                     delegateRouter)
                                  .map(topologyManager -> assembleNode(config,
                                                                       delegateRouter,
                                                                       stateMachine,
@@ -150,13 +151,13 @@ public interface RabiaNode<C extends Command> extends ClusterNode<C> {
     }
 
     private static <C extends Command> RabiaNode<C> assembleNode(NodeConfig config,
-                                                                  DelegateRouter delegateRouter,
-                                                                  StateMachine<C> stateMachine,
-                                                                  Serializer serializer,
-                                                                  Deserializer deserializer,
-                                                                  ConsensusMetrics metrics,
-                                                                  List<ChannelHandler> additionalHandlers,
-                                                                  TcpTopologyManager topologyManager) {
+                                                                 DelegateRouter delegateRouter,
+                                                                 StateMachine<C> stateMachine,
+                                                                 Serializer serializer,
+                                                                 Deserializer deserializer,
+                                                                 ConsensusMetrics metrics,
+                                                                 List<ChannelHandler> additionalHandlers,
+                                                                 TcpTopologyManager topologyManager) {
         var leaderManager = LeaderManager.leaderManager(config.topology()
                                                               .self(),
                                                         delegateRouter);

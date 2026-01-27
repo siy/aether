@@ -394,7 +394,11 @@ class RollingUpdateTest {
     }
 
     private String getSlices() {
-        return get("/slices");
+        var slicesStatus = cluster.slicesStatus();
+        var artifacts = slicesStatus.stream()
+                                    .map(s -> "\"" + s.artifact() + "\"")
+                                    .toList();
+        return "{\"slices\":[" + String.join(",", artifacts) + "]}";
     }
 
     private String getHealth() {
